@@ -41,7 +41,7 @@ import (
 var logKind = logf.RuntimeLog.WithName("source").WithName("Kind")
 
 // Kind is used to provide a source of events originating inside the cluster from Watches (e.g. Pod Create).
-type Kind[object client.Object, request comparable] struct {
+type Kind[object cache.TypedObject, request comparable] struct {
 	// Type is the type of object to watch.  e.g. &v1.Pod{}
 	Type object
 
@@ -77,7 +77,7 @@ func (ks *Kind[object, request]) Start(ctx context.Context, queue workqueue.Type
 	ks.startedErr = make(chan error, 1) // Buffer chan to not leak goroutines if WaitForSync isn't called
 	go func() {
 		var (
-			i       cache.Informer
+			i       cache.TypedInformer[object]
 			lastErr error
 		)
 
@@ -85,7 +85,7 @@ func (ks *Kind[object, request]) Start(ctx context.Context, queue workqueue.Type
 		// an error or the specified context is cancelled or expired.
 		if err := wait.PollUntilContextCancel(ctx, 10*time.Second, true, func(ctx context.Context) (bool, error) {
 			// Lookup the Informer from the Cache and add an EventHandler which populates the Queue
-			i, lastErr = ks.Cache.GetInformer(ctx, ks.Type)
+			i, lastErr = cache.GetTypedInformer(ctx, ks.Cache, ks.Type)
 			if lastErr != nil {
 				kindMatchErr := &meta.NoKindMatchError{}
 				switch {
@@ -109,7 +109,7 @@ func (ks *Kind[object, request]) Start(ctx context.Context, queue workqueue.Type
 			return
 		}
 
-		handlerRegistration, err := i.AddEventHandlerWithOptions(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates), toolscache.HandlerOptions{
+		handlerRegistration, err := i.AddTypedEventHandler(NewEventHandler(ctx, queue, ks.Handler, ks.Predicates), toolscache.HandlerOptions{
 			Logger: &logKind,
 		})
 		if err != nil {

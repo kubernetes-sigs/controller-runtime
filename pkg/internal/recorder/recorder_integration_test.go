@@ -45,7 +45,8 @@ var _ = Describe("recorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")
-			deprecatedRecorder := cm.GetEventRecorderFor("test-deprecated-recorder") //nolint:staticcheck // testing deprecated API
+			//lint:ignore SA1019 testing deprecated API
+			deprecatedRecorder := cm.GetEventRecorderFor("test-deprecated-recorder")
 			recorder := cm.GetEventRecorder("test-recorder")
 			instance, err := controller.New("foo-controller", cm, controller.Options{
 				Reconciler: reconcile.Func(

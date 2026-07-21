@@ -73,7 +73,7 @@ type TypedSyncingSource[request comparable] interface {
 }
 
 // Kind creates a KindSource with the given cache provider.
-func Kind[object client.Object](
+func Kind[object cache.TypedObject](
 	cache cache.Cache,
 	obj object,
 	handler handler.TypedEventHandler[object, reconcile.Request],
@@ -83,7 +83,7 @@ func Kind[object client.Object](
 }
 
 // TypedKind creates a KindSource with the given cache provider.
-func TypedKind[object client.Object, request comparable](
+func TypedKind[object cache.TypedObject, request comparable](
 	cache cache.Cache,
 	obj object,
 	handler handler.TypedEventHandler[object, request],
@@ -266,9 +266,9 @@ func (cs *channel[object, request]) syncLoop(ctx context.Context) {
 
 // TypedInformer is used to provide a source of events originating inside the cluster from Watches using generic
 // event handlers and predicates.
-type TypedInformer[object any, request comparable] struct {
+type TypedInformer[object toolscache.Object, request comparable] struct {
 	// Informer is the controller-runtime Informer
-	Informer   cache.Informer
+	Informer   cache.TypedInformer[object]
 	Handler    handler.TypedEventHandler[object, request]
 	Predicates []predicate.TypedPredicate[object]
 }
@@ -289,7 +289,7 @@ func (is *TypedInformer[object, request]) Start(ctx context.Context, queue workq
 		return errors.New("must specify Informer.Handler")
 	}
 
-	_, err := is.Informer.AddEventHandlerWithOptions(internal.NewEventHandler(ctx, queue, is.Handler, is.Predicates), toolscache.HandlerOptions{
+	_, err := is.Informer.AddTypedEventHandler(internal.NewEventHandler(ctx, queue, is.Handler, is.Predicates), toolscache.HandlerOptions{
 		Logger: &logInformer,
 	})
 	if err != nil {

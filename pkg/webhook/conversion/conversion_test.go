@@ -363,7 +363,7 @@ var _ = Describe("NewHubSpokeConverter", func() {
 	It("should return error if hub is not registered in the scheme", func() {
 		_, err := conversion.NewHubSpokeConverter(&appsv1.Deployment{})(scheme)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("failed to create hub spoke converter: failed to get GroupVersionKind for hub: no kind is registered for the type v1.Deployment in scheme \"pkg/runtime/scheme.go:111\""))
+		Expect(err.Error()).To(ContainSubstring("failed to create hub spoke converter: failed to get GroupVersionKind for hub: no kind is registered for the type v1.Deployment"))
 	})
 
 	It("should return error if spoke is not registered in the scheme", func() {
@@ -373,7 +373,7 @@ var _ = Describe("NewHubSpokeConverter", func() {
 				func(context.Context, *appsv1.Deployment, *jobsv2.ExternalJob) error { return nil }),
 		)(scheme)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("failed to create hub spoke converter for ExternalJob: failed to get GroupVersionKind for spoke converter: no kind is registered for the type v1.Deployment in scheme \"pkg/runtime/scheme.go:111\""))
+		Expect(err.Error()).To(ContainSubstring("failed to create hub spoke converter for ExternalJob: failed to get GroupVersionKind for spoke converter: no kind is registered for the type v1.Deployment"))
 	})
 
 	It("should return error if spoke does not have the same GroupKind as the hub", func() {

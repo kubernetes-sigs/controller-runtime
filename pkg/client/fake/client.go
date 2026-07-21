@@ -1524,8 +1524,48 @@ func getSingleOrZeroOptions[T any](opts []T) (opt T, err error) {
 	return
 }
 
+func isUnstructuredScaleResource(obj *unstructured.Unstructured) bool {
+	gvk := obj.GroupVersionKind()
+	switch gvk {
+	case appsv1.SchemeGroupVersion.WithKind("Deployment"),
+		appsv1.SchemeGroupVersion.WithKind("ReplicaSet"),
+		appsv1.SchemeGroupVersion.WithKind("StatefulSet"),
+		corev1.SchemeGroupVersion.WithKind("ReplicationController"):
+		return true
+	default:
+		return false
+	}
+}
+
 func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 	switch obj := obj.(type) {
+	case *unstructured.Unstructured:
+		if !isUnstructuredScaleResource(obj) {
+			return nil, fmt.Errorf("unimplemented scale subresource for resource %T", obj)
+		}
+		var replicas int32 = 1
+		if replicasVal, found, err := unstructured.NestedInt64(obj.Object, "spec", "replicas"); err != nil {
+			return nil, err
+		} else if found {
+			replicas = int32(replicasVal)
+		}
+		var statusReplicas int32
+		if statusReplicasVal, found, err := unstructured.NestedInt64(obj.Object, "status", "replicas"); err != nil {
+			return nil, err
+		} else if found {
+			statusReplicas = int32(statusReplicasVal)
+		}
+		return &autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:         obj.GetNamespace(),
+				Name:              obj.GetName(),
+				UID:               obj.GetUID(),
+				ResourceVersion:   obj.GetResourceVersion(),
+				CreationTimestamp: obj.GetCreationTimestamp(),
+			},
+			Spec:   autoscalingv1.ScaleSpec{Replicas: replicas},
+			Status: autoscalingv1.ScaleStatus{Replicas: statusReplicas},
+		}, nil
 	case *appsv1.Deployment:
 		var replicas int32 = 1
 		if obj.Spec.Replicas != nil {
@@ -1630,6 +1670,14 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 
 func applyScale(obj client.Object, scale *autoscalingv1.Scale) error {
 	switch obj := obj.(type) {
+	case *unstructured.Unstructured:
+		if !isUnstructuredScaleResource(obj) {
+			return fmt.Errorf("unimplemented scale subresource for resource %T", obj)
+		}
+		if err := unstructured.SetNestedField(obj.Object, int64(scale.Spec.Replicas), "spec", "replicas"); err != nil {
+			return err
+		}
+		return nil
 	case *appsv1.Deployment:
 		obj.Spec.Replicas = new(scale.Spec.Replicas)
 	case *appsv1.ReplicaSet:

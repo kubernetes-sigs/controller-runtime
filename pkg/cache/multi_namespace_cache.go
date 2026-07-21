@@ -42,15 +42,15 @@ func newMultiNamespaceCache(
 	restMapper apimeta.RESTMapper,
 	namespaces map[string]Config,
 	globalConfig *Config, // may be nil in which case no cache for cluster-scoped objects will be created
-) Cache {
+) internalCache {
 	// Create every namespace cache.
-	caches := map[string]Cache{}
+	caches := map[string]internalCache{}
 	for namespace, config := range namespaces {
 		caches[namespace] = newCache(config, namespace)
 	}
 
 	// Create a cache for cluster scoped resources if requested
-	var clusterCache Cache
+	var clusterCache internalCache
 	if globalConfig != nil {
 		clusterCache = newCache(*globalConfig, corev1.NamespaceAll)
 	}
@@ -70,11 +70,11 @@ func newMultiNamespaceCache(
 type multiNamespaceCache struct {
 	Scheme           *runtime.Scheme
 	RESTMapper       apimeta.RESTMapper
-	namespaceToCache map[string]Cache
-	clusterCache     Cache
+	namespaceToCache map[string]internalCache
+	clusterCache     internalCache
 }
 
-var _ Cache = &multiNamespaceCache{}
+var _ internalCache = &multiNamespaceCache{}
 
 // Methods for multiNamespaceCache to conform to the Informers interface.
 
@@ -217,6 +217,42 @@ func (c *multiNamespaceCache) IndexField(ctx context.Context, obj client.Object,
 			return err
 		}
 	}
+	return nil
+}
+
+func (c *multiNamespaceCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	if key.Namespace == "" {
+		if c.clusterCache != nil {
+			c.clusterCache.SetMinimumRVForGVKAndKey(gvk, key, rv)
+		}
+		return
+	}
+	if cache, ok := c.namespaceToCache[key.Namespace]; ok {
+		cache.SetMinimumRVForGVKAndKey(gvk, key, rv)
+		return
+	}
+	if global, ok := c.namespaceToCache[metav1.NamespaceAll]; ok {
+		global.SetMinimumRVForGVKAndKey(gvk, key, rv)
+	}
+}
+
+func (c *multiNamespaceCache) AddRequiredDeleteForObject(obj client.Object) error {
+	if ns := obj.GetNamespace(); ns == "" && c.clusterCache != nil {
+		return c.clusterCache.AddRequiredDeleteForObject(obj)
+	} else if cache, ok := c.namespaceToCache[ns]; ok {
+		return cache.AddRequiredDeleteForObject(obj)
+	}
+
+	return nil
+}
+
+func (c *multiNamespaceCache) RemoveRequiredDeleteForObject(obj client.Object) error {
+	if ns := obj.GetNamespace(); ns == "" && c.clusterCache != nil {
+		return c.clusterCache.RemoveRequiredDeleteForObject(obj)
+	} else if cache, ok := c.namespaceToCache[ns]; ok {
+		return cache.RemoveRequiredDeleteForObject(obj)
+	}
+
 	return nil
 }
 
@@ -498,4 +534,13 @@ func (i *multiNamespaceInformer) IsStopped() bool {
 		}
 	}
 	return true
+}
+
+// LastSyncResourceVersion returns the resource version from the last namespace informer.
+func (i *multiNamespaceInformer) LastSyncResourceVersion() string {
+	var rv string
+	for _, informer := range i.namespaceToInformer {
+		rv = informer.LastSyncResourceVersion()
+	}
+	return rv
 }

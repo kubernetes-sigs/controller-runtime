@@ -70,6 +70,37 @@ type Cache interface {
 	Informers
 }
 
+// internalCache is implemented by all cache implementations in controller-runtime. It
+// adds the requirement methods to be able to work for a consistent client.
+type internalCache interface {
+	Cache
+	// SetMinimumRVForGVKAndKey causes subsequent Get requests for the given
+	// GVK and key to block until the informer for that GVK has observed a
+	// resource version >= rv (or the context times out). For List requests
+	// on the given GVK, it blocks until the highest minimum RV across all
+	// keys for that GVK has been observed.
+	//
+	// TODO: This shouldn't be part of the public interface
+	SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64)
+
+	// AddRequiredDeleteForGVKKeyAndUID causes subsequent Get requests for the
+	// given GVK and key to block until the UID has been observed as deleted.
+	// For List requests on the given GVK, it blocks until all pending delete
+	// UIDs across all keys for that GVK have been observed.
+	//
+	//
+	// An informer for the given object must have been created before the delete
+	// added here was executed, otherwise this will cause a deadlock.
+	//
+	// TODO: This shouldn't be part of the public interface
+	AddRequiredDeleteForObject(obj client.Object) error
+
+	// RemoveRequiredDeleteForObject removes a previously added pending delete.
+	//
+	// TODO: This shouldn't be part of the public interface
+	RemoveRequiredDeleteForObject(obj client.Object) error
+}
+
 // Informers knows how to create or fetch informers for different
 // group-version-kinds, and add indices to those informers.  It's safe to call
 // GetInformer from multiple threads.
@@ -133,6 +164,11 @@ type Informer interface {
 
 	// IsStopped returns true if the informer has been stopped.
 	IsStopped() bool
+
+	// LastSyncResourceVersion is the resource version observed when last synced with the underlying
+	// store. The value returned is not synchronized with access to the underlying store and is not
+	// thread-safe.
+	LastSyncResourceVersion() string
 }
 
 // AllNamespaces should be used as the map key to deliminate namespace settings
@@ -432,7 +468,7 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 
 	newCacheFunc := newCache(cfg, opts)
 
-	var defaultCache Cache
+	var defaultCache internalCache
 	if len(opts.DefaultNamespaces) > 0 {
 		defaultConfig := optionDefaultsToConfig(&opts)
 		defaultCache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, opts.DefaultNamespaces, &defaultConfig)
@@ -446,7 +482,7 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 
 	delegating := &delegatingByGVKCache{
 		scheme:       opts.Scheme,
-		caches:       make(map[schema.GroupVersionKind]Cache, len(opts.ByObject)),
+		caches:       make(map[schema.GroupVersionKind]internalCache, len(opts.ByObject)),
 		defaultCache: defaultCache,
 	}
 
@@ -455,7 +491,7 @@ func New(cfg *rest.Config, opts Options) (Cache, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get GVK for type %T: %w", obj, err)
 		}
-		var cache Cache
+		var cache internalCache
 		if len(config.Namespaces) > 0 {
 			cache = newMultiNamespaceCache(newCacheFunc, opts.Scheme, opts.Mapper, config.Namespaces, nil)
 		} else {
@@ -503,10 +539,10 @@ func byObjectToConfig(byObject ByObject) Config {
 	}
 }
 
-type newCacheFunc func(config Config, namespace string) Cache
+type newCacheFunc func(config Config, namespace string) internalCache
 
 func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
-	return func(config Config, namespace string) Cache {
+	return func(config Config, namespace string) internalCache {
 		return &informerCache{
 			scheme: opts.Scheme,
 			Informers: internal.NewInformers(restConfig, &internal.InformersOpts{

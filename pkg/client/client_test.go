@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -140,6 +141,72 @@ func metaOnlyFromObj(obj interface {
 	}
 	metaObj.SetGroupVersionKind(kinds[0])
 	return &metaObj
+}
+
+// recordingRoundTripper wraps an http.RoundTripper and records the method and
+// URL path of every request that passes through it, then forwards the request
+// unchanged. It is used to prove whether a request was (or, notably, was not)
+// sent to the API server for a given client call.
+type recordingRoundTripper struct {
+	delegate http.RoundTripper
+	requests []string
+}
+
+func (rt *recordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	rt.requests = append(rt.requests, req.Method+" "+req.URL.Path)
+	return rt.delegate.RoundTrip(req)
+}
+
+// newRecordingClient returns a client.Client backed by a copy of cfg whose
+// outgoing HTTP requests are captured by the returned *recordingRoundTripper.
+func newRecordingClient() (client.Client, *recordingRoundTripper) {
+	rt := &recordingRoundTripper{}
+	cfgCopy := rest.CopyConfig(cfg)
+	cfgCopy.WrapTransport = func(delegate http.RoundTripper) http.RoundTripper {
+		rt.delegate = delegate
+		return rt
+	}
+	cl, err := client.New(cfgCopy, client.Options{})
+	Expect(err).NotTo(HaveOccurred())
+	return cl, rt
+}
+
+// expectClusterScopedNamespaceError asserts that err is the rejection produced
+// for calling op ("List" or "DeleteAllOf") with InNamespace(namespace) against
+// a cluster-scoped resource: it must name the operation, say the resource is
+// cluster-scoped, and quote the offending namespace.
+func expectClusterScopedNamespaceError(err error, op, namespace string) {
+	GinkgoHelper()
+	Expect(err).To(MatchError(SatisfyAll(
+		ContainSubstring(op),
+		ContainSubstring("cluster-scoped"),
+		ContainSubstring(fmt.Sprintf("%q", namespace)),
+	)))
+}
+
+// countingListOption wraps a ListOption and counts how many times
+// ApplyToList is invoked, to prove options are applied exactly once.
+type countingListOption struct {
+	inner   client.ListOption
+	applied int
+}
+
+func (o *countingListOption) ApplyToList(opts *client.ListOptions) {
+	o.applied++
+	o.inner.ApplyToList(opts)
+}
+
+// countingDeleteAllOfOption wraps a DeleteAllOfOption and counts how many
+// times ApplyToDeleteAllOf is invoked, to prove options are applied exactly
+// once.
+type countingDeleteAllOfOption struct {
+	inner   client.DeleteAllOfOption
+	applied int
+}
+
+func (o *countingDeleteAllOfOption) ApplyToDeleteAllOf(opts *client.DeleteAllOfOptions) {
+	o.applied++
+	o.inner.ApplyToDeleteAllOf(opts)
 }
 
 var _ = Describe("Client", func() {
@@ -2089,6 +2156,43 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("should error when InNamespace targets a cluster-scoped object, without sending a request (issue #988)", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				err := cl.DeleteAllOf(ctx, node, client.InNamespace("some-namespace"))
+				expectClusterScopedNamespaceError(err, "DeleteAllOf", "some-namespace")
+				Expect(rt.requests).NotTo(ContainElement("DELETE /api/v1/nodes"))
+			})
+
+			It("should still allow a cluster-wide delete collection of a cluster-scoped object when no namespace is specified", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				By("deleting a collection of Nodes matching a label that does not exist, so nothing is actually removed")
+				err := cl.DeleteAllOf(ctx, node, client.MatchingLabels{"this-label-does-not-exist-on-any-node": "true"})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating that the request was not scoped to any namespace")
+				Expect(rt.requests).To(ContainElement("DELETE /api/v1/nodes"))
+			})
+
+			It("should invoke each caller-supplied DeleteAllOfOption exactly once", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				depName := dep.Name
+
+				counting := &countingDeleteAllOfOption{inner: client.InNamespace(ns)}
+				err = cl.DeleteAllOf(ctx, dep, counting, client.MatchingLabels(dep.ObjectMeta.Labels))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(counting.applied).To(Equal(1))
+
+				By("validating the namespaced delete reached the downstream client")
+				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
+				Expect(err).To(HaveOccurred())
+			})
 		})
 		Context("with unstructured objects", func() {
 			It("should delete an existing object from a go struct", func(ctx SpecContext) {
@@ -2195,6 +2299,22 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("should error when InNamespace targets a cluster-scoped object, without sending a request (issue #988)", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				u := &unstructured.Unstructured{}
+				Expect(scheme.Convert(node, u, nil)).To(Succeed())
+				u.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Kind:    "Node",
+					Version: "v1",
+				})
+
+				err := cl.DeleteAllOf(ctx, u, client.InNamespace("some-namespace"))
+				expectClusterScopedNamespaceError(err, "DeleteAllOf", "some-namespace")
+				Expect(rt.requests).NotTo(ContainElement("DELETE /api/v1/nodes"))
+			})
 		})
 		Context("with metadata objects", func() {
 			It("should delete an existing object from a go struct", func(ctx SpecContext) {
@@ -2274,6 +2394,16 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).To(HaveOccurred())
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep2Name, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should error when InNamespace targets a cluster-scoped object, without sending a request (issue #988)", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				metaObj := metaOnlyFromObj(node, scheme)
+
+				err := cl.DeleteAllOf(ctx, metaObj, client.InNamespace("some-namespace"))
+				expectClusterScopedNamespaceError(err, "DeleteAllOf", "some-namespace")
+				Expect(rt.requests).NotTo(ContainElement("DELETE /api/v1/nodes"))
 			})
 		})
 	})
@@ -3067,6 +3197,44 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(deps.Items[1].Name).To(Equal(dep4.Name))
 			})
 
+			It("should error when InNamespace targets a cluster-scoped object, without sending a request (issue #988)", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				nodeList := &corev1.NodeList{}
+				err := cl.List(ctx, nodeList, client.InNamespace("some-namespace"))
+				expectClusterScopedNamespaceError(err, "List", "some-namespace")
+				Expect(rt.requests).NotTo(ContainElement("GET /api/v1/nodes"))
+			})
+
+			It("should still allow listing a cluster-scoped object when no namespace is specified", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				nodeList := &corev1.NodeList{}
+				err := cl.List(ctx, nodeList)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("validating that the request was not scoped to any namespace")
+				Expect(rt.requests).To(ContainElement("GET /api/v1/nodes"))
+			})
+
+			It("should invoke each caller-supplied ListOption exactly once", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				dep, err = clientset.AppsV1().Deployments(ns).Create(ctx, dep, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				counting := &countingListOption{inner: client.InNamespace(ns)}
+				deps := &appsv1.DeploymentList{}
+				err = cl.List(ctx, deps, counting, client.MatchingLabels(dep.ObjectMeta.Labels))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(counting.applied).To(Equal(1))
+
+				By("validating the namespaced list reached the downstream client")
+				Expect(deps.Items).To(HaveLen(1))
+				Expect(deps.Items[0].Name).To(Equal(dep.Name))
+			})
+
 			PIt("should fail if the object doesn't have meta", func() {
 
 			})
@@ -3342,6 +3510,21 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				deleteDeployment(ctx, depFrontend4, "test-namespace-8")
 				deleteNamespace(ctx, tns3)
 				deleteNamespace(ctx, tns4)
+			})
+
+			It("should error when InNamespace targets a cluster-scoped object, without sending a request (issue #988)", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				nodeList := &unstructured.UnstructuredList{}
+				nodeList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Kind:    "NodeList",
+					Version: "v1",
+				})
+
+				err := cl.List(ctx, nodeList, client.InNamespace("some-namespace"))
+				expectClusterScopedNamespaceError(err, "List", "some-namespace")
+				Expect(rt.requests).NotTo(ContainElement("GET /api/v1/nodes"))
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {
@@ -3789,6 +3972,21 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(metaList.Continue).To(BeEmpty())
 				Expect(metaList.Items[0].Name).To(Equal(dep3.Name))
 				Expect(metaList.Items[1].Name).To(Equal(dep4.Name))
+			})
+
+			It("should error when InNamespace targets a cluster-scoped object, without sending a request (issue #988)", func(ctx SpecContext) {
+				cl, rt := newRecordingClient()
+
+				metaList := &metav1.PartialObjectMetadataList{}
+				metaList.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "NodeList",
+				})
+
+				err := cl.List(ctx, metaList, client.InNamespace("some-namespace"))
+				expectClusterScopedNamespaceError(err, "List", "some-namespace")
+				Expect(rt.requests).NotTo(ContainElement("GET /api/v1/nodes"))
 			})
 
 			PIt("should fail if the object doesn't have meta", func() {

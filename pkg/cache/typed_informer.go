@@ -16,14 +16,18 @@ limitations under the License.
 
 package cache
 
-import toolscache "k8s.io/client-go/tools/cache"
+import (
+	"fmt"
+
+	toolscache "k8s.io/client-go/tools/cache"
+)
 
 // TypedInformer adds type-safe variants for the non-type-safe methods in Informer.
 type TypedInformer[object toolscache.Object] interface {
 	Informer
 
 	// AddTypedEventHandler adds a type-safe event handler to the informer.
-	AddTypedEventHandler(handler toolscache.TypedResourceEventHandler[object], options toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error)
+	AddTypedEventHandler(handler toolscache.TypedResourceEventHandler[object], options ...toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error)
 
 	// AddTypedIndexers adds type-safe indexers to the informer.
 	AddTypedIndexers(indexers toolscache.TypedIndexers[object]) error
@@ -41,8 +45,16 @@ type typedInformer[object toolscache.Object] struct {
 	Informer
 }
 
-func (i *typedInformer[object]) AddTypedEventHandler(handler toolscache.TypedResourceEventHandler[object], options toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error) {
-	return i.AddEventHandlerWithOptions(&typedResourceEventHandler[object]{handler: handler}, options)
+func (i *typedInformer[object]) AddTypedEventHandler(handler toolscache.TypedResourceEventHandler[object], options ...toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error) {
+	var o toolscache.HandlerOptions
+	switch len(options) {
+	case 0:
+	case 1:
+		o = options[0]
+	default:
+		return nil, fmt.Errorf("at most one HandlerOptions may be passed, got %d", len(options))
+	}
+	return i.AddEventHandlerWithOptions(&typedResourceEventHandler[object]{handler: handler}, o)
 }
 
 func (i *typedInformer[object]) AddTypedIndexers(indexers toolscache.TypedIndexers[object]) error {

@@ -17,6 +17,8 @@ limitations under the License.
 package cache
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -76,6 +78,24 @@ var _ = Describe("TypedInformer", func() {
 		Expect(*deleted.FinalStateUnknown).To(Equal(tombstone))
 	})
 
+	It("adapts typed event handler options", func() {
+		informer := &recordingInformer{}
+		typedInformer := NewTypedInformer[*corev1.Pod](informer)
+
+		_, err := typedInformer.AddTypedEventHandler(toolscache.TypedResourceEventHandlerFuncs[*corev1.Pod]{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(informer.options).To(Equal(toolscache.HandlerOptions{}))
+
+		resyncPeriod := time.Minute
+		resync := toolscache.HandlerOptions{ResyncPeriod: &resyncPeriod}
+		_, err = typedInformer.AddTypedEventHandler(toolscache.TypedResourceEventHandlerFuncs[*corev1.Pod]{}, resync)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(informer.options).To(Equal(resync))
+
+		_, err = typedInformer.AddTypedEventHandler(toolscache.TypedResourceEventHandlerFuncs[*corev1.Pod]{}, toolscache.HandlerOptions{}, toolscache.HandlerOptions{})
+		Expect(err).To(MatchError("at most one HandlerOptions may be passed, got 2"))
+	})
+
 	It("adapts typed indexers", func() {
 		informer := &recordingInformer{}
 		typedInformer := NewTypedInformer[*corev1.Pod](informer)
@@ -96,11 +116,13 @@ var _ = Describe("TypedInformer", func() {
 type recordingInformer struct {
 	Informer
 	handler  toolscache.ResourceEventHandler
+	options  toolscache.HandlerOptions
 	indexers toolscache.Indexers
 }
 
-func (i *recordingInformer) AddEventHandlerWithOptions(handler toolscache.ResourceEventHandler, _ toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error) {
+func (i *recordingInformer) AddEventHandlerWithOptions(handler toolscache.ResourceEventHandler, options toolscache.HandlerOptions) (toolscache.ResourceEventHandlerRegistration, error) {
 	i.handler = handler
+	i.options = options
 	return nil, nil
 }
 

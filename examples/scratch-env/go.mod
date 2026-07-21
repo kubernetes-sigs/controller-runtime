@@ -74,11 +74,13 @@ require (
 replace sigs.k8s.io/controller-runtime => ../..
 
 replace (
-	k8s.io/api => github.com/pohly/kubernetes/staging/src/k8s.io/api v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/apiextensions-apiserver => github.com/pohly/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/apimachinery => github.com/pohly/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/apiserver => github.com/pohly/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/client-go => github.com/pohly/kubernetes/staging/src/k8s.io/client-go v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/component-base => github.com/pohly/kubernetes/staging/src/k8s.io/component-base v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/streaming => github.com/pohly/kubernetes/staging/src/k8s.io/streaming v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/api => github.com/kubernetes/kubernetes/staging/src/k8s.io/api v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/apiextensions-apiserver => github.com/kubernetes/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/apimachinery => github.com/kubernetes/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/apiserver => github.com/kubernetes/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/client-go => github.com/kubernetes/kubernetes/staging/src/k8s.io/client-go v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/code-generator => github.com/kubernetes/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/component-base => github.com/kubernetes/kubernetes/staging/src/k8s.io/component-base v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/kms => github.com/kubernetes/kubernetes/staging/src/k8s.io/kms v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/streaming => github.com/kubernetes/kubernetes/staging/src/k8s.io/streaming v0.0.0-20260721090818-fd0d12849f1d
 )

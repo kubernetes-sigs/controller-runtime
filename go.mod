@@ -97,7 +97,7 @@ require (
 	golang.org/x/tools v0.47.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/grpc v1.81.1 // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/component-base v0.37.0-alpha.3 // indirect
@@ -109,11 +109,13 @@ require (
 )
 
 replace (
-	k8s.io/api => github.com/pohly/kubernetes/staging/src/k8s.io/api v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/apiextensions-apiserver => github.com/pohly/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/apimachinery => github.com/pohly/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/apiserver => github.com/pohly/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/client-go => github.com/pohly/kubernetes/staging/src/k8s.io/client-go v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/component-base => github.com/pohly/kubernetes/staging/src/k8s.io/component-base v0.0.0-20260717130512-b13e45ea9824
-	k8s.io/streaming => github.com/pohly/kubernetes/staging/src/k8s.io/streaming v0.0.0-20260717130512-b13e45ea9824
+	k8s.io/api => github.com/kubernetes/kubernetes/staging/src/k8s.io/api v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/apiextensions-apiserver => github.com/kubernetes/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/apimachinery => github.com/kubernetes/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/apiserver => github.com/kubernetes/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/client-go => github.com/kubernetes/kubernetes/staging/src/k8s.io/client-go v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/code-generator => github.com/kubernetes/kubernetes/staging/src/k8s.io/code-generator v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/component-base => github.com/kubernetes/kubernetes/staging/src/k8s.io/component-base v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/kms => github.com/kubernetes/kubernetes/staging/src/k8s.io/kms v0.0.0-20260721090818-fd0d12849f1d
+	k8s.io/streaming => github.com/kubernetes/kubernetes/staging/src/k8s.io/streaming v0.0.0-20260721090818-fd0d12849f1d
 )

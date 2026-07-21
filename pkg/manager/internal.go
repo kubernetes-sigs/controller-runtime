@@ -617,12 +617,27 @@ func (cm *controllerManager) initLeaderElector() (*leaderelection.LeaderElector,
 		RenewDeadline: cm.renewDeadline,
 		RetryPeriod:   cm.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(_ context.Context) {
+			OnStartedLeading: func(ctx context.Context) {
 				if err := cm.startLeaderElectionRunnables(); err != nil {
 					cm.errChan <- err
 					return
 				}
 				close(cm.elected)
+
+				if !cm.leaderElectionReleaseOnCancel {
+					return
+				}
+				// When ReleaseOnCancel is set, Run() calls OnStartedLeading synchronously
+				// and keeps renewing the lease until it returns, then releases the lease.
+				// We must block until ctx is cancelled and all runnables have finished.
+				<-ctx.Done()
+				stopCtx := context.Background()
+				if cm.gracefulShutdownTimeout >= 0 {
+					var cancel context.CancelFunc
+					stopCtx, cancel = context.WithTimeout(stopCtx, cm.gracefulShutdownTimeout)
+					defer cancel()
+				}
+				cm.runnables.LeaderElection.StopAndWait(stopCtx)
 			},
 			OnStoppedLeading: func() {
 				if cm.onStoppedLeading != nil {

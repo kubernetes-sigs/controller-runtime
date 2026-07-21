@@ -796,6 +796,21 @@ var _ = Describe("Fake client", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
+		It("should set deletionTimestamp on the object passed to Delete when finalizers are present", func(ctx SpecContext) {
+			obj := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cm",
+					Namespace:  "delete-updates-caller-object",
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
+				},
+			}
+			Expect(cl.Create(ctx, obj)).To(Succeed())
+			Expect(obj.DeletionTimestamp).To(BeNil())
+
+			Expect(cl.Delete(ctx, obj)).To(Succeed())
+			Expect(obj.DeletionTimestamp).NotTo(BeNil())
+		})
+
 		It("should handle finalizers on Update", func(ctx SpecContext) {
 			namespacedName := types.NamespacedName{
 				Name:      "test-cm",
@@ -1211,15 +1226,11 @@ var _ = Describe("Fake client", func() {
 			By("Deleting the object")
 			err = cl.Delete(ctx, newObj)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(newObj.DeletionTimestamp).NotTo(BeNil())
 
 			By("Removing the finalizer")
-			obj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       namespacedName.Name,
-					Namespace:  namespacedName.Namespace,
-					Finalizers: []string{},
-				},
-			}
+			obj := newObj.DeepCopy()
+			obj.Finalizers = []string{}
 			err = cl.Patch(ctx, obj, client.MergeFrom(newObj))
 			Expect(err).ToNot(HaveOccurred())
 

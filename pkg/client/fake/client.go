@@ -1541,7 +1541,7 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 	switch obj := obj.(type) {
 	case *unstructured.Unstructured:
 		if !isUnstructuredScaleResource(obj) {
-			return nil, fmt.Errorf("unimplemented scale subresource for resource %T", obj)
+			return nil, fmt.Errorf("scale subresource for resource %T is not implemented", obj)
 		}
 		var replicas int32 = 1
 		if replicasVal, found, err := unstructured.NestedInt64(obj.Object, "spec", "replicas"); err != nil {
@@ -1555,6 +1555,20 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 		} else if found {
 			statusReplicas = int32(statusReplicasVal)
 		}
+		var selector string
+		if selectorVal, found, err := unstructured.NestedFieldNoCopy(obj.Object, "spec", "selector"); err != nil {
+			return nil, err
+		} else if found && selectorVal != nil {
+			selectorMap, ok := selectorVal.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf(".spec.selector accessor error: %v is of the type %T, expected map[string]interface{}", selectorVal, selectorVal)
+			}
+			ls := &metav1.LabelSelector{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(selectorMap, ls); err != nil {
+				return nil, err
+			}
+			selector = ls.String()
+		}
 		return &autoscalingv1.Scale{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:         obj.GetNamespace(),
@@ -1563,8 +1577,11 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 				ResourceVersion:   obj.GetResourceVersion(),
 				CreationTimestamp: obj.GetCreationTimestamp(),
 			},
-			Spec:   autoscalingv1.ScaleSpec{Replicas: replicas},
-			Status: autoscalingv1.ScaleStatus{Replicas: statusReplicas},
+			Spec: autoscalingv1.ScaleSpec{Replicas: replicas},
+			Status: autoscalingv1.ScaleStatus{
+				Replicas: statusReplicas,
+				Selector: selector,
+			},
 		}, nil
 	case *appsv1.Deployment:
 		var replicas int32 = 1
@@ -1672,7 +1689,7 @@ func applyScale(obj client.Object, scale *autoscalingv1.Scale) error {
 	switch obj := obj.(type) {
 	case *unstructured.Unstructured:
 		if !isUnstructuredScaleResource(obj) {
-			return fmt.Errorf("unimplemented scale subresource for resource %T", obj)
+			return fmt.Errorf("scale subresource for resource %T is not implemented", obj)
 		}
 		if err := unstructured.SetNestedField(obj.Object, int64(scale.Spec.Replicas), "spec", "replicas"); err != nil {
 			return err

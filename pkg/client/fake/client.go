@@ -1524,65 +1524,26 @@ func getSingleOrZeroOptions[T any](opts []T) (opt T, err error) {
 	return
 }
 
-func isUnstructuredScaleResource(obj *unstructured.Unstructured) bool {
-	gvk := obj.GroupVersionKind()
-	switch gvk {
-	case appsv1.SchemeGroupVersion.WithKind("Deployment"),
-		appsv1.SchemeGroupVersion.WithKind("ReplicaSet"),
-		appsv1.SchemeGroupVersion.WithKind("StatefulSet"),
-		corev1.SchemeGroupVersion.WithKind("ReplicationController"):
-		return true
-	default:
-		return false
-	}
-}
-
 func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 	switch obj := obj.(type) {
 	case *unstructured.Unstructured:
-		if !isUnstructuredScaleResource(obj) {
+		var typed client.Object
+		switch obj.GroupVersionKind() {
+		case appsv1.SchemeGroupVersion.WithKind("Deployment"):
+			typed = &appsv1.Deployment{}
+		case appsv1.SchemeGroupVersion.WithKind("ReplicaSet"):
+			typed = &appsv1.ReplicaSet{}
+		case appsv1.SchemeGroupVersion.WithKind("StatefulSet"):
+			typed = &appsv1.StatefulSet{}
+		case corev1.SchemeGroupVersion.WithKind("ReplicationController"):
+			typed = &corev1.ReplicationController{}
+		default:
 			return nil, fmt.Errorf("scale subresource for resource %T is not implemented", obj)
 		}
-		var replicas int32 = 1
-		if replicasVal, found, err := unstructured.NestedInt64(obj.Object, "spec", "replicas"); err != nil {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, typed); err != nil {
 			return nil, err
-		} else if found {
-			replicas = int32(replicasVal)
 		}
-		var statusReplicas int32
-		if statusReplicasVal, found, err := unstructured.NestedInt64(obj.Object, "status", "replicas"); err != nil {
-			return nil, err
-		} else if found {
-			statusReplicas = int32(statusReplicasVal)
-		}
-		var selector string
-		if selectorVal, found, err := unstructured.NestedFieldNoCopy(obj.Object, "spec", "selector"); err != nil {
-			return nil, err
-		} else if found && selectorVal != nil {
-			selectorMap, ok := selectorVal.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf(".spec.selector accessor error: %v is of the type %T, expected map[string]interface{}", selectorVal, selectorVal)
-			}
-			ls := &metav1.LabelSelector{}
-			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(selectorMap, ls); err != nil {
-				return nil, err
-			}
-			selector = ls.String()
-		}
-		return &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:         obj.GetNamespace(),
-				Name:              obj.GetName(),
-				UID:               obj.GetUID(),
-				ResourceVersion:   obj.GetResourceVersion(),
-				CreationTimestamp: obj.GetCreationTimestamp(),
-			},
-			Spec: autoscalingv1.ScaleSpec{Replicas: replicas},
-			Status: autoscalingv1.ScaleStatus{
-				Replicas: statusReplicas,
-				Selector: selector,
-			},
-		}, nil
+		return extractScale(typed)
 	case *appsv1.Deployment:
 		var replicas int32 = 1
 		if obj.Spec.Replicas != nil {
@@ -1688,13 +1649,27 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 func applyScale(obj client.Object, scale *autoscalingv1.Scale) error {
 	switch obj := obj.(type) {
 	case *unstructured.Unstructured:
-		if !isUnstructuredScaleResource(obj) {
+		var typed client.Object
+		switch obj.GroupVersionKind() {
+		case appsv1.SchemeGroupVersion.WithKind("Deployment"):
+			typed = &appsv1.Deployment{}
+		case appsv1.SchemeGroupVersion.WithKind("ReplicaSet"):
+			typed = &appsv1.ReplicaSet{}
+		case appsv1.SchemeGroupVersion.WithKind("StatefulSet"):
+			typed = &appsv1.StatefulSet{}
+		case corev1.SchemeGroupVersion.WithKind("ReplicationController"):
+			typed = &corev1.ReplicationController{}
+		default:
 			return fmt.Errorf("scale subresource for resource %T is not implemented", obj)
 		}
-		if err := unstructured.SetNestedField(obj.Object, int64(scale.Spec.Replicas), "spec", "replicas"); err != nil {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, typed); err != nil {
 			return err
 		}
-		return nil
+		if err := applyScale(typed, scale); err != nil {
+			return err
+		}
+		// applyScale only updates Spec.Replicas for known types; write that back.
+		return unstructured.SetNestedField(obj.Object, int64(scale.Spec.Replicas), "spec", "replicas")
 	case *appsv1.Deployment:
 		obj.Spec.Replicas = new(scale.Spec.Replicas)
 	case *appsv1.ReplicaSet:

@@ -30,6 +30,12 @@ import (
 var log = logf.RuntimeLog.WithName("predicate").WithName("eventFilters")
 
 // Predicate filters events before enqueuing the keys.
+//
+// NOTE: Predicates only filter which events are enqueued for reconciliation.
+// They do not reduce what the cache stores: every watched object is still held
+// in memory. To bound cache memory for a Kind, configure the cache with a
+// label/field selector (cache.Options or cache.ByObject), a cache.ByObject
+// Transform, or client.Options.Cache.DisableFor.
 type Predicate = TypedPredicate[client.Object]
 
 // TypedPredicate filters events before enqueuing the keys.

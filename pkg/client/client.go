@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
@@ -232,11 +231,7 @@ func newClient(config *rest.Config, options Options) (Client, error) {
 	if !isCache {
 		return nil, fmt.Errorf("cache reader does not implement %T, can not provide ReadYourOwnWriteConsistency", cache(nil))
 	}
-	return &consistentClient{
-		upstream:        c,
-		cache:           informerCache,
-		lockedKeysByGVK: threadSafeMap[schema.GroupVersionKind, *threadSafeMap[types.NamespacedName, *keyLocker]]{},
-	}, nil
+	return newConsistentClient(c, informerCache, nil), nil
 }
 
 var _ Client = &client{}

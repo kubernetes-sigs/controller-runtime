@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,14 +38,40 @@ type cache interface {
 	RemoveRequiredDeleteForObject(Object) error
 }
 
+type consistentClientUpstream interface {
+	Client
+
+	delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error)
+}
+
+type keyLock interface {
+	Lock(ctx context.Context) error
+	Unlock()
+	Wait(ctx context.Context) error
+}
+
 var _ Client = (*consistentClient)(nil)
 
+func newConsistentClient(upstream consistentClientUpstream, c cache, newKeyLock func() keyLock) *consistentClient {
+	if newKeyLock == nil {
+		newKeyLock = func() keyLock { return &keyLocker{} }
+	}
+
+	return &consistentClient{
+		upstream: upstream,
+		cache:    c,
+		lockedKeysByGVK: newThreadSafeMap[schema.GroupVersionKind](func() *threadSafeMap[types.NamespacedName, keyLock] {
+			return newThreadSafeMap[types.NamespacedName](newKeyLock)
+		}),
+	}
+}
+
 type consistentClient struct {
-	upstream *client
+	upstream consistentClientUpstream
 	cache    cache
 
-	// lockedKeysByGVK maps gvk -> key -> keyLocker
-	lockedKeysByGVK threadSafeMap[schema.GroupVersionKind, *threadSafeMap[types.NamespacedName, *keyLocker]]
+	// lockedKeysByGVK maps gvk -> key -> keyLock
+	lockedKeysByGVK *threadSafeMap[schema.GroupVersionKind, *threadSafeMap[types.NamespacedName, keyLock]]
 }
 
 func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
@@ -54,7 +81,7 @@ func (c *consistentClient) Get(ctx context.Context, key ObjectKey, obj Object, o
 	}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(key)
-	if err := keyLock.wait(ctx); err != nil {
+	if err := keyLock.Wait(ctx); err != nil {
 		return err
 	}
 
@@ -69,7 +96,7 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 
 	keys := c.lockedKeysByGVK.getOrCreate(gvk).allValues()
 	for _, keyLock := range keys {
-		if err := keyLock.wait(ctx); err != nil {
+		if err := keyLock.Wait(ctx); err != nil {
 			return err
 		}
 	}
@@ -114,10 +141,10 @@ func (c *consistentClient) writeAndRecordRV(ctx context.Context, gvk schema.Grou
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
-	if err := keyLock.lock(ctx); err != nil {
+	if err := keyLock.Lock(ctx); err != nil {
 		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
-	defer keyLock.unlock()
+	defer keyLock.Unlock()
 
 	if err := write(); err != nil {
 		return err
@@ -163,10 +190,10 @@ func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfigura
 	}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
-	if err := keyLock.lock(ctx); err != nil {
+	if err := keyLock.Lock(ctx); err != nil {
 		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
-	defer keyLock.unlock()
+	defer keyLock.Unlock()
 
 	if err := c.upstream.Apply(ctx, obj, opts...); err != nil {
 		return err
@@ -215,10 +242,10 @@ func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...Delet
 	namespacedName := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 
 	keyLock := c.lockedKeysByGVK.getOrCreate(gvk).getOrCreate(namespacedName)
-	if err := keyLock.lock(ctx); err != nil {
+	if err := keyLock.Lock(ctx); err != nil {
 		return fmt.Errorf("failed to acquire lock for %s/%s: %w", namespacedName.Namespace, namespacedName.Name, err)
 	}
-	defer keyLock.unlock()
+	defer keyLock.Unlock()
 
 	// Register the delete before we execute it, otherwise it may be in the cache
 	// before we register it, causing a deadlock.
@@ -287,7 +314,7 @@ type keyLocker struct {
 	done chan struct{}
 }
 
-func (l *keyLocker) lock(ctx context.Context) error {
+func (l *keyLocker) Lock(ctx context.Context) error {
 	for {
 		l.mutex.Lock()
 		if l.done == nil {
@@ -306,7 +333,7 @@ func (l *keyLocker) lock(ctx context.Context) error {
 	}
 }
 
-func (l *keyLocker) unlock() {
+func (l *keyLocker) Unlock() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -317,9 +344,9 @@ func (l *keyLocker) unlock() {
 	l.done = nil
 }
 
-// wait waits for the current lock holder if any to
+// Wait waits for the current lock holder if any to
 // release the lock.
-func (l *keyLocker) wait(ctx context.Context) error {
+func (l *keyLocker) Wait(ctx context.Context) error {
 	l.mutex.Lock()
 	done := l.done
 	l.mutex.Unlock()
@@ -336,9 +363,17 @@ func (l *keyLocker) wait(ctx context.Context) error {
 	}
 }
 
+func newThreadSafeMap[k comparable, v any](newValue func() v) *threadSafeMap[k, v] {
+	return &threadSafeMap[k, v]{
+		data:     map[k]v{},
+		newValue: newValue,
+	}
+}
+
 type threadSafeMap[k comparable, v any] struct {
-	lock sync.Mutex
-	data map[k]v
+	lock     sync.Mutex
+	data     map[k]v
+	newValue func() v
 }
 
 func (t *threadSafeMap[k, v]) getOrCreate(key k) v {
@@ -347,10 +382,7 @@ func (t *threadSafeMap[k, v]) getOrCreate(key k) v {
 
 	val, exists := t.data[key]
 	if !exists {
-		if t.data == nil {
-			t.data = make(map[k]v)
-		}
-		val = reflect.New(reflect.TypeOf(val).Elem()).Interface().(v)
+		val = t.newValue()
 		t.data[key] = val
 	}
 

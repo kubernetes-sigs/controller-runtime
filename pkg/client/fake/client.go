@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	/*
@@ -130,6 +131,7 @@ type ClientBuilder struct {
 	interceptorFuncs      *interceptor.Funcs
 	typeConverters        []managedfields.TypeConverter
 	returnManagedFields   bool
+	globalRVCounter       bool
 	isBuilt               bool
 
 	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
@@ -176,6 +178,15 @@ func (f *ClientBuilder) WithRuntimeObjects(initRuntimeObjs ...runtime.Object) *C
 // tracker.
 func (f *ClientBuilder) WithObjectTracker(ot testing.ObjectTracker) *ClientBuilder {
 	f.objectTracker = ot
+	return f
+}
+
+// WithGlobalResourceVersionCounter makes the client use a global counter for resourceVersions
+// rather than tracking them per object, mimicking what the apiserver does.
+//
+// Disabled by default.
+func (f *ClientBuilder) WithGlobalResourceVersionCounter() *ClientBuilder {
+	f.globalRVCounter = true
 	return f
 }
 
@@ -306,6 +317,9 @@ func (f *ClientBuilder) Build() client.WithWatch {
 		scheme:                        f.scheme,
 		withStatusSubresource:         withStatusSubResource,
 		usesFieldManagedObjectTracker: usesFieldManagedObjectTracker,
+	}
+	if f.globalRVCounter {
+		tracker.resourceVersionCounter = &atomic.Uint64{}
 	}
 
 	for _, obj := range f.initObject {

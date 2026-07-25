@@ -30,6 +30,9 @@ import (
 var log = logf.RuntimeLog.WithName("predicate").WithName("eventFilters")
 
 // Predicate filters events before enqueuing the keys.
+//
+// NOTE: This does not affect what the cache stores. That is configured via
+// cache.Options, which are global to all users of the cache.
 type Predicate = TypedPredicate[client.Object]
 
 // TypedPredicate filters events before enqueuing the keys.

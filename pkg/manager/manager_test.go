@@ -161,6 +161,21 @@ var _ = Describe("manger.Manager", func() {
 			Expect(isCustomWebhook).To(BeTrue())
 		})
 
+		It("should create a webhook server that is disabled", func(specCtx SpecContext) {
+			By("setting the port to -1", func() {
+				srv := webhook.NewServer(webhook.Options{Port: -1})
+				m, err := New(cfg, Options{WebhookServer: srv})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(m).NotTo(BeNil())
+
+				svr := m.GetWebhookServer()
+				Expect(svr).NotTo(BeNil())
+				Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(-1))
+				Expect(svr.Start(specCtx)).NotTo(HaveOccurred())
+				Expect(svr.WebhookMux()).ToNot(BeNil())
+			})
+		})
+
 		Context("with leader election enabled", func() {
 			It("should only cancel the leader election after all runnables are done", func(specCtx SpecContext) {
 				m, err := New(cfg, Options{

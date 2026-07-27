@@ -75,6 +75,8 @@ type Options struct {
 
 	// Port is the port number that the server will serve.
 	// It will be defaulted to 9443 if unspecified.
+	//
+	// To disable the webhook server set Port to -1.
 	Port int
 
 	// CertDir is the directory that contains the server key and certificate.
@@ -142,7 +144,7 @@ func (o *Options) setDefaults() {
 		o.WebhookMux = http.NewServeMux()
 	}
 
-	if o.Port <= 0 {
+	if o.Port == 0 {
 		o.Port = DefaultPort
 	}
 
@@ -186,13 +188,22 @@ func (s *DefaultServer) Register(path string, hook http.Handler) {
 	s.webhookMux.Handle(path, metrics.InstrumentedHook(path, hook))
 
 	regLog := log.WithValues("path", path)
-	regLog.Info("Registering webhook")
+	if s.Options.Port < 0 {
+		regLog.Info("Webhook is disabled")
+	} else {
+		regLog.Info("Registering webhook")
+	}
 }
 
 // Start runs the server.
 // It will install the webhook related resources depend on the server configuration.
 func (s *DefaultServer) Start(ctx context.Context) error {
 	s.defaultingOnce.Do(s.setDefaults)
+
+	if s.Options.Port < 0 {
+		log.Info("Webhook server is disabled")
+		return nil
+	}
 
 	log.Info("Starting webhook server")
 
@@ -284,6 +295,9 @@ func (s *DefaultServer) StartedChecker() healthz.Checker {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
+		if s.Options.Port < 0 {
+			return nil
+		}
 		if !s.started {
 			return fmt.Errorf("webhook server has not been started yet")
 		}

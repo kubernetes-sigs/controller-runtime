@@ -44,6 +44,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
@@ -54,6 +55,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/randfill"
 )
 
 const (
@@ -2623,6 +2625,109 @@ var _ = Describe("Fake client", func() {
 		expectedErr := "unimplemented scale subresource for resource *v1.Pod"
 		Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scale).Error()).To(Equal(expectedErr))
 		Expect(cl.SubResource(subResourceScale).Update(ctx, obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
+	})
+	It("supports scale subresources on unstructured objects with spec.replicas", func(ctx SpecContext) {
+		obj := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]any{
+				"name":      "foo",
+				"namespace": "default",
+			},
+			"spec": map[string]any{
+				"replicas": int64(1),
+			},
+			"status": map[string]any{
+				"replicas": int64(1),
+			},
+		}}
+		cl := NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(obj).Build()
+
+		scale := &autoscalingv1.Scale{}
+		Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scale)).To(Succeed())
+		Expect(scale.Spec.Replicas).To(Equal(int32(1)))
+		Expect(scale.Status.Replicas).To(Equal(int32(1)))
+
+		scale.Spec.Replicas = 3
+		Expect(cl.SubResource(subResourceScale).Update(ctx, obj, client.WithSubResourceBody(scale))).To(Succeed())
+
+		updated := &unstructured.Unstructured{}
+		updated.SetAPIVersion("apps/v1")
+		updated.SetKind("Deployment")
+		updated.SetName("foo")
+		updated.SetNamespace("default")
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(updated), updated)).To(Succeed())
+		replicas, found, err := unstructured.NestedInt64(updated.Object, "spec", "replicas")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(int32(replicas)).To(Equal(int32(3)))
+	})
+
+	It("structured and unstructured scale subresources behave consistently", func(ctx SpecContext) {
+		seed := time.Now().UnixMicro()
+		GinkgoWriter.Printf("seed: %d\n", seed)
+		fuzzer := randfill.NewWithSeed(seed).Funcs(
+			func(d *appsv1.Deployment, c randfill.Continue) {
+				var replicas, statusReplicas int32
+				c.Fill(&replicas)
+				c.Fill(&statusReplicas)
+				d.TypeMeta = metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"}
+				d.ObjectMeta = metav1.ObjectMeta{Name: "scale-" + rand.String(8), Namespace: "default"}
+				d.Spec.Replicas = &replicas
+				d.Status.Replicas = statusReplicas
+			},
+			func(scale *autoscalingv1.Scale, c randfill.Continue) {
+				c.Fill(&scale.Spec.Replicas)
+			},
+		)
+
+		for range 100 {
+			dep := &appsv1.Deployment{}
+			fuzzer.Fill(dep)
+
+			unstrMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(dep)
+			Expect(err).NotTo(HaveOccurred())
+			unstr := &unstructured.Unstructured{Object: unstrMap}
+			unstr.SetAPIVersion("apps/v1")
+			unstr.SetKind("Deployment")
+
+			structuredCl := NewClientBuilder().WithObjects(dep.DeepCopy()).Build()
+			unstructuredCl := NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(unstr.DeepCopy()).Build()
+
+			depKey := dep.DeepCopy()
+			unstrKey := &unstructured.Unstructured{}
+			unstrKey.SetAPIVersion("apps/v1")
+			unstrKey.SetKind("Deployment")
+			unstrKey.SetName(dep.Name)
+			unstrKey.SetNamespace(dep.Namespace)
+
+			scaleTyped, scaleUnstr := &autoscalingv1.Scale{}, &autoscalingv1.Scale{}
+			Expect(structuredCl.SubResource(subResourceScale).Get(ctx, depKey, scaleTyped)).To(Succeed())
+			Expect(unstructuredCl.SubResource(subResourceScale).Get(ctx, unstrKey, scaleUnstr)).To(Succeed())
+			Expect(scaleTyped.Spec.Replicas).To(Equal(scaleUnstr.Spec.Replicas))
+			Expect(scaleTyped.Status.Replicas).To(Equal(scaleUnstr.Status.Replicas))
+
+			updateScale := &autoscalingv1.Scale{}
+			fuzzer.Fill(updateScale)
+			Expect(structuredCl.SubResource(subResourceScale).Update(ctx, depKey, client.WithSubResourceBody(updateScale.DeepCopy()))).To(Succeed())
+			Expect(unstructuredCl.SubResource(subResourceScale).Update(ctx, unstrKey, client.WithSubResourceBody(updateScale.DeepCopy()))).To(Succeed())
+
+			Expect(structuredCl.Get(ctx, client.ObjectKeyFromObject(dep), depKey)).To(Succeed())
+			Expect(depKey.Spec.Replicas).NotTo(BeNil())
+			Expect(*depKey.Spec.Replicas).To(Equal(updateScale.Spec.Replicas))
+
+			Expect(unstructuredCl.Get(ctx, client.ObjectKeyFromObject(dep), unstrKey)).To(Succeed())
+			replicas, found, err := unstructured.NestedInt64(unstrKey.Object, "spec", "replicas")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(int32(replicas)).To(Equal(updateScale.Spec.Replicas))
+
+			scaleTyped, scaleUnstr = &autoscalingv1.Scale{}, &autoscalingv1.Scale{}
+			Expect(structuredCl.SubResource(subResourceScale).Get(ctx, depKey, scaleTyped)).To(Succeed())
+			Expect(unstructuredCl.SubResource(subResourceScale).Get(ctx, unstrKey, scaleUnstr)).To(Succeed())
+			Expect(scaleTyped.Spec.Replicas).To(Equal(scaleUnstr.Spec.Replicas))
+			Expect(scaleTyped.Spec.Replicas).To(Equal(updateScale.Spec.Replicas))
+		}
 	})
 
 	It("disallows scale subresources on non-existing objects", func(ctx SpecContext) {

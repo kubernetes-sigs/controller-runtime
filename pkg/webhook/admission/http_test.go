@@ -28,8 +28,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	admissionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics"
+	internalmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -224,6 +229,82 @@ var _ = Describe("Admission Webhooks", func() {
 				webhook.ServeHTTP(bw, req)
 				return respRecorder.Body.Len()
 			}, time.Second*3).Should(Equal(0))
+		})
+
+		It("should report admission response status codes", func() {
+			const metricsPath = "/admission-response-metrics-test"
+			webhook := &Webhook{
+				Handler: HandlerFunc(func(context.Context, Request) Response {
+					return Response{AdmissionResponse: admissionv1.AdmissionResponse{
+						Allowed: false,
+						Result: &metav1.Status{
+							Code:    http.StatusTooManyRequests,
+							Message: "rate limited",
+						},
+					}}
+				}),
+			}
+			instrumentedWebhook, err := StandaloneWebhook(webhook, StandaloneOptions{MetricsPath: metricsPath})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "true", "200",
+			))).To(BeZero())
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "403",
+			))).To(BeZero())
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "500",
+			))).To(BeZero())
+
+			req := httptest.NewRequest(http.MethodPost, metricsPath, bytes.NewBufferString(`{"request":{}}`))
+			req.Header.Set("Content-Type", "application/json")
+			respRecorder := httptest.NewRecorder()
+			instrumentedWebhook.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Code).To(Equal(http.StatusOK))
+
+			badReq := httptest.NewRequest(http.MethodPost, metricsPath, nil)
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), badReq)
+
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "429",
+			))).To(Equal(float64(1)))
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "400",
+			))).To(Equal(float64(1)))
+		})
+
+		It("should report an unset admission response status code as 200", func() {
+			const metricsPath = "/admission-response-default-code-test"
+			instrumentedWebhook := internalmetrics.InstrumentedHook(metricsPath, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				webhook.writeAdmissionResponse(r.Context(), w, admissionv1.AdmissionReview{
+					Response: &admissionv1.AdmissionResponse{Allowed: false},
+				})
+			}))
+
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, metricsPath, nil))
+
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "false", "200",
+			))).To(Equal(float64(1)))
+		})
+
+		It("should report an allowed response without a result as 200", func() {
+			const metricsPath = "/admission-response-allowed-default-code-test"
+			webhook := &Webhook{
+				Handler: HandlerFunc(func(context.Context, Request) Response {
+					return Response{AdmissionResponse: admissionv1.AdmissionResponse{Allowed: true}}
+				}),
+			}
+			instrumentedWebhook, err := StandaloneWebhook(webhook, StandaloneOptions{MetricsPath: metricsPath})
+			Expect(err).NotTo(HaveOccurred())
+
+			req := httptest.NewRequest(http.MethodPost, metricsPath, bytes.NewBufferString(`{"request":{}}`))
+			req.Header.Set("Content-Type", "application/json")
+			instrumentedWebhook.ServeHTTP(httptest.NewRecorder(), req)
+
+			Expect(testutil.ToFloat64(admissionmetrics.AdmissionResponseTotal.WithLabelValues(
+				metricsPath, "true", "200",
+			))).To(Equal(float64(1)))
 		})
 	})
 })

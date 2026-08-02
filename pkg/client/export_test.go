@@ -27,6 +27,8 @@ type (
 	ConsistencyCache = cache
 	// KeyLock is the per key lock the consistent client serializes on.
 	KeyLock = keyLock
+	// KeyLocker is the implementation of KeyLock the client uses
+	KeyLocker = keyLocker
 )
 
 // UpstreamClient is what NewConsistentClient wraps. It mirrors the unexported

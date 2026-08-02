@@ -22,17 +22,21 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
-	"k8s.io/utils/ptr"
 
+	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -44,25 +48,21 @@ const watchDelay = 10 * time.Second
 
 // newConsistentFakeClient returns a consistent client that is backed by a fakeclient
 // and uses the real cache.
-func newConsistentFakeClient(t *testing.T, opts cache.Options) client.Client {
+func newConsistentFakeClient(t *testing.T, locker client.KeyLock, initObjects ...client.Object) client.Client {
 	t.Helper()
-
-	opts.SyncPeriod = ptr.To(time.Duration(0))
 
 	upstream := fake.NewClientBuilder().
 		WithGlobalResourceVersionCounter().
+		WithObjects(initObjects...).
 		Build()
 
-	var listOpts []client.ListOption
-	for namespace := range opts.DefaultNamespaces {
-		listOpts = append(listOpts, client.InNamespace(namespace))
+	scheme := scheme.Scheme
+	opts := cache.Options{
+		Scheme: scheme,
+		Mapper: testrestmapper.TestOnlyStaticRESTMapper(scheme),
 	}
-	if opts.DefaultLabelSelector != nil {
-		listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: opts.DefaultLabelSelector})
-	}
-
 	opts.NewInformer = func(_ toolscache.ListerWatcher, obj runtime.Object, resync time.Duration, indexers toolscache.Indexers) toolscache.SharedIndexInformer {
-		lw := &fakeListWatcher{client: upstream, scheme: opts.Scheme, obj: obj, listOpts: listOpts}
+		lw := &fakeListWatcher{client: upstream, scheme: scheme, obj: obj}
 		return toolscache.NewSharedIndexInformer(lw, obj, resync, indexers)
 	}
 
@@ -89,7 +89,13 @@ func newConsistentFakeClient(t *testing.T, opts cache.Options) client.Client {
 		<-stopped
 	})
 
-	return client.NewConsistentClient(&fakeConsistentClientUpstream{WithWatch: upstream, reader: c}, consistencyCache, nil)
+	return client.NewConsistentClient(
+		&fakeConsistentClientUpstream{WithWatch: upstream, reader: c},
+		consistencyCache,
+		func() client.KeyLock {
+			return locker
+		},
+	)
 }
 
 type fakeConsistentClientUpstream struct {
@@ -132,10 +138,9 @@ func (u *fakeConsistentClientUpstream) DeleteWithResult(ctx context.Context, obj
 // fakeListWatcher lists and watches a single kind from the fake client, in the
 // representation the informer it belongs to expects.
 type fakeListWatcher struct {
-	client   client.WithWatch
-	scheme   *runtime.Scheme
-	obj      runtime.Object
-	listOpts []client.ListOption
+	client client.WithWatch
+	scheme *runtime.Scheme
+	obj    runtime.Object
 
 	lock sync.Mutex
 	// pending is the watch that was opened when the last list was taken.
@@ -150,7 +155,7 @@ func (l *fakeListWatcher) List(_ metav1.ListOptions) (runtime.Object, error) {
 
 	// Watch before listing. An object that ends up in both is harmless, one that
 	// ends up in neither would never reach the informer.
-	w, err := l.client.Watch(context.Background(), list, l.listOpts...)
+	w, err := l.client.Watch(context.Background(), list)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +163,7 @@ func (l *fakeListWatcher) List(_ metav1.ListOptions) (runtime.Object, error) {
 	l.pending = newDelayedWatch(w, l.convert)
 	l.lock.Unlock()
 
-	if err := l.client.List(context.Background(), list, l.listOpts...); err != nil {
+	if err := l.client.List(context.Background(), list); err != nil {
 		return nil, err
 	}
 
@@ -286,4 +291,78 @@ func (w *delayedWatch) Stop() {
 		close(w.stop)
 		w.upstream.Stop()
 	})
+}
+
+type keyLockerWithLockCallback struct {
+	client.KeyLocker
+	lockCallback func()
+}
+
+func (k *keyLockerWithLockCallback) Lock(ctx context.Context) error {
+	err := k.KeyLocker.Lock(ctx)
+	k.lockCallback()
+	return err
+}
+
+// TestConsistentFakeClient uses a callback on the Lock acquisition of a write operation
+// to start a read operation, then validates the read operation observes the write.
+// It uses a fake informer with a hardcoded 10 second delay on the watch in synctest to
+// avoid actually having to wait 10 seconds.
+func TestConsistentFakeClient(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name  string
+		write func(ctx context.Context, client client.Client, g *WithT)
+		read  func(ctx context.Context, client client.Client, g *WithT)
+	}{
+		{
+			name: "Get after Create",
+			write: func(ctx context.Context, c client.Client, g *WithT) {
+				err := c.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"}})
+				g.Expect(err).NotTo(HaveOccurred())
+			},
+			read: func(ctx context.Context, c client.Client, g *WithT) {
+				err := c.Get(ctx, client.ObjectKey{Name: "test", Namespace: "default"}, &corev1.ConfigMap{})
+				g.Expect(err).NotTo(HaveOccurred())
+			},
+		},
+		{
+			name: "List after Create",
+			write: func(ctx context.Context, c client.Client, g *WithT) {
+				err := c.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"}})
+				g.Expect(err).NotTo(HaveOccurred())
+			},
+			read: func(ctx context.Context, c client.Client, g *WithT) {
+				result := &corev1.ConfigMapList{}
+				err := c.List(ctx, result)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(result.Items).To(HaveLen(1))
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				g := NewWithT(t)
+				locker := keyLockerWithLockCallback{}
+				c := newConsistentFakeClient(t, &locker)
+				synctest.Wait() // wait for cache start to finish
+
+				// Must happen in a goroutine, otherwise we are waiting for the write to release the lock while
+				// blocking it from finishing the acquisition.
+				callBackFinished := make(chan struct{})
+				locker.lockCallback = sync.OnceFunc(func() {
+					go func() {
+						defer close(callBackFinished)
+
+						tc.read(t.Context(), c, g)
+					}()
+				})
+				tc.write(t.Context(), c, g)
+
+				<-callBackFinished
+			})
+		})
+	}
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -93,6 +94,7 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 	if err != nil {
 		return fmt.Errorf("failed to get GVK for list %T: %w", list, err)
 	}
+	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
 	keys := c.lockedKeysByGVK.getOrCreate(gvk).allValues()
 	for _, keyLock := range keys {

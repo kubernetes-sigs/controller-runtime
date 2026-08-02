@@ -956,7 +956,11 @@ func (c *fakeClient) patch(obj client.Object, patch client.Patch, opts ...client
 		if isApplyCreate {
 			// Overwrite it unconditionally, this matches the apiserver behavior
 			// which allows to set it on create, but will then ignore it.
-			obj.SetResourceVersion("1")
+			if c.tracker.resourceVersionCounter != nil {
+				obj.SetResourceVersion(c.tracker.nextResourceVersion())
+			} else {
+				obj.SetResourceVersion("1")
+			}
 		} else {
 			// SSA deletionTimestamp updates are silently ignored
 			obj.SetDeletionTimestamp(oldAccessor.GetDeletionTimestamp())

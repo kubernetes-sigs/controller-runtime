@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -160,29 +161,63 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 }
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
-	errs := make(chan error)
+	// Use a buffered channel to prevent goroutine leaks when multiple caches
+	// return errors simultaneously or when context is cancelled.
+	numCaches := len(c.namespaceToCache)
+	if c.clusterCache != nil {
+		numCaches++
+	}
+	errs := make(chan error, numCaches)
+
+	var wg sync.WaitGroup
+
 	// start global cache
 	if c.clusterCache != nil {
-		go func() {
-			err := c.clusterCache.Start(ctx)
-			if err != nil {
+		wg.Go(func() {
+			if err := c.clusterCache.Start(ctx); err != nil {
 				errs <- fmt.Errorf("failed to start cluster-scoped cache: %w", err)
 			}
-		}()
+		})
 	}
 
 	// start namespaced caches
 	for ns, cache := range c.namespaceToCache {
-		go func(ns string, cache Cache) {
+		wg.Go(func() {
 			if err := cache.Start(ctx); err != nil {
 				errs <- fmt.Errorf("failed to start cache for namespace %s: %w", ns, err)
 			}
-		}(ns, cache)
+		})
 	}
+
+	// Wait for all goroutines to complete in a separate goroutine
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
 	select {
+	case <-done:
+		// All caches completed, check if any returned an error
+		select {
+		case err := <-errs:
+			return err
+		default:
+			return nil
+		}
 	case <-ctx.Done():
-		return nil
+		// Context cancelled, wait for goroutines to finish
+		<-done
+		// Return any error that was captured
+		select {
+		case err := <-errs:
+			return err
+		default:
+			return nil
+		}
 	case err := <-errs:
+		// First error returned, wait for other goroutines to finish
+		<-done
 		return err
 	}
 }

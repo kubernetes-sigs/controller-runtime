@@ -26,12 +26,14 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
@@ -69,6 +71,18 @@ func newConsistentFakeClient(t *testing.T, locker client.KeyLock, initObjects ..
 	c, err := cache.New(&rest.Config{}, opts)
 	if err != nil {
 		t.Fatalf("failed to construct cache: %v", err)
+	}
+
+	// Create a cache for initObjects GVK, otherwise deletes will fail as they require the informer
+	// to be present.
+	for _, initObj := range initObjects {
+		gvk, err := apiutil.GVKForObject(initObj, scheme)
+		if err != nil {
+			t.Fatalf("failed to get GVK for %T: %v", initObj, err)
+		}
+		if _, err := c.GetInformerForKind(t.Context(), gvk); err != nil {
+			t.Fatalf("failed to get informer for %v: %v", gvk, err)
+		}
 	}
 
 	consistencyCache, ok := c.(client.ConsistencyCache)
@@ -310,34 +324,201 @@ func (k *keyLockerWithLockCallback) Lock(ctx context.Context) error {
 // avoid actually having to wait 10 seconds.
 func TestConsistentFakeClient(t *testing.T) {
 	t.Parallel()
+
+	deployment := func() *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", UID: "test-uid"},
+			Spec:       appsv1.DeploymentSpec{Replicas: new(int32(1))},
+		}
+	}
+
+	create := func(ctx context.Context, c client.Client, g *WithT) {
+		g.Expect(c.Create(ctx, deployment())).To(Succeed())
+	}
+	update := func(ctx context.Context, c client.Client, g *WithT) {
+		d := &appsv1.Deployment{}
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(deployment()), d)).To(Succeed())
+		d.Spec.Replicas = new(int32(2))
+		g.Expect(c.Update(ctx, d)).To(Succeed())
+	}
+	patch := func(ctx context.Context, c client.Client, g *WithT) {
+		d := deployment()
+		patch := client.MergeFrom(d.DeepCopy())
+		d.Spec.Replicas = new(int32(3))
+		g.Expect(c.Patch(ctx, d, patch)).To(Succeed())
+	}
+	apply := func(ctx context.Context, c client.Client, g *WithT) {
+		ac := appsv1applyconfigurations.Deployment(deployment().Name, deployment().Namespace).
+			WithSpec(appsv1applyconfigurations.DeploymentSpec().WithReplicas(4))
+		g.Expect(c.Apply(ctx, ac, client.FieldOwner("test"))).To(Succeed())
+	}
+	deleteObject := func(ctx context.Context, c client.Client, g *WithT) {
+		g.Expect(c.Delete(ctx, deployment())).To(Succeed())
+	}
+	updateStatus := func(ctx context.Context, c client.Client, g *WithT) {
+		d := &appsv1.Deployment{}
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(deployment()), d)).To(Succeed())
+		d.Status.Replicas = 5
+		g.Expect(c.Status().Update(ctx, d)).To(Succeed())
+	}
+	patchStatus := func(ctx context.Context, c client.Client, g *WithT) {
+		d := deployment()
+		patch := client.MergeFrom(d.DeepCopy())
+		d.Status.Replicas = 6
+		g.Expect(c.Status().Patch(ctx, d, patch)).To(Succeed())
+	}
+	applyStatus := func(ctx context.Context, c client.Client, g *WithT) {
+		ac := appsv1applyconfigurations.Deployment(deployment().Name, deployment().Namespace).
+			WithStatus(appsv1applyconfigurations.DeploymentStatus().WithReplicas(7))
+		g.Expect(c.Status().Apply(ctx, ac, client.FieldOwner("test"))).To(Succeed())
+	}
+	updateScale := func(ctx context.Context, c client.Client, g *WithT) {
+		scale := &autoscalingv1.Scale{Spec: autoscalingv1.ScaleSpec{Replicas: 8}}
+		g.Expect(c.SubResource("scale").Update(ctx, deployment(), client.WithSubResourceBody(scale))).To(Succeed())
+	}
+
+	get := func(assert func(*appsv1.Deployment, *WithT)) func(context.Context, client.Client, *WithT) {
+		return func(ctx context.Context, c client.Client, g *WithT) {
+			result := &appsv1.Deployment{}
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(deployment()), result)).To(Succeed())
+			assert(result, g)
+		}
+	}
+	list := func(assert func(*appsv1.Deployment, *WithT)) func(context.Context, client.Client, *WithT) {
+		return func(ctx context.Context, c client.Client, g *WithT) {
+			result := &appsv1.DeploymentList{}
+			g.Expect(c.List(ctx, result)).To(Succeed())
+			g.Expect(result.Items).To(HaveLen(1))
+			assert(&result.Items[0], g)
+		}
+	}
+	specReplicas := func(expected int32) func(*appsv1.Deployment, *WithT) {
+		return func(d *appsv1.Deployment, g *WithT) {
+			g.Expect(d.Spec.Replicas).To(HaveValue(Equal(expected)))
+		}
+	}
+	statusReplicas := func(expected int32) func(*appsv1.Deployment, *WithT) {
+		return func(d *appsv1.Deployment, g *WithT) {
+			g.Expect(d.Status.Replicas).To(Equal(expected))
+		}
+	}
+
 	testCases := []struct {
-		name  string
-		write func(ctx context.Context, client client.Client, g *WithT)
-		read  func(ctx context.Context, client client.Client, g *WithT)
+		name        string
+		initObjects []client.Object
+		write       func(ctx context.Context, client client.Client, g *WithT)
+		read        func(ctx context.Context, client client.Client, g *WithT)
 	}{
 		{
-			name: "Get after Create",
-			write: func(ctx context.Context, c client.Client, g *WithT) {
-				err := c.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"}})
-				g.Expect(err).NotTo(HaveOccurred())
-			},
+			name:  "Get after Create",
+			write: create,
+			read:  get(specReplicas(1)),
+		},
+		{
+			name:  "List after Create",
+			write: create,
+			read:  list(specReplicas(1)),
+		},
+		{
+			name:        "Get after Update",
+			initObjects: []client.Object{deployment()},
+			write:       update,
+			read:        get(specReplicas(2)),
+		},
+		{
+			name:        "List after Update",
+			initObjects: []client.Object{deployment()},
+			write:       update,
+			read:        list(specReplicas(2)),
+		},
+		{
+			name:        "Get after Patch",
+			initObjects: []client.Object{deployment()},
+			write:       patch,
+			read:        get(specReplicas(3)),
+		},
+		{
+			name:        "List after Patch",
+			initObjects: []client.Object{deployment()},
+			write:       patch,
+			read:        list(specReplicas(3)),
+		},
+		{
+			name:  "Get after Apply",
+			write: apply,
+			read:  get(specReplicas(4)),
+		},
+		{
+			name:  "List after Apply",
+			write: apply,
+			read:  list(specReplicas(4)),
+		},
+		{
+			name:        "Get after Delete",
+			initObjects: []client.Object{deployment()},
+			write:       deleteObject,
 			read: func(ctx context.Context, c client.Client, g *WithT) {
-				err := c.Get(ctx, client.ObjectKey{Name: "test", Namespace: "default"}, &corev1.ConfigMap{})
-				g.Expect(err).NotTo(HaveOccurred())
+				err := c.Get(ctx, client.ObjectKeyFromObject(deployment()), &appsv1.Deployment{})
+				g.Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected a NotFound error, got %v", err)
 			},
 		},
 		{
-			name: "List after Create",
-			write: func(ctx context.Context, c client.Client, g *WithT) {
-				err := c.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"}})
-				g.Expect(err).NotTo(HaveOccurred())
-			},
+			name:        "List after Delete",
+			initObjects: []client.Object{deployment()},
+			write:       deleteObject,
 			read: func(ctx context.Context, c client.Client, g *WithT) {
-				result := &corev1.ConfigMapList{}
-				err := c.List(ctx, result)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(result.Items).To(HaveLen(1))
+				result := &appsv1.DeploymentList{}
+				g.Expect(c.List(ctx, result)).To(Succeed())
+				g.Expect(result.Items).To(BeEmpty())
 			},
+		},
+		{
+			name:        "Get after status Update",
+			initObjects: []client.Object{deployment()},
+			write:       updateStatus,
+			read:        get(statusReplicas(5)),
+		},
+		{
+			name:        "List after status Update",
+			initObjects: []client.Object{deployment()},
+			write:       updateStatus,
+			read:        list(statusReplicas(5)),
+		},
+		{
+			name:        "Get after status Patch",
+			initObjects: []client.Object{deployment()},
+			write:       patchStatus,
+			read:        get(statusReplicas(6)),
+		},
+		{
+			name:        "List after status Patch",
+			initObjects: []client.Object{deployment()},
+			write:       patchStatus,
+			read:        list(statusReplicas(6)),
+		},
+		{
+			name:        "Get after status Apply",
+			initObjects: []client.Object{deployment()},
+			write:       applyStatus,
+			read:        get(statusReplicas(7)),
+		},
+		{
+			name:        "List after status Apply",
+			initObjects: []client.Object{deployment()},
+			write:       applyStatus,
+			read:        list(statusReplicas(7)),
+		},
+		{
+			name:        "Get after scale Update",
+			initObjects: []client.Object{deployment()},
+			write:       updateScale,
+			read:        get(specReplicas(8)),
+		},
+		{
+			name:        "List after scale Update",
+			initObjects: []client.Object{deployment()},
+			write:       updateScale,
+			read:        list(specReplicas(8)),
 		},
 	}
 	for _, tc := range testCases {
@@ -346,10 +527,10 @@ func TestConsistentFakeClient(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				g := NewWithT(t)
 				locker := keyLockerWithLockCallback{}
-				c := newConsistentFakeClient(t, &locker)
+				c := newConsistentFakeClient(t, &locker, tc.initObjects...)
 				synctest.Wait() // wait for cache start to finish
 
-				// Must happen in a goroutine, otherwise we are waiting for the write to release the lock while
+				// Must happen in a goroutine otherwise we deadlock, as we are waiting for the write to release the lock while
 				// blocking it from finishing the acquisition.
 				callBackFinished := make(chan struct{})
 				locker.lockCallback = sync.OnceFunc(func() {

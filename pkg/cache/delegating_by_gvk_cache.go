@@ -77,8 +77,10 @@ func (dbt *delegatingByGVKCache) Start(ctx context.Context) error {
 	allCaches := slices.Collect(maps.Values(dbt.caches))
 	allCaches = append(allCaches, dbt.defaultCache)
 
+	// Use a buffered channel to prevent goroutine leaks when multiple caches
+	// return errors simultaneously.
+	errs := make(chan error, len(allCaches))
 	wg := &sync.WaitGroup{}
-	errs := make(chan error)
 	for idx := range allCaches {
 		cache := allCaches[idx]
 		wg.Go(func() {
@@ -88,12 +90,36 @@ func (dbt *delegatingByGVKCache) Start(ctx context.Context) error {
 		})
 	}
 
-	select {
-	case err := <-errs:
-		return err
-	case <-ctx.Done():
+	// Wait for all goroutines to complete in a separate goroutine
+	done := make(chan struct{})
+	go func() {
 		wg.Wait()
-		return nil
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All caches completed, check if any returned an error
+		select {
+		case err := <-errs:
+			return err
+		default:
+			return nil
+		}
+	case <-ctx.Done():
+		// Context cancelled, wait for goroutines to finish
+		<-done
+		// Return any error that was captured
+		select {
+		case err := <-errs:
+			return err
+		default:
+			return nil
+		}
+	case err := <-errs:
+		// First error returned, wait for other goroutines to finish
+		<-done
+		return err
 	}
 }
 

@@ -275,12 +275,6 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 // findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked tries to find the passed apiGroup.
 // If the server supports aggregated discovery, it will always perform that.
 func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName string) (_ *metav1.APIGroup, didAggregatedDiscovery bool, _ error) {
-	// Looking in the cache first
-	group, ok := m.apiGroups[groupName]
-	if ok {
-		return group, false, nil
-	}
-
 	// Update the cache if nothing was found.
 	apiGroups, maybeResources, _, err := m.client.GroupsAndMaybeResources()
 	if err != nil {

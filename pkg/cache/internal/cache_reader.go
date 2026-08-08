@@ -30,12 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache/internal/readerconsistency"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/internal/field/selector"
 )
-
-// CacheReader is a client.Reader.
-var _ client.Reader = &CacheReader{}
 
 // CacheReader wraps a cache.Index to implement the client.Reader interface for a single type.
 type CacheReader struct {
@@ -52,10 +50,12 @@ type CacheReader struct {
 	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
 	// otherwise you will mutate the object in the cache.
 	disableDeepCopy bool
+
+	*readerconsistency.ConsistencyHandler
 }
 
 // Get checks the indexer for the object and writes a copy of it if found.
-func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out client.Object, opts ...client.GetOption) error {
+func (c *CacheReader) Get(ctx context.Context, key client.ObjectKey, out client.Object, minRV int64, opts ...client.GetOption) error {
 	getOpts := client.GetOptions{}
 	getOpts.ApplyOptions(opts)
 
@@ -63,6 +63,10 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out client.Ob
 		key.Namespace = ""
 	}
 	storeKey := objectKeyToStoreKey(key)
+
+	if err := c.ConsistencyHandler.WaitForGet(ctx, key, minRV); err != nil {
+		return err
+	}
 
 	// Lookup the object from the indexer cache
 	obj, exists, err := c.indexer.GetByKey(storeKey)
@@ -109,7 +113,7 @@ func (c *CacheReader) Get(_ context.Context, key client.ObjectKey, out client.Ob
 }
 
 // List lists items out of the indexer and writes them to out.
-func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...client.ListOption) error {
+func (c *CacheReader) List(ctx context.Context, out client.ObjectList, minRV int64, opts ...client.ListOption) error {
 	var objs []any
 	var err error
 
@@ -118,6 +122,10 @@ func (c *CacheReader) List(_ context.Context, out client.ObjectList, opts ...cli
 
 	if listOpts.Continue != "" {
 		return fmt.Errorf("continue list option is not supported by the cache")
+	}
+
+	if err := c.ConsistencyHandler.WaitForList(ctx, minRV); err != nil {
+		return err
 	}
 
 	switch {

@@ -76,7 +76,8 @@ func (ic *informerCache) Get(ctx context.Context, key client.ObjectKey, out clie
 	if !started {
 		return &ErrCacheNotStarted{}
 	}
-	return cache.Reader.Get(ctx, key, out, opts...)
+
+	return cache.Reader.Get(ctx, key, out, ic.Informers.MinimumRVs.GetForKey(gvk, key), opts...)
 }
 
 // List implements Reader.
@@ -95,7 +96,7 @@ func (ic *informerCache) List(ctx context.Context, out client.ObjectList, opts .
 		return &ErrCacheNotStarted{}
 	}
 
-	return cache.Reader.List(ctx, out, opts...)
+	return cache.Reader.List(ctx, out, ic.Informers.MinimumRVs.GetMaxForGVK(*gvk), opts...)
 }
 
 // objectTypeForListObject tries to find the runtime.Object and associated GVK
@@ -175,6 +176,50 @@ func (ic *informerCache) getInformerForKind(ctx context.Context, gvk schema.Grou
 		return false, nil, err
 	}
 	return started, cache, nil
+}
+
+func (ic *informerCache) SetMinimumRVForGVKAndKey(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	ic.MinimumRVs.Set(gvk, key, rv)
+}
+
+func (ic *informerCache) AddRequiredDeleteForObject(obj client.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, ic.scheme)
+	if err != nil {
+		return err
+	}
+	cache, started, ok := ic.Peek(gvk, obj)
+	if !ok {
+		return fmt.Errorf("informer for GVK %v not found in cache", gvk)
+	}
+	if !started {
+		return &ErrCacheNotStarted{}
+	}
+	if !cache.Informer.HasSynced() {
+		return fmt.Errorf("informer for GVK %v is not synced", gvk)
+	}
+
+	cache.Reader.ConsistencyHandler.AddPendingDelete(
+		client.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()},
+		obj.GetUID(),
+	)
+	return nil
+}
+
+func (ic *informerCache) RemoveRequiredDeleteForObject(obj client.Object) error {
+	gvk, err := apiutil.GVKForObject(obj, ic.scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for object: %w", err)
+	}
+	cache, _, ok := ic.Peek(gvk, obj)
+	if !ok {
+		return fmt.Errorf("informer for GVK %v not found in cache", gvk)
+	}
+	cache.Reader.ConsistencyHandler.RemovePendingDelete(
+		client.ObjectKey{Namespace: obj.GetNamespace(), Name: obj.GetName()},
+		obj.GetUID(),
+	)
+
+	return nil
 }
 
 // RemoveInformer deactivates and removes the informer from the cache.

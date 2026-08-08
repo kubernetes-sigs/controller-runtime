@@ -38,6 +38,8 @@ import (
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/cache/internal/readerconsistency"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	"sigs.k8s.io/controller-runtime/pkg/internal/syncs"
@@ -101,6 +103,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		enableWatchBookmarks:  options.EnableWatchBookmarks,
 		newInformer:           newInformer,
 		watchErrorHandler:     options.WatchErrorHandler,
+		MinimumRVs:            newMinimumRVStore(),
 	}
 }
 
@@ -205,6 +208,12 @@ type Informers struct {
 	// watchErrorHandler to be set by overriding the options
 	// or to use the default watchErrorHandler
 	watchErrorHandler cache.WatchErrorHandlerWithContext
+
+	// MinimumRVs stores the minimum RVs we must have seen before returning reads. Due to RV
+	// being just a version, we can store this before we have an informer. This is
+	// different from deletes, where we can only observe deletes once we do have an informer,
+	// so we only allow storing required deletes as part of the informer.
+	MinimumRVs *minimumRVStore
 }
 
 // Start calls Run on each of the informers and sets started to true. Blocks on the context.
@@ -412,14 +421,22 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		return nil, false, err
 	}
 
+	consistencyHandler := readerconsistency.NewHandler(func(currentRV int64) {
+		ip.MinimumRVs.Cleanup(gvk, currentRV)
+	})
+	if _, err := sharedIndexInformer.AddEventHandler(consistencyHandler); err != nil {
+		return nil, false, fmt.Errorf("failed to add readerconsistency handler: %w", err)
+	}
+
 	// Create the new entry and set it in the map.
 	i := &Cache{
 		Informer: sharedIndexInformer,
 		Reader: CacheReader{
-			indexer:          sharedIndexInformer.GetIndexer(),
-			groupVersionKind: gvk,
-			scopeName:        mapping.Scope.Name(),
-			disableDeepCopy:  ip.unsafeDisableDeepCopy,
+			indexer:            sharedIndexInformer.GetIndexer(),
+			groupVersionKind:   gvk,
+			scopeName:          mapping.Scope.Name(),
+			disableDeepCopy:    ip.unsafeDisableDeepCopy,
+			ConsistencyHandler: consistencyHandler,
 		},
 		stop: make(chan struct{}),
 	}
@@ -628,4 +645,68 @@ func restrictNamespaceBySelector(namespaceOpt string, s Selector) string {
 		return value
 	}
 	return ""
+}
+
+type minimumRVStore struct {
+	mu       sync.Mutex
+	minimums map[schema.GroupVersionKind]map[client.ObjectKey]int64
+}
+
+func newMinimumRVStore() *minimumRVStore {
+	return &minimumRVStore{
+		minimums: make(map[schema.GroupVersionKind]map[client.ObjectKey]int64),
+	}
+}
+
+func (s *minimumRVStore) Set(gvk schema.GroupVersionKind, key client.ObjectKey, rv int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.minimums[gvk] == nil {
+		s.minimums[gvk] = make(map[client.ObjectKey]int64)
+	}
+	s.minimums[gvk][key] = rv
+}
+
+func (s *minimumRVStore) GetForKey(gvk schema.GroupVersionKind, key client.ObjectKey) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keys, ok := s.minimums[gvk]
+	if !ok {
+		return 0
+	}
+	return keys[key]
+}
+
+func (s *minimumRVStore) GetMaxForGVK(gvk schema.GroupVersionKind) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keys, ok := s.minimums[gvk]
+	if !ok || len(keys) == 0 {
+		return 0
+	}
+	var maxRV int64
+	for _, rv := range keys {
+		if rv > maxRV {
+			maxRV = rv
+		}
+	}
+	return maxRV
+}
+
+func (s *minimumRVStore) Cleanup(gvk schema.GroupVersionKind, currentRV int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keys, ok := s.minimums[gvk]
+	if !ok {
+		return
+	}
+	for key, rv := range keys {
+		if rv <= currentRV {
+			delete(keys, key)
+		}
+	}
 }

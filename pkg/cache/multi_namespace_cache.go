@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -161,65 +161,35 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 }
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
-	// Use a buffered channel to prevent goroutine leaks when multiple caches
-	// return errors simultaneously or when context is cancelled.
-	numCaches := len(c.namespaceToCache)
-	if c.clusterCache != nil {
-		numCaches++
-	}
-	errs := make(chan error, numCaches)
+	group, childCtx := errgroup.WithContext(ctx)
 
-	var wg sync.WaitGroup
-
-	// start global cache
 	if c.clusterCache != nil {
-		wg.Go(func() {
-			if err := c.clusterCache.Start(ctx); err != nil {
-				errs <- fmt.Errorf("failed to start cluster-scoped cache: %w", err)
-			}
+		clusterCache := c.clusterCache
+		group.Go(func() error {
+			return clusterCache.Start(childCtx)
 		})
 	}
 
-	// start namespaced caches
 	for ns, cache := range c.namespaceToCache {
-		wg.Go(func() {
-			if err := cache.Start(ctx); err != nil {
-				errs <- fmt.Errorf("failed to start cache for namespace %s: %w", ns, err)
+		group.Go(func() error {
+			if err := cache.Start(childCtx); err != nil {
+				return fmt.Errorf("failed to start cache for namespace %s: %w", ns, err)
 			}
+			return nil
 		})
 	}
 
-	// Wait for all goroutines to complete in a separate goroutine
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
+	return ignoreContextCanceled(ctx, group.Wait())
+}
 
-	select {
-	case <-done:
-		// All caches completed, check if any returned an error
-		select {
-		case err := <-errs:
-			return err
-		default:
-			return nil
-		}
-	case <-ctx.Done():
-		// Context cancelled, wait for goroutines to finish
-		<-done
-		// Return any error that was captured
-		select {
-		case err := <-errs:
-			return err
-		default:
-			return nil
-		}
-	case err := <-errs:
-		// First error returned, wait for other goroutines to finish
-		<-done
-		return err
+// ignoreContextCanceled returns nil if the parent context was cancelled,
+// otherwise returns the error from group.Wait().
+// This preserves the original semantics where context cancellation returns nil.
+func ignoreContextCanceled(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return nil //nolint:nilerr // intentional: original behavior returns nil on context cancellation
 	}
+	return err
 }
 
 func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {

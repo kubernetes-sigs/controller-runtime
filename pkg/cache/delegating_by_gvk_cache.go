@@ -21,8 +21,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"sync"
 
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -77,50 +77,15 @@ func (dbt *delegatingByGVKCache) Start(ctx context.Context) error {
 	allCaches := slices.Collect(maps.Values(dbt.caches))
 	allCaches = append(allCaches, dbt.defaultCache)
 
-	// Use a buffered channel to prevent goroutine leaks when multiple caches
-	// return errors simultaneously.
-	errs := make(chan error, len(allCaches))
-	wg := &sync.WaitGroup{}
+	group, childCtx := errgroup.WithContext(ctx)
 	for idx := range allCaches {
 		cache := allCaches[idx]
-		wg.Go(func() {
-			if err := cache.Start(ctx); err != nil {
-				errs <- err
-			}
+		group.Go(func() error {
+			return cache.Start(childCtx)
 		})
 	}
 
-	// Wait for all goroutines to complete in a separate goroutine
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// All caches completed, check if any returned an error
-		select {
-		case err := <-errs:
-			return err
-		default:
-			return nil
-		}
-	case <-ctx.Done():
-		// Context cancelled, wait for goroutines to finish
-		<-done
-		// Return any error that was captured
-		select {
-		case err := <-errs:
-			return err
-		default:
-			return nil
-		}
-	case err := <-errs:
-		// First error returned, wait for other goroutines to finish
-		<-done
-		return err
-	}
+	return ignoreContextCanceled(ctx, group.Wait())
 }
 
 func (dbt *delegatingByGVKCache) WaitForCacheSync(ctx context.Context) bool {

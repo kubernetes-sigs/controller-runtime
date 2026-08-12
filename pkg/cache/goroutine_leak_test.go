@@ -145,6 +145,75 @@ func TestMultiNamespaceCacheStart_GoroutineLeak_ContextCancelWithError(t *testin
 	time.Sleep(50 * time.Millisecond)
 }
 
+// TestMultiNamespaceCacheStart_ErrorWithHealthyChildren tests that when one cache
+// returns an error, the healthy children are cancelled and Start returns promptly.
+// This is the critical test case that verifies errgroup behavior.
+func TestMultiNamespaceCacheStart_ErrorWithHealthyChildren(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	errSentinel := errors.New("sentinel error")
+	errorCacheReturned := make(chan struct{})
+	healthyChildCancelled := make(chan struct{})
+
+	errorCache := &mockCache{
+		startFunc: func(ctx context.Context) error {
+			defer close(errorCacheReturned)
+			return errSentinel
+		},
+	}
+
+	healthyCache := &mockCache{
+		startFunc: func(ctx context.Context) error {
+			<-ctx.Done()
+			close(healthyChildCancelled)
+			return nil
+		},
+	}
+
+	namespaceToCache := map[string]Cache{
+		"error":   errorCache,
+		"healthy": healthyCache,
+	}
+
+	c := &multiNamespaceCache{
+		namespaceToCache: namespaceToCache,
+	}
+
+	// Use WithCancel (not WithTimeout) to simulate production behavior
+	// where the manager's context lives for the process lifetime
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- c.Start(ctx)
+	}()
+
+	// Wait for error cache to return
+	<-errorCacheReturned
+
+	// Start should return promptly with the error
+	select {
+	case err := <-done:
+		if !errors.Is(err, errSentinel) {
+			t.Fatalf("expected sentinel error, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start() did not return promptly after error - it hung waiting for healthy children")
+	}
+
+	// Healthy child should have been cancelled
+	select {
+	case <-healthyChildCancelled:
+		// Good, healthy child observed cancellation
+	case <-time.After(1 * time.Second):
+		t.Fatal("healthy child did not observe context cancellation")
+	}
+
+	// Give time for goroutines to clean up
+	time.Sleep(50 * time.Millisecond)
+}
+
 // TestDelegatingByGVKCacheStart_GoroutineLeak_MultipleErrors tests that goroutines
 // don't leak when multiple caches return errors simultaneously
 func TestDelegatingByGVKCacheStart_GoroutineLeak_MultipleErrors(t *testing.T) {
@@ -221,6 +290,85 @@ func TestDelegatingByGVKCacheStart_GoroutineLeak_ContextCancelWithError(t *testi
 		// Good, Start returned
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("Start() deadlocked - wg.Wait() is blocking on leaked goroutines")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+}
+
+// TestDelegatingByGVKCacheStart_ErrorWithHealthyChildren tests that when one cache
+// returns an error, the healthy children are cancelled and Start returns promptly.
+func TestDelegatingByGVKCacheStart_ErrorWithHealthyChildren(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	errSentinel := errors.New("sentinel error")
+	errorCacheReturned := make(chan struct{})
+	healthyChild1Cancelled := make(chan struct{})
+	healthyChild2Cancelled := make(chan struct{})
+
+	errorCache := &mockCache{
+		startFunc: func(ctx context.Context) error {
+			defer close(errorCacheReturned)
+			return errSentinel
+		},
+	}
+
+	healthyCache1 := &mockCache{
+		startFunc: func(ctx context.Context) error {
+			<-ctx.Done()
+			close(healthyChild1Cancelled)
+			return nil
+		},
+	}
+
+	healthyCache2 := &mockCache{
+		startFunc: func(ctx context.Context) error {
+			<-ctx.Done()
+			close(healthyChild2Cancelled)
+			return nil
+		},
+	}
+
+	caches := map[schema.GroupVersionKind]Cache{
+		{Group: "apps", Version: "v1", Kind: "Deployment"}:  errorCache,
+		{Group: "apps", Version: "v1", Kind: "StatefulSet"}: healthyCache1,
+	}
+
+	c := &delegatingByGVKCache{
+		caches:       caches,
+		defaultCache: healthyCache2,
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- c.Start(ctx)
+	}()
+
+	<-errorCacheReturned
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, errSentinel) {
+			t.Fatalf("expected sentinel error, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start() did not return promptly after error - it hung waiting for healthy children")
+	}
+
+	select {
+	case <-healthyChild1Cancelled:
+		// Good
+	case <-time.After(1 * time.Second):
+		t.Fatal("healthy child 1 did not observe context cancellation")
+	}
+
+	select {
+	case <-healthyChild2Cancelled:
+		// Good
+	case <-time.After(1 * time.Second):
+		t.Fatal("healthy child 2 did not observe context cancellation")
 	}
 
 	time.Sleep(50 * time.Millisecond)

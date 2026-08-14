@@ -1331,10 +1331,6 @@ func (sw *fakeSubResourceClient) statusPatch(body client.Object, patch client.Pa
 }
 
 func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
-	if sw.subResource != "status" {
-		return errors.New("fakeSubResourceClient currently only supports Apply for status subresource")
-	}
-
 	applyOpts := &client.SubResourceApplyOptions{}
 	applyOpts.ApplyOpts(opts)
 
@@ -1348,22 +1344,58 @@ func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyCon
 		return fmt.Errorf("failed to unmarshal apply configuration: %w", err)
 	}
 
-	patchOpts := &client.SubResourcePatchOptions{}
-	patchOpts.Raw = applyOpts.AsPatchOptions()
-
-	if applyOpts.SubResourceBody != nil {
+	switch sw.subResource {
+	case subResourceScale:
+		if applyOpts.SubResourceBody == nil {
+			return apierrors.NewBadRequest("missing SubResourceBody")
+		}
 		subResourceBodySerialized, err := json.Marshal(applyOpts.SubResourceBody)
 		if err != nil {
 			return fmt.Errorf("failed to serialize subresource body: %w", err)
 		}
-		subResourceBody := &unstructured.Unstructured{}
-		if err := json.Unmarshal(subResourceBodySerialized, subResourceBody); err != nil {
+		scale := &autoscalingv1.Scale{}
+		if err := json.Unmarshal(subResourceBodySerialized, scale); err != nil {
 			return fmt.Errorf("failed to unmarshal subresource body: %w", err)
 		}
-		patchOpts.SubResourceBody = subResourceBody
-	}
 
-	return sw.Patch(ctx, u, &fakeApplyPatch{}, patchOpts)
+		sw.client.schemeLock.RLock()
+		target, err := sw.client.scheme.New(u.GroupVersionKind())
+		sw.client.schemeLock.RUnlock()
+		if err != nil {
+			return err
+		}
+		targetObj, isObject := target.(client.Object)
+		if !isObject {
+			return fmt.Errorf("%T is not a client.Object", target)
+		}
+
+		if err := sw.client.Get(ctx, client.ObjectKeyFromObject(u), targetObj); err != nil {
+			return err
+		}
+		if err := applyScale(targetObj, scale); err != nil {
+			return err
+		}
+		return sw.client.update(targetObj, false, &client.UpdateOptions{FieldManager: applyOpts.FieldManager})
+	case "status":
+		patchOpts := &client.SubResourcePatchOptions{}
+		patchOpts.Raw = applyOpts.AsPatchOptions()
+
+		if applyOpts.SubResourceBody != nil {
+			subResourceBodySerialized, err := json.Marshal(applyOpts.SubResourceBody)
+			if err != nil {
+				return fmt.Errorf("failed to serialize subresource body: %w", err)
+			}
+			subResourceBody := &unstructured.Unstructured{}
+			if err := json.Unmarshal(subResourceBodySerialized, subResourceBody); err != nil {
+				return fmt.Errorf("failed to unmarshal subresource body: %w", err)
+			}
+			patchOpts.SubResourceBody = subResourceBody
+		}
+
+		return sw.Patch(ctx, u, &fakeApplyPatch{}, patchOpts)
+	default:
+		return errors.New("fakeSubResourceClient currently only supports Apply for status and scale subresource")
+	}
 }
 
 func allowsUnconditionalUpdate(gvk schema.GroupVersionKind) bool {

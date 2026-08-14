@@ -48,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
+	autoscalingv1applyconfigurations "k8s.io/client-go/applyconfigurations/autoscaling/v1"
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -2625,6 +2626,9 @@ var _ = Describe("Fake client", func() {
 		expectedErr := "unimplemented scale subresource for resource *v1.Pod"
 		Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scale).Error()).To(Equal(expectedErr))
 		Expect(cl.SubResource(subResourceScale).Update(ctx, obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
+		Expect(cl.SubResource(subResourceScale).Apply(ctx, applyConfigurationFor(cl, obj), client.FieldOwner("test"), &client.SubResourceApplyOptions{
+			SubResourceBody: autoscalingv1applyconfigurations.Scale().WithSpec(autoscalingv1applyconfigurations.ScaleSpec().WithReplicas(2)),
+		}).Error()).To(Equal(expectedErr))
 	})
 	It("supports scale subresources on unstructured objects with spec.replicas", func(ctx SpecContext) {
 		obj := &unstructured.Unstructured{Object: map[string]any{
@@ -2745,6 +2749,9 @@ var _ = Describe("Fake client", func() {
 		expectedErr := "deployments.apps \"foo\" not found"
 		Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scale).Error()).To(Equal(expectedErr))
 		Expect(cl.SubResource(subResourceScale).Update(ctx, obj, client.WithSubResourceBody(scale)).Error()).To(Equal(expectedErr))
+		Expect(cl.SubResource(subResourceScale).Apply(ctx, applyConfigurationFor(cl, obj), client.FieldOwner("test"), &client.SubResourceApplyOptions{
+			SubResourceBody: autoscalingv1applyconfigurations.Scale().WithSpec(autoscalingv1applyconfigurations.ScaleSpec().WithReplicas(2)),
+		}).Error()).To(Equal(expectedErr))
 	})
 
 	It("clears typemeta from structured objects on create", func(ctx SpecContext) {
@@ -3560,8 +3567,57 @@ var _ = Describe("Fake client", func() {
 			Expect(cmp.Diff(scaleExpected, scaleActual)).To(BeEmpty())
 		})
 
+		It(fmt.Sprintf("should be able to Apply scale subresources for resource %T", obj), func(ctx SpecContext) {
+			cl := NewClientBuilder().WithObjects(obj).Build()
+
+			scale := autoscalingv1applyconfigurations.Scale().
+				WithSpec(autoscalingv1applyconfigurations.ScaleSpec().WithReplicas(3))
+			Expect(cl.SubResource(subResourceScale).Apply(ctx,
+				applyConfigurationFor(cl, obj),
+				client.FieldOwner("test"),
+				&client.SubResourceApplyOptions{
+					SubResourceBody: scale,
+				},
+			)).To(Succeed())
+
+			objActual := obj.DeepCopyObject().(client.Object)
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(objActual), objActual)).To(Succeed())
+
+			objExpected := obj.DeepCopyObject().(client.Object)
+			switch expected := objExpected.(type) {
+			case *appsv1.Deployment:
+				expected.ResourceVersion = objActual.GetResourceVersion()
+				expected.Spec.Replicas = new(int32(3))
+			case *appsv1.ReplicaSet:
+				expected.ResourceVersion = objActual.GetResourceVersion()
+				expected.Spec.Replicas = new(int32(3))
+			case *corev1.ReplicationController:
+				expected.ResourceVersion = objActual.GetResourceVersion()
+				expected.Spec.Replicas = new(int32(3))
+			case *appsv1.StatefulSet:
+				expected.ResourceVersion = objActual.GetResourceVersion()
+				expected.Spec.Replicas = new(int32(3))
+			}
+			Expect(cmp.Diff(objExpected, objActual)).To(BeEmpty())
+
+			scaleActual := &autoscalingv1.Scale{}
+			Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scaleActual)).NotTo(HaveOccurred())
+			Expect(scaleActual.Spec.Replicas).To(Equal(int32(3)))
+		})
 	}
 })
+
+func applyConfigurationFor(cl client.Client, obj client.Object) runtime.ApplyConfiguration {
+	gvk, err := cl.GroupVersionKindFor(obj)
+	Expect(err).NotTo(HaveOccurred())
+
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	u.SetName(obj.GetName())
+	u.SetNamespace(obj.GetNamespace())
+
+	return client.ApplyConfigurationFromUnstructured(u)
+}
 
 type Schemaless map[string]any
 

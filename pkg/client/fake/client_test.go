@@ -48,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	clientgoapplyconfigurations "k8s.io/client-go/applyconfigurations"
+	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
 	autoscalingv1applyconfigurations "k8s.io/client-go/applyconfigurations/autoscaling/v1"
 	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -2925,70 +2926,74 @@ var _ = Describe("Fake client", func() {
 	})
 
 	DescribeTable("mutating operations return the updated object",
-		func(ctx SpecContext, mutate func(ctx SpecContext) (*corev1.ConfigMap, error)) {
+		func(ctx SpecContext, mutate func(ctx SpecContext) (*appsv1.Deployment, error)) {
 			mutated, err := mutate(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			var retrieved corev1.ConfigMap
+			var retrieved appsv1.Deployment
 			Expect(cl.Get(ctx, client.ObjectKeyFromObject(mutated), &retrieved)).To(Succeed())
 
 			Expect(&retrieved).To(BeComparableTo(mutated))
 		},
 
-		Entry("create", func(ctx SpecContext) (*corev1.ConfigMap, error) {
+		Entry("create", func(ctx SpecContext) (*appsv1.Deployment, error) {
 			cl = NewClientBuilder().Build()
-			cm.ResourceVersion = ""
-			return cm, cl.Create(ctx, cm)
+			dep.ResourceVersion = ""
+			return dep, cl.Create(ctx, dep)
 		}),
-		Entry("update", func(ctx SpecContext) (*corev1.ConfigMap, error) {
-			cl = NewClientBuilder().WithObjects(cm).Build()
-			cm.Labels = map[string]string{"updated-label": "update-test"}
-			cm.Data["new-key"] = "new-value"
-			return cm, cl.Update(ctx, cm)
+		Entry("update", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			cl = NewClientBuilder().WithObjects(dep).Build()
+			dep.Labels = map[string]string{"updated-label": "update-test"}
+			dep.Spec.Replicas = new(int32(2))
+			return dep, cl.Update(ctx, dep)
 		}),
-		Entry("patch", func(ctx SpecContext) (*corev1.ConfigMap, error) {
-			cl = NewClientBuilder().WithObjects(cm).Build()
-			original := cm.DeepCopy()
+		Entry("patch", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			cl = NewClientBuilder().WithObjects(dep).Build()
+			original := dep.DeepCopy()
 
-			cm.Labels = map[string]string{"updated-label": "update-test"}
-			cm.Data["new-key"] = "new-value"
-			return cm, cl.Patch(ctx, cm, client.MergeFrom(original))
+			dep.Labels = map[string]string{"updated-label": "update-test"}
+			dep.Spec.Replicas = new(int32(2))
+			return dep, cl.Patch(ctx, dep, client.MergeFrom(original))
 		}),
-		Entry("Create through Apply", func(ctx SpecContext) (*corev1.ConfigMap, error) {
-			ac := corev1applyconfigurations.ConfigMap(cm.Name, cm.Namespace).WithData(cm.Data)
+		Entry("Create through Apply", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			ac := appsv1applyconfigurations.Deployment(dep.Name, dep.Namespace).
+				WithSpec(appsv1applyconfigurations.DeploymentSpec().WithReplicas(2))
 
 			cl = NewClientBuilder().Build()
 			Expect(cl.Apply(ctx, ac, client.FieldOwner("foo"))).To(Succeed())
 
-			serialized, err := json.Marshal(ac)
-			Expect(err).NotTo(HaveOccurred())
-
-			var cm corev1.ConfigMap
-			Expect(json.Unmarshal(serialized, &cm)).To(Succeed())
-
-			// ApplyConfigurations always have TypeMeta set as they do not support using the scheme
-			// to retrieve gvk.
-			cm.TypeMeta = metav1.TypeMeta{}
-			return &cm, nil
+			return deploymentFromApplyConfiguration(ac), nil
 		}),
-		Entry("Update through Apply", func(ctx SpecContext) (*corev1.ConfigMap, error) {
-			ac := corev1applyconfigurations.ConfigMap(cm.Name, cm.Namespace).
+		Entry("Update through Apply", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			ac := appsv1applyconfigurations.Deployment(dep.Name, dep.Namespace).
 				WithLabels(map[string]string{"updated-label": "update-test"}).
-				WithData(map[string]string{"new-key": "new-value"})
+				WithSpec(appsv1applyconfigurations.DeploymentSpec().WithReplicas(2))
 
-			cl = NewClientBuilder().WithObjects(cm).Build()
-			Expect(cl.Apply(ctx, ac, client.FieldOwner("foo"))).To(Succeed())
+			cl = NewClientBuilder().WithObjects(dep).Build()
+			Expect(cl.Apply(ctx, ac, client.FieldOwner("foo"), client.ForceOwnership)).To(Succeed())
 
-			serialized, err := json.Marshal(ac)
-			Expect(err).NotTo(HaveOccurred())
+			return deploymentFromApplyConfiguration(ac), nil
+		}),
+		Entry("status Apply", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			ac := appsv1applyconfigurations.Deployment(dep.Name, dep.Namespace).
+				WithStatus(appsv1applyconfigurations.DeploymentStatus().WithReplicas(2))
 
-			var cm corev1.ConfigMap
-			Expect(json.Unmarshal(serialized, &cm)).To(Succeed())
+			cl = NewClientBuilder().WithObjects(dep).WithStatusSubresource(dep).Build()
+			Expect(cl.Status().Apply(ctx, ac, client.FieldOwner("foo"))).To(Succeed())
 
-			// ApplyConfigurations always have TypeMeta set as they do not support using the scheme
-			// to retrieve gvk.
-			cm.TypeMeta = metav1.TypeMeta{}
-			return &cm, nil
+			return deploymentFromApplyConfiguration(ac), nil
+		}),
+		Entry("scale Apply", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			ac := appsv1applyconfigurations.Deployment(dep.Name, dep.Namespace)
+			scale := autoscalingv1applyconfigurations.Scale().
+				WithSpec(autoscalingv1applyconfigurations.ScaleSpec().WithReplicas(2))
+
+			cl = NewClientBuilder().WithObjects(dep).Build()
+			Expect(cl.SubResource("scale").Apply(ctx, ac, client.FieldOwner("foo"), &client.SubResourceApplyOptions{
+				SubResourceBody: scale,
+			})).To(Succeed())
+
+			return deploymentFromApplyConfiguration(ac), nil
 		}),
 	)
 
@@ -3606,6 +3611,20 @@ var _ = Describe("Fake client", func() {
 		})
 	}
 })
+
+func deploymentFromApplyConfiguration(ac *appsv1applyconfigurations.DeploymentApplyConfiguration) *appsv1.Deployment {
+	serialized, err := json.Marshal(ac)
+	Expect(err).NotTo(HaveOccurred())
+
+	var dep appsv1.Deployment
+	Expect(json.Unmarshal(serialized, &dep)).To(Succeed())
+
+	// ApplyConfigurations always have TypeMeta set as they do not support using the scheme
+	// to retrieve gvk.
+	dep.TypeMeta = metav1.TypeMeta{}
+
+	return &dep
+}
 
 func applyConfigurationFor(cl client.Client, obj client.Object) runtime.ApplyConfiguration {
 	gvk, err := cl.GroupVersionKindFor(obj)

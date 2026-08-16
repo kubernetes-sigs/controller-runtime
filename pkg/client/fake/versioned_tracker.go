@@ -73,7 +73,7 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 			accessor.SetResourceVersion(trackerAddResourceVersion)
 		}
 
-		obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+		obj, err = convertFromUnstructuredOrPartialObjectMetaIfNecessary(t.scheme, obj)
 		if err != nil {
 			return err
 		}
@@ -87,6 +87,18 @@ func (t versionedTracker) Add(obj runtime.Object) error {
 				return fmt.Errorf("invalid managedFields on %T: %w", obj, err)
 			}
 		}
+		// The trackers add panics when using PartialObjectMetadata without registering it to
+		// the scheme.
+		if _, isPartial := obj.(*metav1.PartialObjectMetadata); isPartial {
+			gvk, err := apiutil.GVKForObject(obj, t.scheme)
+			if err != nil {
+				return fmt.Errorf("failed to get gvk for %T: %w", obj, err)
+			}
+			if !t.scheme.Recognizes(gvk) {
+				t.scheme.AddKnownTypeWithName(gvk, obj)
+			}
+		}
+
 		if err := t.upstream.Add(obj); err != nil {
 			return err
 		}
@@ -111,7 +123,7 @@ func (t versionedTracker) Create(gvr schema.GroupVersionResource, obj runtime.Ob
 		return apierrors.NewBadRequest("resourceVersion can not be set for Create requests")
 	}
 	accessor.SetResourceVersion("1")
-	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+	obj, err = convertFromUnstructuredOrPartialObjectMetaIfNecessary(t.scheme, obj)
 	if err != nil {
 		return err
 	}
@@ -301,7 +313,7 @@ func (t versionedTracker) updateObject(
 		return nil, false, t.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
 	}
 
-	obj, err = convertFromUnstructuredIfNecessary(t.scheme, obj)
+	obj, err = convertFromUnstructuredOrPartialObjectMetaIfNecessary(t.scheme, obj)
 	return obj, false, err
 }
 

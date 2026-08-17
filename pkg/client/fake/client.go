@@ -858,7 +858,11 @@ func (c *fakeClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, 
 		return err
 	}
 
-	acJSON, err := json.Marshal(u)
+	return copyIntoApplyConfiguration(u, obj)
+}
+
+func copyIntoApplyConfiguration(from any, obj runtime.ApplyConfiguration) error {
+	acJSON, err := json.Marshal(from)
 	if err != nil {
 		return fmt.Errorf("failed to marshal patched object: %w", err)
 	}
@@ -1375,11 +1379,23 @@ func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyCon
 		if err := applyScale(targetObj, scale); err != nil {
 			return err
 		}
-		return sw.client.update(targetObj, false, &client.UpdateOptions{FieldManager: applyOpts.FieldManager})
+		if err := sw.client.update(targetObj, false, &client.UpdateOptions{FieldManager: applyOpts.FieldManager}); err != nil {
+			return err
+		}
+
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(targetObj)
+		if err != nil {
+			return fmt.Errorf("failed to convert %T to unstructured: %w", targetObj, err)
+		}
+		result := &unstructured.Unstructured{Object: content}
+		result.SetGroupVersionKind(u.GroupVersionKind())
+
+		return copyIntoApplyConfiguration(result, obj)
 	case "status":
 		patchOpts := &client.SubResourcePatchOptions{}
 		patchOpts.Raw = applyOpts.AsPatchOptions()
 
+		result := u
 		if applyOpts.SubResourceBody != nil {
 			subResourceBodySerialized, err := json.Marshal(applyOpts.SubResourceBody)
 			if err != nil {
@@ -1390,9 +1406,14 @@ func (sw *fakeSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyCon
 				return fmt.Errorf("failed to unmarshal subresource body: %w", err)
 			}
 			patchOpts.SubResourceBody = subResourceBody
+			result = subResourceBody
 		}
 
-		return sw.Patch(ctx, u, &fakeApplyPatch{}, patchOpts)
+		if err := sw.Patch(ctx, u, &fakeApplyPatch{}, patchOpts); err != nil {
+			return err
+		}
+
+		return copyIntoApplyConfiguration(result, obj)
 	default:
 		return errors.New("fakeSubResourceClient currently only supports Apply for status and scale subresource")
 	}

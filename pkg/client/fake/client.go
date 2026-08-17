@@ -343,14 +343,15 @@ func (f *ClientBuilder) Build() client.WithWatch {
 
 const trackerAddResourceVersion = "999"
 
-// convertFromUnstructuredIfNecessary will convert runtime.Unstructured for a GVK that is recognized
-// by the schema into the whatever the schema produces with New() for said GVK.
+// convertFromUnstructuredOrPartialObjectMetaIfNecessary will convert runtime.Unstructured or metav1.PartialObjectMetadata
+// for a GVK that is recognized by the schema into the whatever the schema produces with New() for said GVK.
 // This is required because the tracker unconditionally saves on manipulations, but its List() implementation
 // tries to assign whatever it finds into a ListType it gets from schema.New() - Thus we have to ensure
 // we save as the very same type, otherwise subsequent List requests will fail.
-func convertFromUnstructuredIfNecessary(s *runtime.Scheme, o runtime.Object) (runtime.Object, error) {
-	u, isUnstructured := o.(runtime.Unstructured)
-	if !isUnstructured {
+func convertFromUnstructuredOrPartialObjectMetaIfNecessary(s *runtime.Scheme, o runtime.Object) (runtime.Object, error) {
+	_, isUnstructured := o.(runtime.Unstructured)
+	_, isPartial := o.(*metav1.PartialObjectMetadata)
+	if !isUnstructured && !isPartial {
 		return o, nil
 	}
 	gvk := o.GetObjectKind().GroupVersionKind()
@@ -362,16 +363,17 @@ func convertFromUnstructuredIfNecessary(s *runtime.Scheme, o runtime.Object) (ru
 	if err != nil {
 		return nil, fmt.Errorf("scheme recognizes %s but failed to produce an object for it: %w", gvk, err)
 	}
-	if _, isTypedUnstructured := typed.(runtime.Unstructured); isTypedUnstructured {
+	switch typed.(type) {
+	case runtime.Unstructured, *metav1.PartialObjectMetadata:
 		return o, nil
 	}
 
-	unstructuredSerialized, err := json.Marshal(u)
+	serialized, err := json.Marshal(o)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize %T: %w", unstructuredSerialized, err)
+		return nil, fmt.Errorf("failed to serialize %T: %w", o, err)
 	}
-	if err := json.Unmarshal(unstructuredSerialized, typed); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal the content of %T into %T: %w", u, typed, err)
+	if err := json.Unmarshal(serialized, typed); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the content of %T into %T: %w", o, typed, err)
 	}
 
 	return typed, nil

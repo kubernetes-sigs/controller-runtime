@@ -226,7 +226,7 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should be able to Get an unregisted type using unstructured", func(ctx SpecContext) {
+		It("should be able to Get an unregistered type using unstructured", func(ctx SpecContext) {
 			By("Creating an object of an unregistered type")
 			item := &unstructured.Unstructured{}
 			item.SetAPIVersion("custom/v2")
@@ -372,6 +372,110 @@ var _ = Describe("Fake client", func() {
 
 			Expect(partialObjMeta.Kind).To(Equal("Secret"))
 			Expect(partialObjMeta.APIVersion).To(Equal("v1"))
+		})
+
+		It("should be able to Get an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
+			By("Creating an object of an unregistered type")
+			item := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v9", Kind: "Image"},
+			}
+			err := cl.Create(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Getting and the object")
+			item = &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v9", Kind: "Image"},
+			}
+			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should be able to List an unregistered type using PartialObjectMetadata with ListKind", func(ctx SpecContext) {
+			list := &metav1.PartialObjectMetadataList{
+				TypeMeta: metav1.TypeMeta{APIVersion: "custom/v10", Kind: "ImageList"},
+			}
+			err := cl.List(ctx, list)
+			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v10"))
+			Expect(list.Kind).To(Equal("ImageList"))
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should be able to List an unregistered type using PartialObjectMetadata with Kind", func(ctx SpecContext) {
+			list := &metav1.PartialObjectMetadataList{
+				TypeMeta: metav1.TypeMeta{APIVersion: "custom/v11", Kind: "Image"},
+			}
+			err := cl.List(ctx, list)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v11"))
+			Expect(list.Kind).To(Equal("Image"))
+		})
+
+		It("should be able to Patch an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
+			By("Creating an object of an unregistered type")
+			item := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v13", Kind: "Image"},
+			}
+			err := cl.Create(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Updating the object")
+			original := item.DeepCopy()
+			item.Annotations = map[string]string{"foo": "bar"}
+			err = cl.Patch(ctx, item, client.MergeFrom(original))
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Getting the object")
+			item = &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v13", Kind: "Image"},
+			}
+			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Inspecting the object")
+			Expect(item.Annotations).To(Equal(map[string]string{"foo": "bar"}))
+		})
+
+		It("should be able to Delete an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
+			By("Creating an object of an unregistered type")
+			item := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v14", Kind: "Image"},
+			}
+			err := cl.Create(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Deleting the object")
+			err = cl.Delete(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Getting the object")
+			item = &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v14", Kind: "Image"},
+			}
+			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should be able to Get an unregistered type that was initialized using PartialObjectMetadata", func(ctx SpecContext) {
+			By("Initializing the client with an object of an unregistered type")
+			item := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v15", Kind: "Image"},
+			}
+			cl := NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(item).Build()
+
+			By("Getting the object")
+			item = &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v15", Kind: "Image"},
+			}
+			err := cl.Get(ctx, client.ObjectKeyFromObject(item), item)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should support filtering by labels and their values", func(ctx SpecContext) {

@@ -25,6 +25,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -85,6 +86,14 @@ type CacheOptions struct {
 	// read unstructured objects or lists from the cache.
 	// If false, unstructured objects will always result in a live lookup.
 	Unstructured bool
+
+	// ReadYourOwnWriteConsistencyEnabled controls if read requests against the cache will
+	// block until the cache observed all write requests that started before the read
+	// request. Lists will wait for all pending write requests to the gvk the List is for.
+	//
+	// This is an experimental feature, a form of this will be kept but both the details of
+	// how exactly it works and how exactly it is configured may change.
+	ReadYourOwnWriteConsistencyEnabled bool
 }
 
 // NewClientFunc allows a user to define how to create a client.
@@ -128,7 +137,7 @@ func New(config *rest.Config, options Options) (c Client, err error) {
 	return c, err
 }
 
-func newClient(config *rest.Config, options Options) (*client, error) {
+func newClient(config *rest.Config, options Options) (Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("must provide non-nil rest.Config to client.New")
 	}
@@ -219,7 +228,16 @@ func newClient(config *rest.Config, options Options) (*client, error) {
 		}
 		c.uncachedGVKs[gvk] = struct{}{}
 	}
-	return c, nil
+
+	if !options.Cache.ReadYourOwnWriteConsistencyEnabled {
+		return c, nil
+	}
+
+	informerCache, isCache := options.Cache.Reader.(cache)
+	if !isCache {
+		return nil, fmt.Errorf("cache reader does not implement %T, can not provide ReadYourOwnWriteConsistency", cache(nil))
+	}
+	return newConsistentClient(c, informerCache, nil), nil
 }
 
 var _ Client = &client{}
@@ -319,11 +337,17 @@ func (c *client) Update(ctx context.Context, obj Object, opts ...UpdateOption) e
 
 // Delete implements client.Client.
 func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
+	_, err := c.delete(ctx, obj, opts...)
+	return err
+}
+
+// delete issues a delete call and returns the response or an error. The response
+// gets deserialized into an unstructured and is either a metav1.Status if the object
+// is gone from storage or the object if it remains, for example because of finalizers.
+func (c *client) delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
 	switch obj.(type) {
 	case runtime.Unstructured:
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
-	case *metav1.PartialObjectMetadata:
-		return c.metadataClient.Delete(ctx, obj, opts...)
 	default:
 		return c.typedClient.Delete(ctx, obj, opts...)
 	}

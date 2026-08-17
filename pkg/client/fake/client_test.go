@@ -374,6 +374,15 @@ var _ = Describe("Fake client", func() {
 			Expect(partialObjMeta.APIVersion).To(Equal("v1"))
 		})
 
+		It("should be able to Create an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
+			item := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v8", Kind: "Image"},
+			}
+			err := cl.Create(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("should be able to Get an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
 			By("Creating an object of an unregistered type")
 			item := &metav1.PartialObjectMetadata{
@@ -410,6 +419,33 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v11"))
 			Expect(list.Kind).To(Equal("Image"))
+		})
+
+		It("should be able to Update an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
+			By("Creating an object of an unregistered type")
+			item := &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v12", Kind: "Image"},
+			}
+			err := cl.Create(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Updating the object")
+			item.Annotations = map[string]string{"foo": "bar"}
+			err = cl.Update(ctx, item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Getting the object")
+			item.SetName("my-item")
+			item = &metav1.PartialObjectMetadata{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
+				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v12", Kind: "Image"},
+			}
+			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Inspecting the object")
+			Expect(item.Annotations).To(Equal(map[string]string{"foo": "bar"}))
 		})
 
 		It("should be able to Patch an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
@@ -3712,6 +3748,14 @@ var _ = Describe("Fake client", func() {
 			scaleActual := &autoscalingv1.Scale{}
 			Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scaleActual)).NotTo(HaveOccurred())
 			Expect(scaleActual.Spec.Replicas).To(Equal(int32(3)))
+		})
+
+		It(fmt.Sprintf("requires a SubResourceBody to Apply scale subresources for resource %T", obj), func(ctx SpecContext) {
+			obj := obj.DeepCopyObject().(client.Object)
+			cl := NewClientBuilder().WithObjects(obj).Build()
+
+			err := cl.SubResource(subResourceScale).Apply(ctx, applyConfigurationFor(cl, obj), client.FieldOwner("test"))
+			Expect(apierrors.IsBadRequest(err)).To(BeTrue(), "expected a BadRequest error, got %v", err)
 		})
 	}
 })

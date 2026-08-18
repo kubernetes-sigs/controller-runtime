@@ -24,6 +24,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	clientmetrics "k8s.io/client-go/tools/metrics"
 )
 
@@ -86,5 +88,113 @@ var _ = Describe("RESTClientMetrics", func() {
 		for _, name := range optInMetricNames {
 			Expect(names).To(HaveKey(name), "metric %s should be found after calling RegisterRESTClientMetrics", name)
 		}
+
+		Expect(histogramBounds(namesToFamily("rest_client_request_duration_seconds"))).To(Equal(defaultRESTClientDurationBuckets))
+		Expect(histogramBounds(namesToFamily("rest_client_rate_limiter_duration_seconds"))).To(Equal(defaultRESTClientDurationBuckets))
+		Expect(histogramBounds(namesToFamily("rest_client_dns_resolution_duration_seconds"))).To(Equal(defaultRESTClientDurationBuckets))
 	})
 })
+
+func namesToFamily(name string) *dto.MetricFamily {
+	mfs, err := Registry.Gather()
+	Expect(err).NotTo(HaveOccurred())
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			return mf
+		}
+	}
+	Fail("metric family " + name + " not found")
+	return nil
+}
+
+func histogramBounds(mf *dto.MetricFamily) []float64 {
+	Expect(mf.GetMetric()).NotTo(BeEmpty())
+	buckets := mf.GetMetric()[0].GetHistogram().GetBucket()
+	bounds := make([]float64, 0, len(buckets))
+	for _, b := range buckets {
+		bounds = append(bounds, b.GetUpperBound())
+	}
+	return bounds
+}
+
+func TestRESTClientDurationHistogramBuckets(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default buckets start at 5ms", func(t *testing.T) {
+		t.Parallel()
+		h := restClientDurationHistogram(
+			"test_rest_client_request_duration_seconds",
+			"test",
+			[]string{verbLabel, hostLabel},
+			nil,
+		)
+		bounds := gatherHistogramBounds(t, h, "GET", "example.com", 0.001)
+		if len(bounds) != len(defaultRESTClientDurationBuckets) {
+			t.Fatalf("got %d buckets, want %d: %v", len(bounds), len(defaultRESTClientDurationBuckets), bounds)
+		}
+		for i := range defaultRESTClientDurationBuckets {
+			if bounds[i] != defaultRESTClientDurationBuckets[i] {
+				t.Fatalf("bucket[%d]=%v, want %v", i, bounds[i], defaultRESTClientDurationBuckets[i])
+			}
+		}
+	})
+
+	t.Run("custom buckets capture sub-5ms observations", func(t *testing.T) {
+		t.Parallel()
+		custom := []float64{0.001, 0.0025, 0.005, 0.025, 0.1}
+		h := restClientDurationHistogram(
+			"test_rest_client_request_duration_seconds_custom",
+			"test",
+			[]string{verbLabel, hostLabel},
+			custom,
+		)
+		reg := prometheus.NewPedanticRegistry()
+		if err := reg.Register(h); err != nil {
+			t.Fatal(err)
+		}
+		h.WithLabelValues("PATCH", "example.com").Observe(0.001)
+
+		mfs, err := reg.Gather()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(mfs) != 1 || len(mfs[0].GetMetric()) != 1 {
+			t.Fatalf("expected one metric family with one series, got %#v", mfs)
+		}
+		buckets := mfs[0].GetMetric()[0].GetHistogram().GetBucket()
+		if len(buckets) != len(custom) {
+			t.Fatalf("got %d buckets, want %d", len(buckets), len(custom))
+		}
+		for i, want := range custom {
+			if buckets[i].GetUpperBound() != want {
+				t.Fatalf("bucket[%d] le=%v, want %v", i, buckets[i].GetUpperBound(), want)
+			}
+		}
+		// 1ms observation should land in the 0.001s bucket, not collapse into 5ms.
+		if buckets[0].GetCumulativeCount() != 1 {
+			t.Fatalf("le=0.001 count=%d, want 1", buckets[0].GetCumulativeCount())
+		}
+	})
+}
+
+func gatherHistogramBounds(t *testing.T, h *prometheus.HistogramVec, verb, host string, observe float64) []float64 {
+	t.Helper()
+	reg := prometheus.NewPedanticRegistry()
+	if err := reg.Register(h); err != nil {
+		t.Fatal(err)
+	}
+	h.WithLabelValues(verb, host).Observe(observe)
+	mfs, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mfs) != 1 || len(mfs[0].GetMetric()) != 1 {
+		t.Fatalf("expected one metric family with one series, got %#v", mfs)
+	}
+	buckets := mfs[0].GetMetric()[0].GetHistogram().GetBucket()
+	bounds := make([]float64, 0, len(buckets))
+	for _, b := range buckets {
+		bounds = append(bounds, b.GetUpperBound())
+	}
+	return bounds
+}

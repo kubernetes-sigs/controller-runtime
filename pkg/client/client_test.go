@@ -2534,6 +2534,27 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(metaOnlyFromObj(node, scheme)).To(Equal(&actual))
 			})
 
+			It("should delete an object", func(ctx SpecContext) {
+				By("first creating the object")
+				_, err := clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cl).NotTo(BeNil())
+
+				By("deleting a node through client")
+				pom := metav1.PartialObjectMetadata{
+					TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Node"},
+					ObjectMeta: metav1.ObjectMeta{Name: node.Name},
+				}
+				err = cl.Delete(ctx, &pom)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = clientset.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
 			It("should fail if the object does not exist", func(ctx SpecContext) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())

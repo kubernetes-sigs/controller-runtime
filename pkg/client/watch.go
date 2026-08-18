@@ -28,11 +28,11 @@ import (
 
 // NewWithWatch returns a new WithWatch.
 func NewWithWatch(config *rest.Config, options Options) (WithWatch, error) {
-	client, err := newClient(config, options)
+	c, err := newClient(config, options)
 	if err != nil {
 		return nil, err
 	}
-	return &watchingClient{client: client}, nil
+	return &watchingClient{client: c.(*client)}, nil // TODO: This will panic if consistency is enabled
 }
 
 type watchingClient struct {

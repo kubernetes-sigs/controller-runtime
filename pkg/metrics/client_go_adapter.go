@@ -36,6 +36,25 @@ const (
 	verbLabel = "verb"
 )
 
+// defaultRESTClientDurationBuckets matches Kubernetes core controller REST client metrics.
+// They start at 5ms; override via RESTClientMetricsOptions.DurationBuckets if a scrape
+// pipeline still consumes classic buckets and needs sub-5ms resolution.
+var defaultRESTClientDurationBuckets = []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0}
+
+func restClientDurationHistogram(name, help string, labels []string, buckets []float64) *prometheus.HistogramVec {
+	if len(buckets) == 0 {
+		buckets = defaultRESTClientDurationBuckets
+	}
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:                            name,
+		Help:                            help,
+		Buckets:                         buckets,
+		NativeHistogramBucketFactor:     1.1,
+		NativeHistogramMaxBucketNumber:  100,
+		NativeHistogramMinResetDuration: 1 * time.Hour,
+	}, labels)
+}
+
 var (
 	// client metrics.
 
@@ -47,28 +66,18 @@ var (
 		[]string{"code", "method", hostLabel},
 	)
 
-	requestLatency = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:                            "rest_client_request_duration_seconds",
-			Help:                            "Request latency in seconds. Broken down by verb and host.",
-			Buckets:                         []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0},
-			NativeHistogramBucketFactor:     1.1,
-			NativeHistogramMaxBucketNumber:  100,
-			NativeHistogramMinResetDuration: 1 * time.Hour,
-		},
+	requestLatency = restClientDurationHistogram(
+		"rest_client_request_duration_seconds",
+		"Request latency in seconds. Broken down by verb and host.",
 		[]string{verbLabel, hostLabel},
+		nil,
 	)
 
-	resolverLatency = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:                            "rest_client_dns_resolution_duration_seconds",
-			Help:                            "DNS resolver latency in seconds. Broken down by host.",
-			Buckets:                         []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0},
-			NativeHistogramBucketFactor:     1.1,
-			NativeHistogramMaxBucketNumber:  100,
-			NativeHistogramMinResetDuration: 1 * time.Hour,
-		},
+	resolverLatency = restClientDurationHistogram(
+		"rest_client_dns_resolution_duration_seconds",
+		"DNS resolver latency in seconds. Broken down by host.",
 		[]string{hostLabel},
+		nil,
 	)
 
 	requestSize = prometheus.NewHistogramVec(
@@ -97,16 +106,11 @@ var (
 		[]string{verbLabel, hostLabel},
 	)
 
-	rateLimiterLatency = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:                            "rest_client_rate_limiter_duration_seconds",
-			Help:                            "Client side rate limiter latency in seconds. Broken down by verb, and host.",
-			Buckets:                         []float64{0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 60.0},
-			NativeHistogramBucketFactor:     1.1,
-			NativeHistogramMaxBucketNumber:  100,
-			NativeHistogramMinResetDuration: 1 * time.Hour,
-		},
+	rateLimiterLatency = restClientDurationHistogram(
+		"rest_client_rate_limiter_duration_seconds",
+		"Client side rate limiter latency in seconds. Broken down by verb, and host.",
 		[]string{verbLabel, hostLabel},
+		nil,
 	)
 
 	requestRetry = prometheus.NewCounterVec(
@@ -164,18 +168,78 @@ func registerClientMetrics() {
 
 	// register the metrics with client-go
 	clientmetrics.Register(clientmetrics.RegisterOpts{
-		RequestResult:      &resultAdapter{metric: requestResult},
-		RequestLatency:     &latencyAdapter{metric: requestLatency, enabled: &requestLatencyEnabled},
-		ResolverLatency:    &resolverLatencyAdapter{metric: resolverLatency, enabled: &resolverLatencyEnabled},
-		RequestSize:        &sizeAdapter{metric: requestSize, enabled: &requestSizeEnabled},
-		ResponseSize:       &sizeAdapter{metric: responseSize, enabled: &responseSizeEnabled},
-		RateLimiterLatency: &latencyAdapter{metric: rateLimiterLatency, enabled: &rateLimiterLatencyEnabled},
-		RequestRetry:       &retryAdapter{metric: requestRetry, enabled: &requestRetryEnabled},
+		RequestResult: &resultAdapter{metric: requestResult},
+		RequestLatency: &latencyAdapter{
+			metric:  func() *prometheus.HistogramVec { return requestLatency },
+			enabled: &requestLatencyEnabled,
+		},
+		ResolverLatency: &resolverLatencyAdapter{
+			metric:  func() *prometheus.HistogramVec { return resolverLatency },
+			enabled: &resolverLatencyEnabled,
+		},
+		RequestSize:  &sizeAdapter{metric: requestSize, enabled: &requestSizeEnabled},
+		ResponseSize: &sizeAdapter{metric: responseSize, enabled: &responseSizeEnabled},
+		RateLimiterLatency: &latencyAdapter{
+			metric:  func() *prometheus.HistogramVec { return rateLimiterLatency },
+			enabled: &rateLimiterLatencyEnabled,
+		},
+		RequestRetry: &retryAdapter{metric: requestRetry, enabled: &requestRetryEnabled},
 	})
 }
 
-// RegisterRESTClientMetrics enables the client metrics.
+// RESTClientMetricsOptions configures RegisterRESTClientMetricsWithOptions.
+type RESTClientMetricsOptions struct {
+	// DurationBuckets overrides the classic Prometheus histogram buckets used by
+	// rest_client_request_duration_seconds, rest_client_dns_resolution_duration_seconds,
+	// and rest_client_rate_limiter_duration_seconds.
+	//
+	// If nil or empty, the Kubernetes-default buckets are kept (starting at 5ms).
+	// Native histogram settings are not changed.
+	//
+	// Options are applied on the first RegisterRESTClientMetrics /
+	// RegisterRESTClientMetricsWithOptions call. Later calls ignore a different
+	// DurationBuckets value so already-registered collectors are not replaced.
+	DurationBuckets []float64
+}
+
+var applyDurationBucketsOnce sync.Once
+
+func applyDurationBuckets(buckets []float64) {
+	applyDurationBucketsOnce.Do(func() {
+		if len(buckets) == 0 {
+			return
+		}
+		requestLatency = restClientDurationHistogram(
+			"rest_client_request_duration_seconds",
+			"Request latency in seconds. Broken down by verb and host.",
+			[]string{verbLabel, hostLabel},
+			buckets,
+		)
+		resolverLatency = restClientDurationHistogram(
+			"rest_client_dns_resolution_duration_seconds",
+			"DNS resolver latency in seconds. Broken down by host.",
+			[]string{hostLabel},
+			buckets,
+		)
+		rateLimiterLatency = restClientDurationHistogram(
+			"rest_client_rate_limiter_duration_seconds",
+			"Client side rate limiter latency in seconds. Broken down by verb, and host.",
+			[]string{verbLabel, hostLabel},
+			buckets,
+		)
+	})
+}
+
+// RegisterRESTClientMetrics enables the given client metrics using default buckets
+// that match Kubernetes core controllers.
 func RegisterRESTClientMetrics(metrics ...RESTClientMetric) {
+	RegisterRESTClientMetricsWithOptions(RESTClientMetricsOptions{}, metrics...)
+}
+
+// RegisterRESTClientMetricsWithOptions enables the given client metrics.
+// See RESTClientMetricsOptions for knobs such as custom duration buckets.
+func RegisterRESTClientMetricsWithOptions(opts RESTClientMetricsOptions, metrics ...RESTClientMetric) {
+	applyDurationBuckets(opts.DurationBuckets)
 	for _, m := range metrics {
 		switch m {
 		case MetricRequestLatency:
@@ -231,7 +295,7 @@ func (r *resultAdapter) Increment(_ context.Context, code, method, host string) 
 }
 
 type latencyAdapter struct {
-	metric  *prometheus.HistogramVec
+	metric  func() *prometheus.HistogramVec
 	enabled *atomic.Bool
 }
 
@@ -239,11 +303,11 @@ func (l *latencyAdapter) Observe(_ context.Context, verb string, u url.URL, dura
 	if !l.enabled.Load() {
 		return
 	}
-	l.metric.WithLabelValues(verb, u.Host).Observe(duration.Seconds())
+	l.metric().WithLabelValues(verb, u.Host).Observe(duration.Seconds())
 }
 
 type resolverLatencyAdapter struct {
-	metric  *prometheus.HistogramVec
+	metric  func() *prometheus.HistogramVec
 	enabled *atomic.Bool
 }
 
@@ -251,7 +315,7 @@ func (r *resolverLatencyAdapter) Observe(_ context.Context, host string, duratio
 	if !r.enabled.Load() {
 		return
 	}
-	r.metric.WithLabelValues(host).Observe(duration.Seconds())
+	r.metric().WithLabelValues(host).Observe(duration.Seconds())
 }
 
 type sizeAdapter struct {

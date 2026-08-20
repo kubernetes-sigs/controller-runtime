@@ -305,6 +305,38 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 					log.Error(err, "certificate watcher error")
 				}
 			}()
+		} else {
+			// Cert files do not exist yet — this happens when the manager starts before
+			// the certificate provisioner (e.g. cert-controller, cert-manager) has written
+			// them to disk. Install a lazy GetCertificate that retries initialization on
+			// every TLS handshake until the files appear, then starts the certwatcher and
+			// caches it for subsequent calls. Once initialized the certwatcher handles
+			// rotation normally.
+			var (
+				mu      sync.Mutex
+				watcher *certwatcher.CertWatcher
+			)
+			cfg.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				mu.Lock()
+				if watcher == nil {
+					if w, err := certwatcher.New(certPath, keyPath); err == nil {
+						go func() {
+							if err := w.Start(ctx); err != nil {
+								log.Error(err, "certificate watcher error")
+							}
+						}()
+						watcher = w
+					}
+				}
+				w := watcher
+				mu.Unlock()
+
+				if w == nil {
+					// Cert not yet written; signal the client to retry.
+					return nil, nil
+				}
+				return w.GetCertificate(hello)
+			}
 		}
 	}
 

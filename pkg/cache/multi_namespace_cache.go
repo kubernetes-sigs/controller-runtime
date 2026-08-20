@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -160,31 +161,35 @@ func (c *multiNamespaceCache) GetInformerForKind(ctx context.Context, gvk schema
 }
 
 func (c *multiNamespaceCache) Start(ctx context.Context) error {
-	errs := make(chan error)
-	// start global cache
+	group, childCtx := errgroup.WithContext(ctx)
+
 	if c.clusterCache != nil {
-		go func() {
-			err := c.clusterCache.Start(ctx)
-			if err != nil {
-				errs <- fmt.Errorf("failed to start cluster-scoped cache: %w", err)
-			}
-		}()
+		clusterCache := c.clusterCache
+		group.Go(func() error {
+			return clusterCache.Start(childCtx)
+		})
 	}
 
-	// start namespaced caches
 	for ns, cache := range c.namespaceToCache {
-		go func(ns string, cache Cache) {
-			if err := cache.Start(ctx); err != nil {
-				errs <- fmt.Errorf("failed to start cache for namespace %s: %w", ns, err)
+		group.Go(func() error {
+			if err := cache.Start(childCtx); err != nil {
+				return fmt.Errorf("failed to start cache for namespace %s: %w", ns, err)
 			}
-		}(ns, cache)
+			return nil
+		})
 	}
-	select {
-	case <-ctx.Done():
-		return nil
-	case err := <-errs:
-		return err
+
+	return ignoreContextCanceled(ctx, group.Wait())
+}
+
+// ignoreContextCanceled returns nil if the parent context was cancelled,
+// otherwise returns the error from group.Wait().
+// This preserves the original semantics where context cancellation returns nil.
+func ignoreContextCanceled(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return nil //nolint:nilerr // intentional: original behavior returns nil on context cancellation
 	}
+	return err
 }
 
 func (c *multiNamespaceCache) WaitForCacheSync(ctx context.Context) bool {

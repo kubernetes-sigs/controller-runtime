@@ -462,6 +462,10 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		// Create a context that inherits all keys from the parent context
 		// but can be cancelled independently for leader election management
 		baseCtx := context.WithoutCancel(ctx)
+
+		// Inject the logger into the context for client-go contextual logging
+		baseCtx = logr.NewContext(baseCtx, cm.logger.WithName("leaderelection"))
+
 		leaderCtx, cancel := context.WithCancel(baseCtx)
 		cm.leaderElectionCancel = cancel
 		if leaderElector != nil {

@@ -94,12 +94,12 @@ var _ = Describe("controller", func() {
 	Describe("Reconciler", func() {
 		It("should call the Reconciler function", func(ctx SpecContext) {
 			ctrl.Do = reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
-				return reconcile.Result{Requeue: true}, nil
+				return reconcile.Result{Requeue: true}, nil //nolint:staticcheck // testing deprecated Requeue field
 			})
 			result, err := ctrl.Reconcile(ctx,
 				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(reconcile.Result{Requeue: true}))
+			Expect(result).To(Equal(reconcile.Result{Requeue: true})) //nolint:staticcheck // testing deprecated Requeue field
 		})
 
 		It("should not recover panic if RecoverPanic is false", func(ctx SpecContext) {
@@ -918,12 +918,12 @@ var _ = Describe("controller", func() {
 			Expect(dq.getCounts()).To(Equal(countInfo{Trying: 1}))
 
 			By("Invoking Reconciler which will ask for requeue")
-			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
+			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil) //nolint:staticcheck // testing deprecated Requeue field
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(dq.getCounts).Should(Equal(countInfo{Trying: 1, AddRateLimited: 1}))
 
 			By("Invoking Reconciler a second time without asking for requeue")
-			fakeReconcile.AddResult(reconcile.Result{Requeue: false}, nil)
+			fakeReconcile.AddResult(reconcile.Result{Requeue: false}, nil) //nolint:staticcheck // testing deprecated Requeue field
 			Expect(<-reconciled).To(Equal(request))
 
 			Eventually(dq.getCounts).Should(Equal(countInfo{Trying: 0, AddRateLimited: 1}))
@@ -947,7 +947,7 @@ var _ = Describe("controller", func() {
 			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will request a requeue")
-			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
+			fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil) //nolint:staticcheck // testing deprecated Requeue field
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(func() []priorityQueueAddition {
 				q.lock.Lock()
@@ -976,7 +976,7 @@ var _ = Describe("controller", func() {
 			q.PriorityQueue.AddWithOpts(priorityqueue.AddOpts{Priority: new(10)}, request)
 
 			By("Invoking Reconciler which will request a requeue")
-			fakeReconcile.AddResult(reconcile.Result{Requeue: true, Priority: new(99)}, nil)
+			fakeReconcile.AddResult(reconcile.Result{Requeue: true, Priority: new(99)}, nil) //nolint:staticcheck // testing deprecated Requeue field
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(func() []priorityQueueAddition {
 				q.lock.Lock()
@@ -1006,7 +1006,7 @@ var _ = Describe("controller", func() {
 			Expect(dq.getCounts()).To(Equal(countInfo{Trying: 1}))
 
 			By("Invoking Reconciler which will ask for requeue & requeueafter")
-			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100, Requeue: true}, nil)
+			fakeReconcile.AddResult(reconcile.Result{RequeueAfter: time.Millisecond * 100, Requeue: true}, nil) //nolint:staticcheck // testing deprecated Requeue field
 			Expect(<-reconciled).To(Equal(request))
 			Eventually(dq.getCounts).Should(Equal(countInfo{Trying: 0, AddAfter: 1}))
 
@@ -1257,7 +1257,7 @@ var _ = Describe("controller", func() {
 				By("Invoking Reconciler which will return result with Requeue enabled")
 				queue.Add(request)
 
-				fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil)
+				fakeReconcile.AddResult(reconcile.Result{Requeue: true}, nil) //nolint:staticcheck // testing deprecated Requeue field
 				Expect(<-reconciled).To(Equal(request))
 				Eventually(func() error {
 					Expect(ctrlmetrics.ReconcileTotal.WithLabelValues(ctrl.Name, "requeue").Write(&reconcileTotal)).To(Succeed())

@@ -73,8 +73,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, err
 		}
 
-		// Use short backoff instead of deprecated Requeue:true to resolve SA1019 staticcheck warning
-		return ctrl.Result{RequeueAfter: 1 * time.Millisecond}, nil
+		return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // deprecated Requeue field
 	}
 
 	templ := chaospod.Spec.Template.DeepCopy()

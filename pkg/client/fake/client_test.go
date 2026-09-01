@@ -3473,6 +3473,99 @@ var _ = Describe("Fake client", func() {
 		}
 	})
 
+	// GH-3484
+	It("respects managed fields set on the object on update", func(ctx SpecContext) {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Namespace: "default"},
+			Data:       map[string]string{"k": "v"},
+		}
+		Expect(cl.Create(ctx, obj, client.FieldOwner("initial-manager"))).To(Succeed())
+
+		persisted := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), persisted)).To(Succeed())
+		Expect(persisted.ManagedFields).To(HaveLen(1))
+		Expect(persisted.ManagedFields[0].Manager).To(Equal("initial-manager"))
+
+		// This is what the csaupgrade package in client-go does to migrate
+		// an object from client-side to server-side apply.
+		persisted.ManagedFields[0].Manager = "updated-manager"
+		persisted.ManagedFields[0].Operation = metav1.ManagedFieldsOperationApply
+		Expect(cl.Update(ctx, persisted)).To(Succeed())
+
+		updated := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), updated)).To(Succeed())
+		Expect(updated.ManagedFields).To(HaveLen(1))
+		Expect(updated.ManagedFields[0].Manager).To(Equal("updated-manager"))
+		Expect(updated.ManagedFields[0].Operation).To(Equal(metav1.ManagedFieldsOperationApply))
+	})
+
+	// GH-3484
+	It("respects managed fields set on the object on merge patch", func(ctx SpecContext) {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Namespace: "default"},
+			Data:       map[string]string{"k": "v"},
+		}
+		Expect(cl.Create(ctx, obj, client.FieldOwner("initial-manager"))).To(Succeed())
+
+		base := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), base)).To(Succeed())
+		Expect(base.ManagedFields).To(HaveLen(1))
+
+		modified := base.DeepCopy()
+		modified.ManagedFields[0].Manager = "updated-manager"
+		modified.ManagedFields[0].Operation = metav1.ManagedFieldsOperationApply
+		Expect(cl.Patch(ctx, modified, client.MergeFrom(base))).To(Succeed())
+
+		patched := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), patched)).To(Succeed())
+		Expect(patched.ManagedFields).To(HaveLen(1))
+		Expect(patched.ManagedFields[0].Manager).To(Equal("updated-manager"))
+		Expect(patched.ManagedFields[0].Operation).To(Equal(metav1.ManagedFieldsOperationApply))
+	})
+
+	// GH-3484
+	It("does not change the object's managed fields when they are set on a scale update", func(ctx SpecContext) {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+
+		dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+			Name:      "dep",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "dep"},
+		}}
+		Expect(cl.Create(ctx, dep, client.FieldOwner("dep-manager"))).To(Succeed())
+
+		before := &appsv1.Deployment{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(dep), before)).To(Succeed())
+
+		scale := &autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      dep.Name,
+				Namespace: dep.Namespace,
+				ManagedFields: []metav1.ManagedFieldsEntry{{
+					Manager:    "sneaky-manager",
+					Operation:  metav1.ManagedFieldsOperationUpdate,
+					APIVersion: "autoscaling/v1",
+					FieldsType: "FieldsV1",
+					FieldsV1:   &metav1.FieldsV1{Raw: []byte(`{"f:spec":{"f:replicas":{}}}`)},
+				}},
+			},
+			Spec: autoscalingv1.ScaleSpec{Replicas: 3},
+		}
+		Expect(cl.SubResource("scale").Update(ctx, before, client.WithSubResourceBody(scale), client.FieldOwner("scale-manager"))).To(Succeed())
+
+		after := &appsv1.Deployment{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(dep), after)).To(Succeed())
+		Expect(*after.Spec.Replicas).To(Equal(int32(3)))
+		Expect(after.ManagedFields).NotTo(BeEmpty())
+		for _, mf := range after.ManagedFields {
+			Expect(mf.Manager).NotTo(Equal("sneaky-manager"))
+		}
+	})
+
 	// GH-3267
 	It("Doesn't leave stale data when updating an object through SSA", func(ctx SpecContext) {
 		obj := corev1applyconfigurations.

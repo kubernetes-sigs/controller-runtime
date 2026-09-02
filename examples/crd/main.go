@@ -73,7 +73,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // deprecated Requeue field
+		return ctrl.Result{}, nil
 	}
 
 	templ := chaospod.Spec.Template.DeepCopy()

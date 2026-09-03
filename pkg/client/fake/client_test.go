@@ -3574,7 +3574,7 @@ var _ = Describe("Fake client", func() {
 					Operation:  metav1.ManagedFieldsOperationUpdate,
 					APIVersion: "autoscaling/v1",
 					FieldsType: "FieldsV1",
-					FieldsV1:   &metav1.FieldsV1{Raw: []byte(`{"f:spec":{"f:replicas":{}}}`)},
+					FieldsV1:   metav1.NewFieldsV1(`{"f:spec":{"f:replicas":{}}}`),
 				}},
 			},
 			Spec: autoscalingv1.ScaleSpec{Replicas: 3},
@@ -3679,7 +3679,7 @@ var _ = Describe("Fake client", func() {
 				Manager:    "my-manager",
 				Operation:  metav1.ManagedFieldsOperationUpdate,
 				FieldsType: "FieldsV1",
-				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+				FieldsV1:   metav1.NewFieldsV1(string(fieldV1)),
 			}},
 		}}
 
@@ -3707,7 +3707,7 @@ var _ = Describe("Fake client", func() {
 				Manager:    "my-manager",
 				Operation:  metav1.ManagedFieldsOperationUpdate,
 				FieldsType: "FieldsV1",
-				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+				FieldsV1:   metav1.NewFieldsV1(string(fieldV1)),
 				APIVersion: "v1",
 			}},
 		}}
@@ -3734,7 +3734,7 @@ var _ = Describe("Fake client", func() {
 				Manager:    "my-manager",
 				Operation:  metav1.ManagedFieldsOperationUpdate,
 				FieldsType: "FieldsV1",
-				FieldsV1:   &metav1.FieldsV1{Raw: fieldV1},
+				FieldsV1:   metav1.NewFieldsV1(string(fieldV1)),
 			}},
 		}}
 

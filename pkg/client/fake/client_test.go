@@ -3502,6 +3502,30 @@ var _ = Describe("Fake client", func() {
 	})
 
 	// GH-3484
+	It("does not retain stored managed fields when the incoming update has an empty slice", func(ctx SpecContext) {
+		cl := NewClientBuilder().WithReturnManagedFields().Build()
+
+		obj := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Namespace: "default"},
+			Data:       map[string]string{"k": "v"},
+		}
+		Expect(cl.Create(ctx, obj, client.FieldOwner("initial-manager"))).To(Succeed())
+
+		persisted := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), persisted)).To(Succeed())
+		Expect(persisted.ManagedFields).To(HaveLen(1))
+
+		// Non-nil empty is an explicit clear in apimachinery fieldmanager,
+		// not "unset".
+		persisted.ManagedFields = []metav1.ManagedFieldsEntry{}
+		Expect(cl.Update(ctx, persisted)).To(Succeed())
+
+		updated := &corev1.ConfigMap{}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), updated)).To(Succeed())
+		Expect(updated.ManagedFields).To(BeEmpty())
+	})
+
+	// GH-3484
 	It("respects managed fields set on the object on merge patch", func(ctx SpecContext) {
 		cl := NewClientBuilder().WithReturnManagedFields().Build()
 

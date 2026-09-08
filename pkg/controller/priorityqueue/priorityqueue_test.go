@@ -17,6 +17,7 @@ limitations under the License.
 package priorityqueue
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"strconv"
@@ -1067,4 +1068,63 @@ func TestPriorityQueueDoesNotDeadlockOnShutdownWhileHandingOutItems(t *testing.T
 			t.Fatalf("workers did not return within 10s after ShutDown in round %d: queue deadlocked", round)
 		}
 	}
+}
+
+// TestPriorityQueueLogStateDoesNotRaceOnReadyAt is a regression test for a data
+// race in logState. It used to collect the []*item[T] pointers under w.lock and
+// then hand them to the logger after releasing the lock, while handleWaitingItems
+// (toMove.ReadyAt = nil) and lockedAddWithOpts (item.ReadyAt = readyAt) kept
+// mutating those same items. Serializing a ReadyAt pointer that races from
+// non-nil to nil crashes the process inside encoding/json with
+// "value method time.Time.MarshalJSON called using nil *Time pointer".
+// cloneItems now returns an independent by-value copy taken under the lock; this
+// test reproduces the concurrent access and must be run with -race.
+func TestPriorityQueueLogStateDoesNotRaceOnReadyAt(t *testing.T) {
+	t.Parallel()
+
+	q, _ := newQueue()
+	defer q.ShutDown()
+
+	const keySpace = 20
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Writers: churn items through waiting -> ready (handleWaitingItems clears
+	// ReadyAt) and through the update path (lockedAddWithOpts reassigns ReadyAt).
+	for range 8 {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				q.AddWithOpts(AddOpts{
+					After:    time.Duration(rand.IntN(3)) * time.Millisecond,
+					Priority: new(rand.IntN(5)),
+				}, strconv.Itoa(rand.IntN(keySpace)))
+			}
+		})
+	}
+
+	// Readers: do what logState does - snapshot the queue and serialize it.
+	for range 4 {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if _, err := json.Marshal(q.cloneItems()); err != nil {
+					t.Errorf("marshaling queue snapshot: %v", err)
+					return
+				}
+			}
+		})
+	}
+
+	time.Sleep(500 * time.Millisecond)
+	close(stop)
+	wg.Wait()
 }

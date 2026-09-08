@@ -537,20 +537,36 @@ func (w *priorityqueue[T]) logState() {
 		if !w.log.V(5).Enabled() {
 			continue
 		}
-		w.lock.Lock()
-		items := make([]*item[T], 0, len(w.items))
-		w.waiting.Ascend(func(item *item[T]) bool {
-			items = append(items, item)
-			return true
-		})
-		w.ready.Ascend(func(item *item[T]) bool {
-			items = append(items, item)
-			return true
-		})
-		w.lock.Unlock()
 
-		w.log.V(5).Info("workqueue_items", "items", items)
+		w.log.V(5).Info("workqueue_items", "items", w.cloneItems())
 	}
+}
+
+// cloneItems returns a by-value deep copy of every queued item that is safe to
+// use after w.lock is released. logState serializes the result outside the lock
+// while other goroutines keep mutating the live items (handleWaitingItems sets
+// ReadyAt to nil as an item becomes ready, lockedAddWithOpts reassigns it on the
+// update path), so handing the *item[T] pointers straight to the logger is a
+// data race. The race can crash the process from within encoding/json when a
+// ReadyAt pointer is observed non-nil and then dereferenced after it went nil:
+// "value method time.Time.MarshalJSON called using nil *Time pointer".
+func (w *priorityqueue[T]) cloneItems() []item[T] {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	items := make([]item[T], 0, len(w.items))
+	appendItem := func(it *item[T]) bool {
+		clone := *it
+		if it.ReadyAt != nil {
+			clone.ReadyAt = new(*it.ReadyAt)
+		}
+		items = append(items, clone)
+		return true
+	}
+	w.waiting.Ascend(appendItem)
+	w.ready.Ascend(appendItem)
+
+	return items
 }
 
 func lessWaiting[T comparable](a, b *item[T]) bool {

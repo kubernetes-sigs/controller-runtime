@@ -19,19 +19,24 @@ package priorityqueue
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand/v2"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	fuzz "github.com/google/gofuzz"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
+	"k8s.io/utils/third_party/forked/golang/btree"
+	"sigs.k8s.io/randfill"
 )
 
 var _ = Describe("Controllerworkqueue", func() {
@@ -1070,15 +1075,9 @@ func TestPriorityQueueDoesNotDeadlockOnShutdownWhileHandingOutItems(t *testing.T
 	}
 }
 
-// TestPriorityQueueLogStateDoesNotRaceOnReadyAt is a regression test for a data
-// race in logState. It used to collect the []*item[T] pointers under w.lock and
-// then hand them to the logger after releasing the lock, while handleWaitingItems
-// (toMove.ReadyAt = nil) and lockedAddWithOpts (item.ReadyAt = readyAt) kept
-// mutating those same items. Serializing a ReadyAt pointer that races from
-// non-nil to nil crashes the process inside encoding/json with
-// "value method time.Time.MarshalJSON called using nil *Time pointer".
-// cloneItems now returns an independent by-value copy taken under the lock; this
-// test reproduces the concurrent access and must be run with -race.
+// TestPriorityQueueLogStateDoesNotRaceOnReadyAt checks that snapshotting the queue is safe
+// while other goroutines mutate ReadyAt. logState used to log the live *item[T] pointers,
+// which raced and could crash encoding/json on a ReadyAt that concurrently became nil.
 func TestPriorityQueueLogStateDoesNotRaceOnReadyAt(t *testing.T) {
 	t.Parallel()
 
@@ -1127,4 +1126,55 @@ func TestPriorityQueueLogStateDoesNotRaceOnReadyAt(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	close(stop)
 	wg.Wait()
+}
+
+// TestPriorityQueueCloneItemsCopiesAllFields checks that cloneItems returns items that are
+// equal to the queued ones and share no memory with them. Filling the items with random
+// values keeps both checks valid for fields that are added to item in the future.
+func TestPriorityQueueCloneItemsCopiesAllFields(t *testing.T) {
+	t.Parallel()
+
+	seed := time.Now().UnixNano()
+	t.Logf("seed: %d", seed)
+	filler := randfill.NewWithSeed(seed).NilChance(0).Funcs(func(t *time.Time, c randfill.Continue) {
+		*t = time.Unix(c.Int63n(math.MaxInt32), c.Int63n(int64(time.Second)))
+	})
+
+	for range 100 {
+		waitingItem, readyItem := &item[string]{}, &item[string]{}
+		filler.Fill(waitingItem)
+		filler.Fill(readyItem)
+		// Only items in the waiting tree have a ReadyAt.
+		readyItem.ReadyAt = nil
+
+		q := &priorityqueue[string]{
+			items:   map[string]*item[string]{waitingItem.Key: waitingItem, readyItem.Key: readyItem},
+			ready:   btree.New(32, lessReady[string]),
+			waiting: btree.New(32, lessWaiting[string]),
+		}
+		q.waiting.ReplaceOrInsert(waitingItem)
+		q.ready.ReplaceOrInsert(readyItem)
+
+		// cloneItems returns the waiting items first, then the ready ones.
+		expected := []item[string]{*waitingItem, *readyItem}
+		clones := q.cloneItems()
+		if diff := cmp.Diff(expected, clones); diff != "" {
+			t.Fatalf("cloned items don't match the queued ones: %s", diff)
+		}
+
+		// Equal fields are not enough, a clone must not reference the item it was cloned from.
+		for i, original := range []*item[string]{waitingItem, readyItem} {
+			originalValue, cloneValue := reflect.ValueOf(*original), reflect.ValueOf(clones[i])
+			for f := range cloneValue.NumField() {
+				field := cloneValue.Field(f)
+				if kind := field.Kind(); kind != reflect.Pointer && kind != reflect.Map && kind != reflect.Slice {
+					continue
+				}
+
+				if !field.IsNil() && field.Pointer() == originalValue.Field(f).Pointer() {
+					t.Fatalf("field %s of the clone is shared with the queued item", cloneValue.Type().Field(f).Name)
+				}
+			}
+		}
+	}
 }

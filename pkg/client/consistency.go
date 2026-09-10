@@ -311,6 +311,54 @@ func (c *consistentClient) writeAndRecordRV(ctx context.Context, obj any, disabl
 	return nil
 }
 
+// writeSubResourceAndRecordRV is used for subresource creates whose response is not obj itself,
+// for example an eviction or a token request. Unlike writeAndRecordRV, it reads the resource
+// version to wait for from response rather than from obj. Some such responses, notably an
+// Eviction or a Binding, are a bare Status on success and carry no resource version reflecting
+// obj's new state at all. When that happens, this treats the write as done without registering
+// anything to wait on, the same way it behaves with read-your-writes consistency disabled:
+// unlike Delete, it has no event to fall back on to guarantee that a subsequent Get or List
+// through this client observes the effect of the write (e.g. the evicted Pod's removal).
+func (c *consistentClient) writeSubResourceAndRecordRV(ctx context.Context, obj, response Object, disableConsistency bool, write func() error) error {
+	if disableConsistency {
+		return write()
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, c.upstream.Scheme())
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for object %T: %w", obj, err)
+	}
+	gvkAndRepresentation := gvkAndRepresentation{gvk: gvk, representation: representationIDForObj(obj)}
+
+	// We don't technically need an informer since the RV is monotonically increasing, but we want to fail
+	// ASAP if the cache can not be setup.
+	h, err := c.getConsistencyHandler(ctx, gvkAndRepresentation, obj)
+	if err != nil {
+		return err
+	}
+
+	namespacedName := ObjectKeyFromObject(obj)
+	release := c.writeBarriers.getOrCreate(gvkAndRepresentation).Begin(namespacedName)
+	defer release()
+
+	if err := write(); err != nil {
+		return err
+	}
+
+	rvRaw := response.GetResourceVersion()
+	if rvRaw == "" {
+		return nil
+	}
+	rv, err := strconv.ParseInt(rvRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
+	}
+
+	h.SetMinimumRV(namespacedName, rv)
+
+	return nil
+}
+
 func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, error) {
 	v := reflect.ValueOf(obj)
 	for v.Kind() == reflect.Pointer {
@@ -429,14 +477,16 @@ func (c *consistentClient) IsObjectNamespaced(obj runtime.Object) (bool, error) 
 
 func (c *consistentClient) SubResource(subResource string) SubResourceClient {
 	return &consistentSubResourceClient{
-		writeAndRecordRV: c.writeAndRecordRV,
-		upstream:         c.upstream.SubResource(subResource),
+		writeAndRecordRV:            c.writeAndRecordRV,
+		writeSubResourceAndRecordRV: c.writeSubResourceAndRecordRV,
+		upstream:                    c.upstream.SubResource(subResource),
 	}
 }
 
 type consistentSubResourceClient struct {
-	writeAndRecordRV func(ctx context.Context, obj any, disableConsistency bool, write func() error) error
-	upstream         SubResourceClient
+	writeAndRecordRV            func(ctx context.Context, obj any, disableConsistency bool, write func() error) error
+	writeSubResourceAndRecordRV func(ctx context.Context, obj, response Object, disableConsistency bool, write func() error) error
+	upstream                    SubResourceClient
 }
 
 func (c *consistentSubResourceClient) Get(ctx context.Context, obj, subResource Object, opts ...SubResourceGetOption) error {
@@ -444,7 +494,7 @@ func (c *consistentSubResourceClient) Get(ctx context.Context, obj, subResource 
 }
 
 func (c *consistentSubResourceClient) Create(ctx context.Context, obj, subResource Object, opts ...SubResourceCreateOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&SubResourceCreateOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	return c.writeSubResourceAndRecordRV(ctx, obj, subResource, (&SubResourceCreateOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
 		return c.upstream.Create(ctx, obj, subResource, opts...)
 	})
 }

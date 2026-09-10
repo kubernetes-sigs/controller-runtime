@@ -542,14 +542,8 @@ func (w *priorityqueue[T]) logState() {
 	}
 }
 
-// cloneItems returns a by-value deep copy of every queued item that is safe to
-// use after w.lock is released. logState serializes the result outside the lock
-// while other goroutines keep mutating the live items (handleWaitingItems sets
-// ReadyAt to nil as an item becomes ready, lockedAddWithOpts reassigns it on the
-// update path), so handing the *item[T] pointers straight to the logger is a
-// data race. The race can crash the process from within encoding/json when a
-// ReadyAt pointer is observed non-nil and then dereferenced after it went nil:
-// "value method time.Time.MarshalJSON called using nil *Time pointer".
+// cloneItems returns a deep copy of all queued items, taken under the lock, so that callers
+// like logState can use them after it is released without racing with writers of ReadyAt.
 func (w *priorityqueue[T]) cloneItems() []item[T] {
 	w.lock.Lock()
 	defer w.lock.Unlock()

@@ -1,7 +1,6 @@
 package priorityqueue
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -12,6 +11,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/go-logr/logr/funcr"
 	"github.com/google/go-cmp/cmp"
 	fuzz "github.com/google/gofuzz"
 	. "github.com/onsi/ginkgo/v2"
@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
-	"k8s.io/utils/third_party/forked/golang/btree"
 	"sigs.k8s.io/randfill"
 )
 
@@ -604,11 +603,11 @@ func TestHighPriorityItemsAreReturnedBeforeLowPriorityItemMultipleTimes(t *testi
 	}
 }
 
-func newQueue() (*priorityqueue[string], *fakeMetricsProvider) {
+func newQueue(opts ...Opt[string]) (*priorityqueue[string], *fakeMetricsProvider) {
 	metrics := newFakeMetricsProvider()
-	q := New("test", func(o *Opts[string]) {
+	q := New("test", append([]Opt[string]{func(o *Opts[string]) {
 		o.MetricProvider = metrics
-	})
+	}}, opts...)...)
 	q.(*priorityqueue[string]).waiting = &btreeInteractionValidator{
 		bTree:             q.(*priorityqueue[string]).waiting,
 		shouldHaveReadyAt: true,
@@ -1059,106 +1058,69 @@ func TestPriorityQueueDoesNotDeadlockOnShutdownWhileHandingOutItems(t *testing.T
 	}
 }
 
-// TestPriorityQueueLogStateDoesNotRaceOnReadyAt checks that snapshotting the queue is safe
-// while other goroutines mutate ReadyAt. logState used to log the live *item[T] pointers,
-// which raced and could crash encoding/json on a ReadyAt that concurrently became nil.
 func TestPriorityQueueLogStateDoesNotRaceOnReadyAt(t *testing.T) {
 	t.Parallel()
-
-	q, _ := newQueue()
-	defer q.ShutDown()
-
-	const keySpace = 20
-	stop := make(chan struct{})
-	var wg sync.WaitGroup
-
-	// Writers: churn items through waiting -> ready (handleWaitingItems clears
-	// ReadyAt) and through the update path (lockedAddWithOpts reassigns ReadyAt).
-	for range 8 {
-		wg.Go(func() {
-			for {
-				select {
-				case <-stop:
-					return
-				default:
-				}
-				q.AddWithOpts(AddOpts{
-					After:    time.Duration(rand.IntN(3)) * time.Millisecond,
-					Priority: new(rand.IntN(5)),
-				}, strconv.Itoa(rand.IntN(keySpace)))
-			}
+	synctest.Test(t, func(t *testing.T) {
+		q, _ := newQueue(func(o *Opts[string]) {
+			o.Log = funcr.New(func(string, string) {}, funcr.Options{Verbosity: 5})
 		})
-	}
+		defer q.ShutDown()
 
-	// Readers: do what logState does - snapshot the queue and serialize it.
-	for range 4 {
-		wg.Go(func() {
-			for {
-				select {
-				case <-stop:
-					return
-				default:
-				}
-				if _, err := json.Marshal(q.cloneItems()); err != nil {
-					t.Errorf("marshaling queue snapshot: %v", err)
-					return
-				}
-			}
-		})
-	}
-
-	time.Sleep(500 * time.Millisecond)
-	close(stop)
-	wg.Wait()
+		// Re-adding an item with a lower After updates its ReadyAt, and every
+		// sleep lets logState log the item once, concurrently to the update.
+		for i := range 10 {
+			q.AddWithOpts(AddOpts{After: time.Hour - time.Duration(i)*time.Minute}, "foo")
+			time.Sleep(10 * time.Second)
+		}
+	})
 }
 
-// TestPriorityQueueCloneItemsCopiesAllFields checks that cloneItems returns items that are
-// equal to the queued ones and share no memory with them. Filling the items with random
-// values keeps both checks valid for fields that are added to item in the future.
-func TestPriorityQueueCloneItemsCopiesAllFields(t *testing.T) {
+func TestItemCloneCopiesAllFields(t *testing.T) {
 	t.Parallel()
 
 	seed := time.Now().UnixNano()
 	t.Logf("seed: %d", seed)
-	filler := randfill.NewWithSeed(seed).NilChance(0).Funcs(func(t *time.Time, c randfill.Continue) {
-		*t = time.Unix(c.Int63n(math.MaxInt32), c.Int63n(int64(time.Second)))
-	})
+	filler := newItemFiller(seed)
 
 	for range 100 {
-		waitingItem, readyItem := &item[string]{}, &item[string]{}
-		filler.Fill(waitingItem)
-		filler.Fill(readyItem)
-		// Only items in the waiting tree have a ReadyAt.
-		readyItem.ReadyAt = nil
+		original := item[string]{}
+		filler.Fill(&original)
 
-		q := &priorityqueue[string]{
-			items:   map[string]*item[string]{waitingItem.Key: waitingItem, readyItem.Key: readyItem},
-			ready:   btree.New(32, lessReady[string]),
-			waiting: btree.New(32, lessWaiting[string]),
+		if diff := cmp.Diff(original, original.clone()); diff != "" {
+			t.Errorf("clone doesn't match the original item: %s", diff)
 		}
-		q.waiting.ReplaceOrInsert(waitingItem)
-		q.ready.ReplaceOrInsert(readyItem)
+	}
+}
 
-		// cloneItems returns the waiting items first, then the ready ones.
-		expected := []item[string]{*waitingItem, *readyItem}
-		clones := q.cloneItems()
-		if diff := cmp.Diff(expected, clones); diff != "" {
-			t.Fatalf("cloned items don't match the queued ones: %s", diff)
-		}
+func TestItemCloneDoesNotShareMemoryWithOriginal(t *testing.T) {
+	t.Parallel()
 
-		// Equal fields are not enough, a clone must not reference the item it was cloned from.
-		for i, original := range []*item[string]{waitingItem, readyItem} {
-			originalValue, cloneValue := reflect.ValueOf(*original), reflect.ValueOf(clones[i])
-			for f := range cloneValue.NumField() {
-				field := cloneValue.Field(f)
-				if kind := field.Kind(); kind != reflect.Pointer && kind != reflect.Map && kind != reflect.Slice {
-					continue
-				}
+	seed := time.Now().UnixNano()
+	t.Logf("seed: %d", seed)
+	filler := newItemFiller(seed)
 
-				if !field.IsNil() && field.Pointer() == originalValue.Field(f).Pointer() {
-					t.Fatalf("field %s of the clone is shared with the queued item", cloneValue.Type().Field(f).Name)
-				}
+	for range 100 {
+		original := item[string]{}
+		filler.Fill(&original)
+
+		originalValue, cloneValue := reflect.ValueOf(original), reflect.ValueOf(original.clone())
+		for i := range cloneValue.NumField() {
+			field := cloneValue.Field(i)
+			if kind := field.Kind(); kind != reflect.Pointer && kind != reflect.Map && kind != reflect.Slice {
+				continue
+			}
+
+			if !field.IsNil() && field.Pointer() == originalValue.Field(i).Pointer() {
+				t.Fatalf("field %s of the clone is shared with the original item", cloneValue.Type().Field(i).Name)
 			}
 		}
 	}
+}
+
+// newItemFiller returns a filler that also fills time.Time, which randfill
+// leaves at its zero value as all of its fields are unexported.
+func newItemFiller(seed int64) *randfill.Filler {
+	return randfill.NewWithSeed(seed).NilChance(0).Funcs(func(t *time.Time, c randfill.Continue) {
+		*t = time.Unix(c.Int63n(math.MaxInt32), c.Int63n(int64(time.Second)))
+	})
 }

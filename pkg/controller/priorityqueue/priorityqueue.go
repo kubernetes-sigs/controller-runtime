@@ -550,11 +550,7 @@ func (w *priorityqueue[T]) cloneItems() []item[T] {
 
 	items := make([]item[T], 0, len(w.items))
 	appendItem := func(it *item[T]) bool {
-		clone := *it
-		if it.ReadyAt != nil {
-			clone.ReadyAt = new(*it.ReadyAt)
-		}
-		items = append(items, clone)
+		items = append(items, it.clone())
 		return true
 	}
 	w.waiting.Ascend(appendItem)
@@ -582,6 +578,15 @@ type item[T comparable] struct {
 	AddedCounter uint64     `json:"addedCounter"`
 	Priority     int        `json:"priority"`
 	ReadyAt      *time.Time `json:"readyAt,omitempty"`
+}
+
+// clone returns a copy of the item that shares no memory with it.
+func (i *item[T]) clone() item[T] {
+	clone := *i
+	if i.ReadyAt != nil {
+		clone.ReadyAt = new(*i.ReadyAt)
+	}
+	return clone
 }
 
 func (w *priorityqueue[T]) updateUnfinishedWorkLoop() {

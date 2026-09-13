@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -277,4 +278,67 @@ var _ = Describe("ConsistentClient", func() {
 			})
 		})
 	}
+
+	Describe("SubResource Create", func() {
+		var (
+			cl     client.Client
+			ctx    context.Context
+			cancel context.CancelFunc
+		)
+
+		BeforeEach(func(specCtx SpecContext) {
+			// NB: Don't derive from the BeforeEach's context, Ginkgo cancels it when the
+			// node returns and it thus would not outlive it, stopping the cache's watches.
+			ctx, cancel = context.WithCancel(context.WithoutCancel(specCtx))
+
+			c, err := cache.New(cfg, cache.Options{Scheme: kscheme.Scheme})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = c.GetInformer(ctx, &corev1.Pod{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.GetInformer(ctx, &corev1.Namespace{})
+			Expect(err).NotTo(HaveOccurred())
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(c.Start(ctx)).To(Succeed())
+			}()
+			Expect(c.WaitForCacheSync(ctx)).To(BeTrue())
+
+			cl, err = client.New(cfg, client.Options{
+				Scheme: kscheme.Scheme,
+				Cache: &client.CacheOptions{
+					Reader:                          c,
+					EnableReadYourWritesConsistency: new(true),
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		It("evicts a pod without erroring", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-evict-%d", counter.Add(1))}}
+			Expect(cl.Create(ctx, ns)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				Expect(client.IgnoreNotFound(cl.Delete(ctx, ns))).To(Succeed())
+			})
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: fmt.Sprintf("consistency-evict-%d", counter.Add(1))},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "c", Image: "example.com/does-not-matter"}},
+				},
+			}
+			Expect(cl.Create(ctx, pod)).To(Succeed())
+
+			// This is the scenario from https://github.com/kubernetes-sigs/controller-runtime/issues/3590:
+			// the eviction response is decoded into a policy/v1.Eviction, not the Pod, so the client
+			// must not try to read a resource version to wait for off the Pod after this write.
+			eviction := &policyv1.Eviction{ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name}}
+			Expect(cl.SubResource("eviction").Create(ctx, pod, eviction)).To(Succeed())
+		})
+	})
 })

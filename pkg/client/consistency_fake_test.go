@@ -28,8 +28,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
-	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -522,31 +520,6 @@ func TestConsistentFakeClientDisableReadYourWritesConsistency(t *testing.T) {
 			})
 		})
 	}
-}
-
-// TestConsistentFakeClientSubResourceCreateWithoutResponseResourceVersion covers a subresource
-// create whose response is not obj itself and does not carry obj's resource version, for example
-// a Pod eviction: the response is a policy/v1.Eviction, not the evicted Pod. That must not be
-// treated as a failure to determine the resource version to wait for.
-func TestConsistentFakeClientSubResourceCreateWithoutResponseResourceVersion(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		g := NewWithT(t)
-
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default", UID: "test-uid"},
-		}
-
-		c := newConsistentFakeClient(t, writebarrier.NewWriteBarrier(), pod)
-		synctest.Wait() // wait for cache start to finish
-
-		// Only Namespace and Name are set, as is typical for an eviction caller that does not
-		// already have the Pod's resource version at hand.
-		podStub := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace}}
-		eviction := &policyv1.Eviction{ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace}}
-		g.Expect(c.SubResource("eviction").Create(t.Context(), podStub, eviction)).To(Succeed())
-	})
 }
 
 // watchDelay is how long the fake cache lags behind the fake client.

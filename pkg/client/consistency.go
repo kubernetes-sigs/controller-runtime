@@ -443,9 +443,9 @@ func (c *consistentSubResourceClient) Get(ctx context.Context, obj, subResource 
 	return c.upstream.Get(ctx, obj, subResource, opts...)
 }
 
-// Create does not attempt to participate in read-your-writes consistency: the server's response
-// is decoded into subResource, not obj, and in every in-tree case (Eviction, Binding) that
-// response is a bare Status with no resource version to record a write barrier against anyway.
+// Create is excluded from read-your-writes consistency, because it either returns a
+// status with no RV (pod/eviction, pod/binding) or a virtual resource that is not
+// persisted (serviceaccount/token).
 func (c *consistentSubResourceClient) Create(ctx context.Context, obj, subResource Object, opts ...SubResourceCreateOption) error {
 	return c.upstream.Create(ctx, obj, subResource, opts...)
 }

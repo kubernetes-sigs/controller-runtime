@@ -280,7 +280,8 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
 	handlerOpts := promhttp.HandlerOpts{
-		ErrorHandling: promhttp.HTTPErrorOnError,
+		ErrorHandling:     promhttp.HTTPErrorOnError,
+		EnableOpenMetrics: true,
 	}
 	for _, op := range s.options.HandlerOpts {
 		op(&handlerOpts)

@@ -46,7 +46,7 @@ var _ = Describe("handlerOpts", func() {
 		Entry("with defaults", &testCase{
 			server:                    defaultServer{},
 			expectedErrorHandling:     promhttp.HTTPErrorOnError,
-			expectedEnableOpenMetrics: false,
+			expectedEnableOpenMetrics: true,
 		}),
 		Entry("with overrides", &testCase{
 			server: defaultServer{
@@ -54,13 +54,13 @@ var _ = Describe("handlerOpts", func() {
 					HandlerOpts: []func(*promhttp.HandlerOpts){
 						func(opts *promhttp.HandlerOpts) {
 							opts.ErrorHandling = promhttp.ContinueOnError
-							opts.EnableOpenMetrics = true
+							opts.EnableOpenMetrics = false
 						},
 					},
 				},
 			},
 			expectedErrorHandling:     promhttp.ContinueOnError,
-			expectedEnableOpenMetrics: true,
+			expectedEnableOpenMetrics: false,
 		}),
 	)
 })

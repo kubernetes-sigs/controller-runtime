@@ -111,6 +111,10 @@ type Options struct {
 	// cannot be loaded from the configured files when the server starts.
 	TLSOpts []func(*tls.Config)
 
+	// HandlerOpts is used to allow configuring the promhttp handler used to serve metrics.
+	// These options are applied after the default handler options are set and can override them.
+	HandlerOpts []func(*promhttp.HandlerOpts)
+
 	// ListenConfig contains options for listening to an address on the metric server.
 	ListenConfig net.ListenConfig
 }
@@ -224,9 +228,7 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 
-	handler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{
-		ErrorHandling: promhttp.HTTPErrorOnError,
-	})
+	handler := promhttp.HandlerFor(metrics.Registry, s.handlerOpts())
 	if s.metricsFilter != nil {
 		log := log.WithValues("path", defaultMetricsEndpoint)
 		var err error
@@ -274,6 +276,17 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 	<-idleConnsClosed
 	return nil
+}
+
+func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
+	handlerOpts := promhttp.HandlerOpts{
+		ErrorHandling:     promhttp.HTTPErrorOnError,
+		EnableOpenMetrics: true,
+	}
+	for _, op := range s.options.HandlerOpts {
+		op(&handlerOpts)
+	}
+	return handlerOpts
 }
 
 func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (net.Listener, error) {

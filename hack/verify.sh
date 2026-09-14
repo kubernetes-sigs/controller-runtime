@@ -35,3 +35,8 @@ make verify-boilerplate
 
 header_text "running golangci-lint"
 make lint
+
+# CI runs only on Linux, so check that the code still compiles for Windows.
+header_text "building for windows"
+GOOS=windows go build ./...
+(cd tools/setup-envtest && GOOS=windows go build ./...)

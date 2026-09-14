@@ -22,7 +22,6 @@ import (
 
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
-	"sigs.k8s.io/controller-runtime/pkg/internal/metrics"
 )
 
 // This file is mostly a copy of unexported code from
@@ -56,7 +55,7 @@ func newQueueMetrics[T comparable](mp workqueue.MetricsProvider, name string, cl
 		retries:                 mp.NewRetriesMetric(name),
 	}
 
-	if mpp, ok := mp.(metrics.MetricsProviderWithPriority); ok {
+	if mpp, ok := mp.(MetricsProvider); ok {
 		dqm.depthWithPriority = mpp.NewDepthMetricWithPriority(name)
 	} else {
 		dqm.depth = mp.NewDepthMetric(name)
@@ -70,7 +69,7 @@ type defaultQueueMetrics[T comparable] struct {
 
 	// current depth of a workqueue
 	depth             workqueue.GaugeMetric
-	depthWithPriority metrics.DepthMetricWithPriority
+	depthWithPriority DepthMetricWithPriority
 	// total number of adds handled by a workqueue
 	adds workqueue.CounterMetric
 	// how long an item stays in a workqueue

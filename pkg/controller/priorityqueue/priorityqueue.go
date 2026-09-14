@@ -31,6 +31,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/internal/metrics"
 )
 
+// MetricsProvider extends workqueue.MetricsProvider with support
+// for recording queue depth partitioned by item priority.
+type MetricsProvider interface {
+	workqueue.MetricsProvider
+
+	NewDepthMetricWithPriority(name string) DepthMetricWithPriority
+}
+
+// DepthMetricWithPriority represents a depth metric with priority.
+type DepthMetricWithPriority = metrics.DepthMetricWithPriority
+
 // AddOpts describes the options for adding items to the queue.
 type AddOpts struct {
 	After       time.Duration

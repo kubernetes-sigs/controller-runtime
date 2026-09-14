@@ -85,24 +85,30 @@ type Options struct {
 	// CertDir is the directory that contains the server key and certificate. Defaults to
 	// <temp-dir>/k8s-metrics-server/serving-certs.
 	//
-	// Note: This option is only used when TLSOpts does not set GetCertificate.
-	// Note: If certificate or key doesn't exist a self-signed certificate will be used.
+	// If both the certificate and key exist when the server starts, they are loaded and
+	// watched for changes. If either file does not exist, a self-signed certificate is
+	// generated instead. To use certificates that are provisioned after the server starts,
+	// set GetCertificate through TLSOpts.
 	CertDir string
 
 	// CertName is the server certificate name. Defaults to tls.crt.
 	//
-	// Note: This option is only used when TLSOpts does not set GetCertificate.
-	// Note: If certificate or key doesn't exist a self-signed certificate will be used.
+	// This option is only used when TLSOpts does not set GetCertificate. If the
+	// certificate or key does not exist when the server starts, a self-signed certificate
+	// will be used.
 	CertName string
 
 	// KeyName is the server key name. Defaults to tls.key.
 	//
-	// Note: This option is only used when TLSOpts does not set GetCertificate.
-	// Note: If certificate or key doesn't exist a self-signed certificate will be used.
+	// This option is only used when TLSOpts does not set GetCertificate. If the
+	// certificate or key does not exist when the server starts, a self-signed certificate
+	// will be used.
 	KeyName string
 
 	// TLSOpts is used to allow configuring the TLS config used for the server.
-	// This also allows providing a certificate via GetCertificate.
+	// If an option sets GetCertificate, it takes precedence over CertDir, CertName, and
+	// KeyName. Use this when certificates are provisioned asynchronously or otherwise
+	// cannot be loaded from the configured files when the server starts.
 	TLSOpts []func(*tls.Config)
 
 	// ListenConfig contains options for listening to an address on the metric server.

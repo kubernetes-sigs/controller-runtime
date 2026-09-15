@@ -114,15 +114,37 @@ type Reconciler = TypedReconciler[Request]
 type TypedReconciler[request comparable] interface {
 	// Reconcile performs a full reconciliation for the object referred to by the Request.
 	//
-	// If the returned error is non-nil, the Result is ignored and the request will be
-	// requeued using exponential backoff. The only exception is if the error is a
-	// TerminalError in which case no requeuing happens.
+	// The returned Result and error control whether and how the request is requeued:
 	//
-	// If the error is nil and the returned Result has a non-zero result.RequeueAfter, the request
-	// will be requeued after the specified duration.
+	//   // Done: do not requeue.
+	//   return reconcile.Result{}, nil
 	//
-	// If the error is nil and result.RequeueAfter is zero and result.Requeue is true, the request
-	// will be requeued using exponential backoff.
+	//   // Requeue after a fixed delay (no exponential backoff).
+	//   return reconcile.Result{RequeueAfter: 60 * time.Second}, nil
+	//
+	//   // Requeue immediately with exponential backoff (no error).
+	//   // Deprecated: prefer RequeueAfter with an explicit interval.
+	//   return reconcile.Result{Requeue: true}, nil
+	//
+	//   // Error: Result is ignored; requeue with exponential backoff.
+	//   return reconcile.Result{}, err
+	//
+	//   // Terminal error: do not retry (still logged and recorded in metrics).
+	//   return reconcile.Result{}, reconcile.TerminalError(err)
+	//
+	// Rules of thumb:
+	//
+	//   - Non-nil error (except TerminalError) always triggers exponential backoff.
+	//     The Result is ignored when an error is returned.
+	//   - nil error + non-zero RequeueAfter requeues once after that duration
+	//     (no exponential backoff).
+	//   - nil error + zero RequeueAfter + Requeue true requeues with exponential
+	//     backoff (deprecated; use RequeueAfter instead).
+	//   - nil error + zero Result means the work is done until another event arrives.
+	//
+	// When waiting for an external condition, prefer RequeueAfter with a poll
+	// interval over Requeue or returning a transient error, so retries are not
+	// coupled to the error rate limiter.
 	Reconcile(context.Context, request) (Result, error)
 }
 

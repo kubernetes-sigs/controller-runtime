@@ -182,6 +182,15 @@ var _ = Describe("CreateOptions", func() {
 	})
 })
 
+var _ = Describe("SubResourceCreateOptions", func() {
+	It("Should set CreateOptions", func() {
+		o := &client.SubResourceCreateOptions{CreateOptions: client.CreateOptions{FieldManager: "bar"}}
+		newCreateOpts := &client.SubResourceCreateOptions{}
+		o.ApplyToSubResourceCreate(newCreateOpts)
+		Expect(newCreateOpts).To(Equal(o))
+	})
+})
+
 var _ = Describe("DeleteOptions", func() {
 	It("Should set GracePeriodSeconds", func() {
 		o := &client.DeleteOptions{GracePeriodSeconds: new(int64(42))}

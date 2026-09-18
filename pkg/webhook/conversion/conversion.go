@@ -39,6 +39,26 @@ import (
 	conversionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/metrics"
 )
 
+// adapted from https://github.com/kubernetes/kubernetes/blob/c28c2009181fcc44c5f6b47e10e62dacf53e4da0/staging/src/k8s.io/pod-security-admission/cmd/webhook/server/server.go
+//
+// From https://github.com/kubernetes/apiserver/blob/d6876a0600de06fef75968c4641c64d7da499f25/pkg/server/config.go#L433-L442C5:
+//
+//	     1.5MB is the recommended client request size in byte
+//		 the etcd server should accept. See
+//		 https://github.com/etcd-io/etcd/blob/release-3.4/embed/config.go#L56.
+//		 A request body might be encoded in json, and is converted to
+//		 proto when persisted in etcd, so we allow 2x as the largest request
+//		 body size to be accepted and decoded in a write request.
+//
+// For the conversion request for CRDs, we can infer that it contains at most on object
+// (the object to be converted), which can be at most 3MB in size.
+// For the rest of the request, we can assume that it will be less than 1MB in size.
+// Therefore, we can set the max request size to 4MB.
+//
+// If your use case requires larger max request sizes, please
+// open an issue (https://github.com/kubernetes-sigs/controller-runtime/issues/new).
+const maxRequestSize = int64(4 * 1024 * 1024)
+
 var (
 	log = logf.Log.WithName("conversion-webhook")
 )
@@ -60,9 +80,22 @@ var _ http.Handler = &webhook{}
 func (wh *webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
+		log.Error(fmt.Errorf("contentType=%s, expected application/json", contentType), "unable to process a request with unknown content type")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+
 	convertReview := &apix.ConversionReview{}
-	err := json.NewDecoder(r.Body).Decode(convertReview)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(convertReview); err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			log.Error(err, "unable to read conversion request; limit reached", "limit", maxRequestSize)
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
 		log.Error(err, "failed to read conversion request")
 		w.WriteHeader(http.StatusBadRequest)
 		return

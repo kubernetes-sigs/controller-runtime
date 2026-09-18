@@ -542,7 +542,7 @@ func (co *SubResourceCreateOptions) ApplyOptions(opts []SubResourceCreateOption)
 
 // ApplyToSubResourceCreate applies the the configuration on the given create options.
 func (co *SubResourceCreateOptions) ApplyToSubResourceCreate(o *SubResourceCreateOptions) {
-	co.CreateOptions.ApplyToCreate(&co.CreateOptions)
+	co.CreateOptions.ApplyToCreate(&o.CreateOptions)
 }
 
 // SubResourcePatchOptions holds all possible configurations for a subresource patch

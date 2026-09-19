@@ -149,7 +149,9 @@ func (o *Options) setDefaults() {
 	}
 
 	if len(o.CertDir) == 0 {
-		o.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
+		// Note: os.TempDir() returns a different path on each invocation.
+	// For consistent behavior, consider setting CertDir explicitly.
+	o.CertDir = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs")
 	}
 
 	if len(o.CertName) == 0 {

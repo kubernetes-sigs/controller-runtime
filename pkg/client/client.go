@@ -108,6 +108,9 @@ type CacheOptions struct {
 	// This is an experimental feature, a form of this will be kept but both the details of
 	// how exactly it works and how exactly it is configured may change.
 	//
+	// This feature does not work correctly when a resource has more than one Namespace
+	// configured.
+	//
 	// Defaults to false.
 	EnableReadYourWritesConsistency *bool
 }

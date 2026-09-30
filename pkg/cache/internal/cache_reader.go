@@ -98,9 +98,9 @@ func (c *CacheReader) Get(ctx context.Context, key client.ObjectKey, out client.
 		return fmt.Errorf("cache had type %s, but %s was asked for", objVal.Type(), outVal.Type())
 	}
 	reflect.Indirect(outVal).Set(reflect.Indirect(objVal))
-	if !c.disableDeepCopy && (getOpts.UnsafeDisableDeepCopy == nil || !*getOpts.UnsafeDisableDeepCopy) {
-		out.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
-	}
+	// Set GVK on the caller object. The reflect copy above already detached it
+	// from the cached object, including when deep copy is disabled.
+	out.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
 
 	return nil
 }
@@ -168,11 +168,12 @@ func (c *CacheReader) List(ctx context.Context, out client.ObjectList, opts ...c
 		if c.disableDeepCopy || (listOpts.UnsafeDisableDeepCopy != nil && *listOpts.UnsafeDisableDeepCopy) {
 			// skip deep copy which might be unsafe
 			// you must DeepCopy any object before mutating it outside
-			outObj = obj
+			// Shallow-copy only so GVK can be set without writing TypeMeta into the indexer.
+			outObj = shallowCopyObject(obj)
 		} else {
 			outObj = obj.DeepCopyObject()
-			outObj.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
 		}
+		outObj.GetObjectKind().SetGroupVersionKind(c.groupVersionKind)
 		runtimeObjs = append(runtimeObjs, outObj)
 	}
 
@@ -227,6 +228,19 @@ func byIndexes(indexer cache.Indexer, requires fields.Requirements, namespace st
 		objs = filteredObjects
 	}
 	return objs, nil
+}
+
+// shallowCopyObject copies the object header so TypeMeta can be set on the
+// returned value without mutating the object stored in the indexer. Nested
+// fields stay shared, matching the no-deep-copy contract.
+func shallowCopyObject(obj runtime.Object) runtime.Object {
+	v := reflect.ValueOf(obj)
+	if v.Kind() != reflect.Pointer || v.IsNil() || v.Elem().Kind() != reflect.Struct {
+		return obj
+	}
+	clone := reflect.New(v.Elem().Type())
+	clone.Elem().Set(v.Elem())
+	return clone.Interface().(runtime.Object)
 }
 
 // objectKeyToStorageKey converts an object key to store key.

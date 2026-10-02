@@ -275,13 +275,6 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 // findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked tries to find the passed apiGroup.
 // If the server supports aggregated discovery, it will always perform that.
 func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName string) (_ *metav1.APIGroup, didAggregatedDiscovery bool, _ error) {
-	// Looking in the cache first
-	group, ok := m.apiGroups[groupName]
-	if ok {
-		return group, false, nil
-	}
-
-	// Update the cache if nothing was found.
 	apiGroups, maybeResources, _, err := m.client.GroupsAndMaybeResources()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get server groups: %w", err)
@@ -294,12 +287,32 @@ func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName s
 	for i := range apiGroups.Groups {
 		group := &apiGroups.Groups[i]
 		m.apiGroups[group.Name] = group
+
+		// Remove stale versions from the cache: any version cached for this group
+		// that is no longer advertised by the server should be evicted.
+		if knownGroup, ok := m.knownGroups[group.Name]; ok {
+			serverVersions := make(map[string]bool, len(group.Versions))
+			for _, v := range group.Versions {
+				serverVersions[v.Version] = true
+			}
+			for version := range knownGroup.VersionedResources {
+				if !serverVersions[version] {
+					delete(knownGroup.VersionedResources, version)
+				}
+			}
+			filtered := []metav1.GroupVersionForDiscovery{}
+			for _, v := range knownGroup.Group.Versions {
+				if serverVersions[v.Version] {
+					filtered = append(filtered, v)
+				}
+			}
+			knownGroup.Group.Versions = filtered
+		}
 	}
 	if len(maybeResources) > 0 {
 		didAggregatedDiscovery = true
 		m.addGroupVersionResourcesToCacheAndReloadLocked(maybeResources)
 	}
-
 	// Looking in the cache again.
 	// Don't return an error here if the API group is not present.
 	// The reloaded RESTMapper will take care of returning a NoMatchError.

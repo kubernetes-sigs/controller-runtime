@@ -17,19 +17,23 @@ limitations under the License.
 package httpserver
 
 import (
-	"context"
-	"net"
 	"net/http"
+	"testing"
 	"time"
+
+	. "github.com/onsi/gomega"
 )
 
-// New returns a new server with sane defaults.
-func New(ctx context.Context, handler http.Handler) *http.Server {
-	return &http.Server{
-		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		Handler:           handler,
-		MaxHeaderBytes:    1 << 20,
-		IdleTimeout:       120 * time.Second, // slightly larger than client's (such as kube-apiserver or http.DefaultTransport) 90s keep-alive timeout
-		ReadHeaderTimeout: 32 * time.Second,
-	}
+func TestNew(t *testing.T) {
+	g := NewWithT(t)
+
+	ctx := t.Context()
+	handler := http.NewServeMux()
+
+	srv := New(ctx, handler)
+	g.Expect(srv).NotTo(BeNil())
+	g.Expect(srv.Handler).To(Equal(handler))
+	g.Expect(srv.MaxHeaderBytes).To(Equal(1 << 20))
+	g.Expect(srv.IdleTimeout).To(Equal(120 * time.Second))
+	g.Expect(srv.ReadHeaderTimeout).To(Equal(32 * time.Second))
 }

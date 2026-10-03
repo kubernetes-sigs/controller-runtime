@@ -23,6 +23,9 @@ import (
 	"sync"
 	"testing"
 
+	// Register the Ginkgo flags passed by hack/test-all.sh.
+	_ "github.com/onsi/ginkgo/v2"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

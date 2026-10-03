@@ -140,6 +140,55 @@ func TestFakeInformersGetClusterScopedObject(t *testing.T) {
 	}
 }
 
+func TestFakeInformersGetRESTMapper(t *testing.T) {
+	t.Parallel()
+	gvk := corev1.SchemeGroupVersion.WithKind("Namespace")
+	clusterScoped := apimeta.NewDefaultRESTMapper([]schema.GroupVersion{gvk.GroupVersion()})
+	clusterScoped.Add(gvk, apimeta.RESTScopeRoot)
+	namespaced := apimeta.NewDefaultRESTMapper([]schema.GroupVersion{gvk.GroupVersion()})
+	namespaced.Add(gvk, apimeta.RESTScopeNamespace)
+	empty := apimeta.NewDefaultRESTMapper(nil)
+
+	for _, tt := range []struct {
+		name           string
+		backingMapper  apimeta.RESTMapper
+		explicitMapper apimeta.RESTMapper
+		wantNotFound   bool
+		wantNoMatch    bool
+	}{
+		{name: "backing cluster scope", backingMapper: clusterScoped},
+		{name: "backing namespace scope", backingMapper: namespaced, wantNotFound: true},
+		{name: "explicit mapper takes precedence", backingMapper: namespaced, explicitMapper: clusterScoped},
+		{name: "default empty mapper preserves key", wantNotFound: true},
+		{name: "explicit missing mapping returns error", backingMapper: clusterScoped, explicitMapper: empty, wantNoMatch: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			informers := &FakeInformers{
+				RESTMapper: tt.explicitMapper,
+				Client: fake.NewClientBuilder().WithRESTMapper(tt.backingMapper).WithObjects(
+					&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "cluster-object"}},
+				).Build(),
+			}
+			var got corev1.Namespace
+			err := informers.Get(t.Context(), client.ObjectKey{Namespace: "ignored", Name: "cluster-object"}, &got)
+			switch {
+			case tt.wantNotFound:
+				if !apierrors.IsNotFound(err) {
+					t.Fatalf("expected NotFound, got %v", err)
+				}
+			case tt.wantNoMatch:
+				if !apimeta.IsNoMatchError(err) {
+					t.Fatalf("expected missing mapping error, got %v", err)
+				}
+			default:
+				if err != nil || got.Name != "cluster-object" {
+					t.Fatalf("expected cluster-object, got %q: %v", got.Name, err)
+				}
+			}
+		})
+	}
+}
+
 func TestFakeInformersUsesConfiguredSharedIndexInformer(t *testing.T) {
 	t.Parallel()
 

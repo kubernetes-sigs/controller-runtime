@@ -47,7 +47,7 @@ type FakeInformers struct {
 	// Supply a client to seed or change stored objects.
 	Client client.Client
 	// RESTMapper lets Get ignore key.Namespace for cluster-scoped objects.
-	// If nil, Get uses the key unchanged.
+	// If nil, Get uses Client's mapper, preserving the key for unmapped kinds.
 	RESTMapper apimeta.RESTMapper
 	Error      error
 	Synced     *bool
@@ -144,12 +144,16 @@ func (c *FakeInformers) Get(ctx context.Context, key client.ObjectKey, obj clien
 	if c.Error != nil {
 		return c.Error
 	}
-	if c.RESTMapper != nil {
-		namespaced, err := apiutil.IsObjectNamespaced(obj, c.objectScheme(), c.RESTMapper)
-		if err != nil {
+	mapper := c.RESTMapper
+	if mapper == nil && c.Client != nil {
+		mapper = c.Client.RESTMapper()
+	}
+	if mapper != nil {
+		namespaced, err := apiutil.IsObjectNamespaced(obj, c.objectScheme(), mapper)
+		if err != nil && (c.RESTMapper != nil || !apimeta.IsNoMatchError(err)) {
 			return err
 		}
-		if !namespaced {
+		if err == nil && !namespaced {
 			key.Namespace = ""
 		}
 	}

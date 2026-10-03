@@ -82,7 +82,7 @@ type fakeHandlerRegistration struct {
 
 // HasSynced implements cache.ResourceEventHandlerRegistration.
 func (f *fakeHandlerRegistration) HasSynced() bool {
-	return f.informer.HasSynced()
+	return cache.IsDone(f.HasSyncedChecker())
 }
 
 // HasSyncedChecker implements cache.ResourceEventHandlerRegistration.
@@ -120,12 +120,7 @@ func (f *FakeInformer) Synced() {
 
 // HasSynced implements the Informer interface. Returns f.Synced.
 func (f *FakeInformer) HasSynced() bool {
-	select {
-	case <-f.synced:
-		return true
-	default:
-		return false
-	}
+	return cache.IsDone(f.HasSyncedChecker())
 }
 
 // HasSyncedChecker implements the Informer interface.

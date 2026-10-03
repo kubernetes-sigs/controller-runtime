@@ -244,6 +244,7 @@ func StandaloneWebhook(hook *Webhook, opts StandaloneOptions) (http.Handler, err
 	if opts.MetricsPath == "" {
 		return hook, nil
 	}
+	admissionmetrics.InitializeAdmissionResponseTotal(opts.MetricsPath)
 	return metrics.InstrumentedHook(opts.MetricsPath, hook), nil
 }
 

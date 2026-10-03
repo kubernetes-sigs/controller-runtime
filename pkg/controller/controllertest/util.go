@@ -21,7 +21,6 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -59,7 +58,6 @@ type FakeInformer struct {
 	RunCount int
 
 	handlers []cache.ResourceEventHandler
-	indexer  cache.Indexer
 }
 
 func NewFakeInformer(opts ...InformerOption) *FakeInformer {
@@ -70,9 +68,6 @@ func NewFakeInformer(opts ...InformerOption) *FakeInformer {
 
 	f := &FakeInformer{
 		synced: make(chan struct{}),
-		indexer: cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{
-			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
-		}),
 	}
 	if informerOptions.Synced {
 		f.Synced()
@@ -103,12 +98,14 @@ func (f *fakeHandlerRegistration) Done() <-chan struct{} {
 	return f.informer.synced
 }
 
+// AddIndexers does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) AddIndexers(indexers cache.Indexers) error {
-	return f.indexer.AddIndexers(indexers)
+	return nil
 }
 
+// GetIndexer does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) GetIndexer() cache.Indexer {
-	return f.indexer
+	return cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, nil)
 }
 
 // Informer returns the fake Informer.
@@ -173,9 +170,6 @@ func (f *FakeInformer) RunWithContext(_ context.Context) {
 
 // Add fakes an Add event for obj.
 func (f *FakeInformer) Add(obj metav1.Object) {
-	if runtimeObj, ok := obj.(runtime.Object); ok {
-		_ = f.indexer.Add(runtimeObj)
-	}
 	for _, h := range f.handlers {
 		h.OnAdd(obj, false)
 	}
@@ -183,13 +177,6 @@ func (f *FakeInformer) Add(obj metav1.Object) {
 
 // Update fakes an Update event for obj.
 func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
-	if oldRuntimeObj, oldOK := oldObj.(runtime.Object); oldOK {
-		if newRuntimeObj, newOK := newObj.(runtime.Object); newOK {
-			_ = f.indexer.Update(newRuntimeObj)
-		} else {
-			_ = f.indexer.Delete(oldRuntimeObj)
-		}
-	}
 	for _, h := range f.handlers {
 		h.OnUpdate(oldObj, newObj)
 	}
@@ -197,9 +184,6 @@ func (f *FakeInformer) Update(oldObj, newObj metav1.Object) {
 
 // Delete fakes an Delete event for obj.
 func (f *FakeInformer) Delete(obj metav1.Object) {
-	if runtimeObj, ok := obj.(runtime.Object); ok {
-		_ = f.indexer.Delete(runtimeObj)
-	}
 	for _, h := range f.handlers {
 		h.OnDelete(obj)
 	}

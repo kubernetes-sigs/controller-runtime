@@ -51,15 +51,6 @@ type CacheReader struct {
 	disableDeepCopy bool
 }
 
-// NewCacheReader returns a CacheReader backed by indexer.
-func NewCacheReader(indexer cache.Indexer, groupVersionKind schema.GroupVersionKind, scopeName apimeta.RESTScopeName) *CacheReader {
-	return &CacheReader{
-		indexer:          indexer,
-		groupVersionKind: groupVersionKind,
-		scopeName:        scopeName,
-	}
-}
-
 // Get checks the indexer for the object and writes a copy of it if found.
 func (c *CacheReader) Get(ctx context.Context, key client.ObjectKey, out client.Object, opts ...client.GetOption) error {
 	getOpts := client.GetOptions{}

@@ -268,22 +268,22 @@ func (ip *Informers) waitForStarted(ctx context.Context) bool {
 	}
 }
 
-// getHasSyncedFuncs returns all the HasSynced functions for the informers in this map.
-func (ip *Informers) getHasSyncedFuncs() []cache.InformerSynced {
+// getHasSyncedCheckers returns all the HasSynced checkers for the informers in this map.
+func (ip *Informers) getHasSyncedCheckers() []cache.DoneChecker {
 	ip.mu.RLock()
 	defer ip.mu.RUnlock()
 
-	res := make([]cache.InformerSynced, 0,
+	res := make([]cache.DoneChecker, 0,
 		len(ip.tracker.Structured)+len(ip.tracker.Unstructured)+len(ip.tracker.Metadata),
 	)
 	for _, i := range ip.tracker.Structured {
-		res = append(res, i.Informer.HasSynced)
+		res = append(res, i.Informer.HasSyncedChecker())
 	}
 	for _, i := range ip.tracker.Unstructured {
-		res = append(res, i.Informer.HasSynced)
+		res = append(res, i.Informer.HasSyncedChecker())
 	}
 	for _, i := range ip.tracker.Metadata {
-		res = append(res, i.Informer.HasSynced)
+		res = append(res, i.Informer.HasSyncedChecker())
 	}
 	return res
 }
@@ -293,7 +293,7 @@ func (ip *Informers) WaitForCacheSync(ctx context.Context) bool {
 	if !ip.waitForStarted(ctx) {
 		return false
 	}
-	return cache.WaitForCacheSync(ctx.Done(), ip.getHasSyncedFuncs()...)
+	return cache.WaitFor(ctx, "cache sync", ip.getHasSyncedCheckers()...)
 }
 
 // Peek attempts to get the informer for the GVK, but does not start one if one does not exist.
@@ -324,9 +324,9 @@ func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj r
 		shouldBlock = *opts.BlockUntilSynced
 	}
 
-	if shouldBlock && started && !i.Informer.HasSynced() {
+	if shouldBlock && started && !cache.IsDone(i.Informer.HasSyncedChecker()) {
 		// Wait for it to sync before returning the Informer so that folks don't read from a stale cache.
-		if !cache.WaitForCacheSync(ctx.Done(), i.Informer.HasSynced) {
+		if !cache.WaitFor(ctx, "informer sync", i.Informer.HasSyncedChecker()) {
 			return started, nil, apierrors.NewTimeoutError(fmt.Sprintf("failed waiting for %T Informer to sync", obj), 0)
 		}
 	}

@@ -124,7 +124,7 @@ func (ks *Kind[object, request]) Start(ctx context.Context, queue workqueue.Type
 			return
 		}
 		// Then wait for this specific handler to receive all initial events.
-		if !toolscache.WaitForCacheSync(ctx.Done(), handlerRegistration.HasSynced) {
+		if !toolscache.WaitFor(ctx, "event handler sync", handlerRegistration.HasSyncedChecker()) {
 			ks.startedErr <- errors.New("handler did not sync")
 		}
 		close(ks.startedErr)

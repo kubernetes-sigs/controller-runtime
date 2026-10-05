@@ -239,7 +239,7 @@ type webhookPoller struct {
 // poll checks if all the resources have been found in discovery, and returns false if not.
 func (p *webhookPoller) poll(ctx context.Context) (done bool, err error) {
 	// Create a new clientset to avoid any client caching of discovery
-	c, err := client.New(p.config, client.Options{})
+	c, err := client.New(ctx, p.config, client.Options{})
 	if err != nil {
 		return false, err
 	}
@@ -309,7 +309,7 @@ func (o *WebhookInstallOptions) setupCA() error {
 }
 
 func createWebhooks(config *rest.Config, mutHooks []*admissionv1.MutatingWebhookConfiguration, valHooks []*admissionv1.ValidatingWebhookConfiguration) error {
-	cs, err := client.New(config, client.Options{})
+	cs, err := client.New(context.TODO(), config, client.Options{})
 	if err != nil {
 		return err
 	}

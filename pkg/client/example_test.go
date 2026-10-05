@@ -41,7 +41,7 @@ var (
 )
 
 func ExampleNew() {
-	cl, err := client.New(config.GetConfigOrDie(), client.Options{})
+	cl, err := client.New(context.Background(), config.GetConfigOrDie(), client.Options{})
 	if err != nil {
 		fmt.Println("failed to create client")
 		os.Exit(1)
@@ -61,7 +61,7 @@ func ExampleNew_suppress_warnings() {
 	// Use a rest.WarningHandlerWithContext that discards warning messages.
 	cfg.WarningHandlerWithContext = rest.NoWarnings{}
 
-	cl, err := client.New(cfg, client.Options{})
+	cl, err := client.New(context.Background(), cfg, client.Options{})
 	if err != nil {
 		fmt.Println("failed to create client")
 		os.Exit(1)

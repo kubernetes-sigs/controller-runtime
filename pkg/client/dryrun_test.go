@@ -38,8 +38,8 @@ var _ = Describe("DryRunClient", func() {
 	var replicaCount int32 = 2
 	var ns = "default"
 
-	getClient := func() client.Client {
-		cl, err := client.New(cfg, client.Options{DryRun: new(true)})
+	getClient := func(ctx SpecContext) client.Client {
+		cl, err := client.New(ctx, cfg, client.Options{DryRun: new(true)})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cl).NotTo(BeNil())
 		return cl
@@ -78,7 +78,7 @@ var _ = Describe("DryRunClient", func() {
 		name := types.NamespacedName{Namespace: ns, Name: dep.Name}
 		result := &appsv1.Deployment{}
 
-		Expect(getClient().Get(ctx, name, result)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Get(ctx, name, result)).NotTo(HaveOccurred())
 		Expect(result).To(BeEquivalentTo(dep))
 	})
 
@@ -86,7 +86,7 @@ var _ = Describe("DryRunClient", func() {
 		result := &appsv1.DeploymentList{}
 		opts := client.MatchingLabels(dep.Labels)
 
-		Expect(getClient().List(ctx, result, opts)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).List(ctx, result, opts)).NotTo(HaveOccurred())
 
 		Expect(len(result.Items)).To(BeEquivalentTo(1))
 		Expect(result.Items[0]).To(BeEquivalentTo(*dep))
@@ -96,7 +96,7 @@ var _ = Describe("DryRunClient", func() {
 		newDep := dep.DeepCopy()
 		newDep.Name = "new-deployment"
 
-		Expect(getClient().Create(ctx, newDep)).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Create(ctx, newDep)).ToNot(HaveOccurred())
 
 		_, err := clientset.AppsV1().Deployments(ns).Get(ctx, newDep.Name, metav1.GetOptions{})
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
@@ -107,7 +107,7 @@ var _ = Describe("DryRunClient", func() {
 		newDep.Name = "new-deployment"
 		opts := &client.CreateOptions{DryRun: []string{"Bye", "Pippa"}}
 
-		Expect(getClient().Create(ctx, newDep, opts)).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Create(ctx, newDep, opts)).ToNot(HaveOccurred())
 
 		_, err := clientset.AppsV1().Deployments(ns).Get(ctx, newDep.Name, metav1.GetOptions{})
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
@@ -117,7 +117,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Spec.Template.Spec.Containers = nil
 
-		err := getClient().Create(ctx, changedDep)
+		err := getClient(ctx).Create(ctx, changedDep)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue())
 	})
 
@@ -125,7 +125,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		*changedDep.Spec.Replicas = 2
 
-		Expect(getClient().Update(ctx, changedDep)).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Update(ctx, changedDep)).ToNot(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -138,7 +138,7 @@ var _ = Describe("DryRunClient", func() {
 		*changedDep.Spec.Replicas = 2
 		opts := &client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}
 
-		Expect(getClient().Update(ctx, changedDep, opts)).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Update(ctx, changedDep, opts)).ToNot(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -150,7 +150,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Spec.Template.Spec.Containers = nil
 
-		err := getClient().Update(ctx, changedDep)
+		err := getClient(ctx).Update(ctx, changedDep)
 		Expect(apierrors.IsInvalid(err)).To(BeTrue())
 	})
 
@@ -158,7 +158,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		*changedDep.Spec.Replicas = 2
 
-		Expect(getClient().Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -171,7 +171,7 @@ var _ = Describe("DryRunClient", func() {
 		*changedDep.Spec.Replicas = 2
 		opts := &client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}
 
-		Expect(getClient().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -180,7 +180,7 @@ var _ = Describe("DryRunClient", func() {
 	})
 
 	It("should not delete objects", func(ctx SpecContext) {
-		Expect(getClient().Delete(ctx, dep)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Delete(ctx, dep)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -191,7 +191,7 @@ var _ = Describe("DryRunClient", func() {
 	It("should not delete objects with opts", func(ctx SpecContext) {
 		opts := &client.DeleteOptions{DryRun: []string{"Bye", "Pippa"}}
 
-		Expect(getClient().Delete(ctx, dep, opts)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Delete(ctx, dep, opts)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -202,7 +202,7 @@ var _ = Describe("DryRunClient", func() {
 	It("should not delete objects via deleteAllOf", func(ctx SpecContext) {
 		opts := []client.DeleteAllOfOption{client.InNamespace(ns), client.MatchingLabels(dep.Labels)}
 
-		Expect(getClient().DeleteAllOf(ctx, dep, opts...)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).DeleteAllOf(ctx, dep, opts...)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -214,7 +214,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
 
-		Expect(getClient().Status().Update(ctx, changedDep)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Status().Update(ctx, changedDep)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -227,7 +227,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep.Status.Replicas = 99
 		opts := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}}
 
-		Expect(getClient().Status().Update(ctx, changedDep, opts)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Status().Update(ctx, changedDep, opts)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -239,7 +239,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
 
-		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Status().Patch(ctx, changedDep, client.MergeFrom(dep))).ToNot(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -253,7 +253,7 @@ var _ = Describe("DryRunClient", func() {
 
 		opts := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}}
 
-		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
+		Expect(getClient(ctx).Status().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -268,7 +268,7 @@ var _ = Describe("DryRunClient", func() {
 			Replicas: new(int32(99)),
 		})
 
-		Expect(getClient().Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"))).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -285,7 +285,7 @@ var _ = Describe("DryRunClient", func() {
 
 		opts := &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{DryRun: []string{"Bye", "Pippa"}}}
 
-		Expect(getClient().Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"), opts)).NotTo(HaveOccurred())
+		Expect(getClient(ctx).Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"), opts)).NotTo(HaveOccurred())
 
 		actual, err := clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())

@@ -17,6 +17,7 @@ limitations under the License.
 package client
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -43,7 +44,7 @@ type clientRestResources struct {
 	scheme *runtime.Scheme
 
 	// mapper maps GroupVersionKinds to Resources
-	mapper meta.RESTMapper
+	mapper meta.RESTMapperWithContext
 
 	// codecs are used to create a REST client for a gvk
 	codecs serializer.CodecFactory
@@ -61,7 +62,7 @@ type cacheKey struct {
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
 // If the object is a list, the resource represents the item's type instead.
-func (c *clientRestResources) newResource(gvk schema.GroupVersionKind,
+func (c *clientRestResources) newResource(ctx context.Context, gvk schema.GroupVersionKind,
 	isList bool,
 	forceDisableProtoBuf bool,
 	isUnstructured bool,
@@ -75,7 +76,7 @@ func (c *clientRestResources) newResource(gvk schema.GroupVersionKind,
 	if err != nil {
 		return nil, err
 	}
-	mapping, err := c.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := c.mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ type applyConfiguration interface {
 
 // getResource returns the resource meta information for the given type of object.
 // If the object is a list, the resource represents the item's type instead.
-func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
+func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resourceMeta, error) {
 	var gvk schema.GroupVersionKind
 	var err error
 	var isApplyConfiguration bool
@@ -140,7 +141,7 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 	// Initialize a new Client
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	r, err = c.newResource(gvk, isList, forceDisableProtoBuf, isUnstructured)
+	r, err = c.newResource(ctx, gvk, isList, forceDisableProtoBuf, isUnstructured)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +150,8 @@ func (c *clientRestResources) getResource(obj any) (*resourceMeta, error) {
 }
 
 // getObjMeta returns objMeta containing both type and object metadata and state.
-func (c *clientRestResources) getObjMeta(obj any) (*objMeta, error) {
-	r, err := c.getResource(obj)
+func (c *clientRestResources) getObjMeta(ctx context.Context, obj any) (*objMeta, error) {
+	r, err := c.getResource(ctx, obj)
 	if err != nil {
 		return nil, err
 	}

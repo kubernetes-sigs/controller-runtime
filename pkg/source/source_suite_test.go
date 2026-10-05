@@ -56,7 +56,7 @@ var _ = BeforeSuite(func() {
 	clientset, err = kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 
-	icache, err = cache.New(config, cache.Options{})
+	icache, err = cache.New(ctx, config, cache.Options{})
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

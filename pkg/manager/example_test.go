@@ -42,7 +42,8 @@ func ExampleNew() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{})
+	ctx := signals.SetupSignalHandler()
+	mgr, err := manager.New(ctx, cfg, manager.Options{})
 	if err != nil {
 		log.Error(err, "unable to set up manager")
 		os.Exit(1)
@@ -58,13 +59,14 @@ func ExampleNew_limitToNamespaces() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(cfg, manager.Options{
-		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+	ctx := signals.SetupSignalHandler()
+	mgr, err := manager.New(ctx, cfg, manager.Options{
+		NewCache: func(ctx context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error) {
 			opts.DefaultNamespaces = map[string]cache.Config{
 				"namespace1": {},
 				"namespace2": {},
 			}
-			return cache.New(config, opts)
+			return cache.New(ctx, config, opts)
 		}},
 	)
 	if err != nil {

@@ -44,16 +44,16 @@ var _ = Describe("controller.Controller", func() {
 	})
 
 	Describe("New", func() {
-		It("should return an error if Name is not Specified", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should return an error if Name is not Specified", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c, err := controller.New("", m, controller.Options{Reconciler: rec})
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Name for Controller"))
 		})
 
-		It("should return an error if Reconciler is not Specified", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should return an error if Reconciler is not Specified", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("foo", m, controller.Options{})
@@ -61,8 +61,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(err.Error()).To(ContainSubstring("must specify Reconciler"))
 		})
 
-		It("should return an error if two controllers are registered with the same name", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should return an error if two controllers are registered with the same name", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c1, err := controller.New("c3", m, controller.Options{Reconciler: rec})
@@ -75,8 +75,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).To(BeNil())
 		})
 
-		It("should return an error if two controllers are registered with the same name and SkipNameValidation is set to false on the manager", func() {
-			m, err := manager.New(cfg, manager.Options{
+		It("should return an error if two controllers are registered with the same name and SkipNameValidation is set to false on the manager", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{
 					SkipNameValidation: new(false),
 				},
@@ -93,8 +93,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).To(BeNil())
 		})
 
-		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the manager", func() {
-			m, err := manager.New(cfg, manager.Options{
+		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the manager", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{
 					SkipNameValidation: new(true),
 				},
@@ -110,8 +110,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).ToNot(BeNil())
 		})
 
-		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should not return an error if two controllers are registered with the same name and SkipNameValidation is set on the controller", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c1, err := controller.New("c6", m, controller.Options{Reconciler: rec})
@@ -123,8 +123,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(c2).ToNot(BeNil())
 		})
 
-		It("should not return an error if two controllers are registered with different names", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should not return an error if two controllers are registered with different names", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c1, err := controller.New("c1", m, controller.Options{Reconciler: rec})
@@ -159,7 +159,7 @@ var _ = Describe("controller.Controller", func() {
 				return reconcile.Result{}, nil
 			})
 
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-0", m, controller.Options{Reconciler: rec})
@@ -182,10 +182,10 @@ var _ = Describe("controller.Controller", func() {
 			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 
-		It("should not create goroutines if never started", func() {
+		It("should not create goroutines if never started", func(ctx SpecContext) {
 			currentGRs := goleak.IgnoreCurrent()
 
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = controller.New("new-controller-1", m, controller.Options{Reconciler: rec})
@@ -197,8 +197,8 @@ var _ = Describe("controller.Controller", func() {
 			Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 		})
 
-		It("should default RateLimiter and NewQueue if not specified", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should default RateLimiter and NewQueue if not specified", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-2", m, controller.Options{
@@ -213,8 +213,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.NewQueue).NotTo(BeNil())
 		})
 
-		It("should not override RateLimiter and NewQueue if specified", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should not override RateLimiter and NewQueue if specified", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			customRateLimiter := workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Millisecond, 1000*time.Second)
@@ -239,8 +239,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(customNewQueueCalled).To(BeTrue(), "Expected customNewQueue to be called")
 		})
 
-		It("should default RecoverPanic from the manager", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: new(true)}})
+		It("should default RecoverPanic from the manager", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{Controller: config.Controller{RecoverPanic: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-4", m, controller.Options{
@@ -255,8 +255,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(*ctrl.RecoverPanic).To(BeTrue())
 		})
 
-		It("should not override RecoverPanic on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{RecoverPanic: new(true)}})
+		It("should not override RecoverPanic on the controller", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{Controller: config.Controller{RecoverPanic: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller", m, controller.Options{
@@ -272,8 +272,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(*ctrl.RecoverPanic).To(BeFalse())
 		})
 
-		It("should default NeedLeaderElection from the manager", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: new(true)}})
+		It("should default NeedLeaderElection from the manager", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-5", m, controller.Options{
@@ -287,8 +287,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
 		})
 
-		It("should not override NeedLeaderElection on the controller", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: new(true)}})
+		It("should not override NeedLeaderElection on the controller", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{Controller: config.Controller{NeedLeaderElection: new(true)}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-6", m, controller.Options{
@@ -303,8 +303,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
 		})
 
-		It("Should default MaxConcurrentReconciles from the manager if set", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{MaxConcurrentReconciles: 5}})
+		It("Should default MaxConcurrentReconciles from the manager if set", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{Controller: config.Controller{MaxConcurrentReconciles: 5}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-7", m, controller.Options{
@@ -318,8 +318,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
 		})
 
-		It("Should default MaxConcurrentReconciles to 1 if unset", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("Should default MaxConcurrentReconciles to 1 if unset", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-8", m, controller.Options{
@@ -333,8 +333,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(1))
 		})
 
-		It("Should leave MaxConcurrentReconciles if set", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("Should leave MaxConcurrentReconciles if set", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-9", m, controller.Options{
@@ -349,8 +349,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.MaxConcurrentReconciles).To(BeEquivalentTo(5))
 		})
 
-		It("Should default CacheSyncTimeout from the manager if set", func() {
-			m, err := manager.New(cfg, manager.Options{Controller: config.Controller{CacheSyncTimeout: 5}})
+		It("Should default CacheSyncTimeout from the manager if set", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{Controller: config.Controller{CacheSyncTimeout: 5}})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-10", m, controller.Options{
@@ -364,8 +364,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
 		})
 
-		It("Should default CacheSyncTimeout to 2 minutes if unset", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("Should default CacheSyncTimeout to 2 minutes if unset", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-11", m, controller.Options{
@@ -379,8 +379,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(2 * time.Minute))
 		})
 
-		It("Should leave CacheSyncTimeout if set", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("Should leave CacheSyncTimeout if set", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-12", m, controller.Options{
@@ -395,8 +395,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.CacheSyncTimeout).To(BeEquivalentTo(5))
 		})
 
-		It("should default NeedLeaderElection on the controller to true", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should default NeedLeaderElection on the controller to true", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-13", m, controller.Options{
@@ -410,8 +410,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.NeedLeaderElection()).To(BeTrue())
 		})
 
-		It("should allow for setting leaderElected to false", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should allow for setting leaderElected to false", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-14", m, controller.Options{
@@ -426,8 +426,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.NeedLeaderElection()).To(BeFalse())
 		})
 
-		It("should implement manager.LeaderElectionRunnable", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should implement manager.LeaderElectionRunnable", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-15", m, controller.Options{
@@ -439,8 +439,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeTrue())
 		})
 
-		It("should configure a priority queue per default", func() {
-			m, err := manager.New(cfg, manager.Options{
+		It("should configure a priority queue per default", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -458,8 +458,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeTrue())
 		})
 
-		It("should not configure a priority queue if UsePriorityQueue is set to false", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should not configure a priority queue if UsePriorityQueue is set to false", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			c, err := controller.New("new-controller-17", m, controller.Options{
@@ -476,8 +476,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ok).To(BeFalse())
 		})
 
-		It("should set EnableWarmup correctly", func() {
-			m, err := manager.New(cfg, manager.Options{})
+		It("should set EnableWarmup correctly", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Test with EnableWarmup set to true
@@ -513,9 +513,9 @@ var _ = Describe("controller.Controller", func() {
 			Expect(internalCtrlWithDefaultWarmup.EnableWarmup).To(BeNil())
 		})
 
-		It("should inherit EnableWarmup from manager config", func() {
+		It("should inherit EnableWarmup from manager config", func(ctx SpecContext) {
 			// Test with manager default setting EnableWarmup to true
-			managerWithWarmup, err := manager.New(cfg, manager.Options{
+			managerWithWarmup, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{
 					EnableWarmup: new(true),
 				},
@@ -542,8 +542,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(internalCtrlOverridingWarmup.EnableWarmup).To(HaveValue(BeFalse()))
 		})
 
-		It("should default ReconciliationTimeout from manager if unset", func() {
-			m, err := manager.New(cfg, manager.Options{
+		It("should default ReconciliationTimeout from manager if unset", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{ReconciliationTimeout: 30 * time.Second},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -559,8 +559,8 @@ var _ = Describe("controller.Controller", func() {
 			Expect(ctrl.ReconciliationTimeout).To(Equal(30 * time.Second))
 		})
 
-		It("should not override an existing ReconciliationTimeout", func() {
-			m, err := manager.New(cfg, manager.Options{
+		It("should not override an existing ReconciliationTimeout", func(ctx SpecContext) {
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{ReconciliationTimeout: 30 * time.Second},
 			})
 			Expect(err).NotTo(HaveOccurred())

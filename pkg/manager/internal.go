@@ -268,7 +268,7 @@ func (cm *controllerManager) GetEventRecorder(name string) recorder.EventRecorde
 	return cm.cluster.GetEventRecorder(name)
 }
 
-func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
+func (cm *controllerManager) GetRESTMapper() meta.RESTMapperWithContext {
 	return cm.cluster.GetRESTMapper()
 }
 

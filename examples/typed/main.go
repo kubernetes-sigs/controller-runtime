@@ -38,7 +38,8 @@ func main() {
 }
 
 func run() error {
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	ctx := signals.SetupSignalHandler()
+	mgr, err := ctrl.NewManager(ctx, ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to construct manager: %w", err)
 	}
@@ -71,7 +72,6 @@ func run() error {
 		return fmt.Errorf("failed to construct ingress-controller: %w", err)
 	}
 
-	ctx := signals.SetupSignalHandler()
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start manager: %w", err)
 	}

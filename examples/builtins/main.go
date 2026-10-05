@@ -38,7 +38,8 @@ func main() {
 
 	// Setup a Manager
 	entryLog.Info("setting up manager")
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	ctx := signals.SetupSignalHandler()
+	mgr, err := manager.New(ctx, config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
@@ -69,7 +70,7 @@ func main() {
 	}
 
 	entryLog.Info("starting manager")
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		entryLog.Error(err, "unable to run manager")
 		os.Exit(1)
 	}

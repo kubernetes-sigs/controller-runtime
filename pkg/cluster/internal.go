@@ -53,7 +53,7 @@ type cluster struct {
 	recorderProvider *intrec.Provider
 
 	// mapper is used to map resources to kind, and map kind and version.
-	mapper meta.RESTMapper
+	mapper meta.RESTMapperWithContext
 
 	// Logger is the logger that should be used by this manager.
 	// If none is set, it defaults to log.Log global logger.
@@ -92,7 +92,7 @@ func (c *cluster) GetEventRecorder(name string) recorder.EventRecorder {
 	return c.recorderProvider.GetEventRecorder(name)
 }
 
-func (c *cluster) GetRESTMapper() meta.RESTMapper {
+func (c *cluster) GetRESTMapper() meta.RESTMapperWithContext {
 	return c.mapper
 }
 

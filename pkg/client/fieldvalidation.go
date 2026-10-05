@@ -68,14 +68,16 @@ func (c *clientWithFieldValidation) DeleteAllOf(ctx context.Context, obj Object,
 	return c.client.DeleteAllOf(ctx, obj, opts...)
 }
 
-func (c *clientWithFieldValidation) Scheme() *runtime.Scheme     { return c.client.Scheme() }
-func (c *clientWithFieldValidation) RESTMapper() meta.RESTMapper { return c.client.RESTMapper() }
+func (c *clientWithFieldValidation) Scheme() *runtime.Scheme { return c.client.Scheme() }
+func (c *clientWithFieldValidation) RESTMapper() meta.RESTMapperWithContext {
+	return c.client.RESTMapper()
+}
 func (c *clientWithFieldValidation) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return c.client.GroupVersionKindFor(obj)
 }
 
-func (c *clientWithFieldValidation) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return c.client.IsObjectNamespaced(obj)
+func (c *clientWithFieldValidation) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return c.client.IsObjectNamespaced(ctx, obj)
 }
 
 func (c *clientWithFieldValidation) Status() StatusWriter {

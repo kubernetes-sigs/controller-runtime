@@ -41,7 +41,7 @@ var _ = Describe("recorder", func() {
 	Describe("deprecated recorder", func() {
 		It("should publish events", func(ctx SpecContext) {
 			By("Creating the Manager")
-			cm, err := manager.New(cfg, manager.Options{})
+			cm, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")

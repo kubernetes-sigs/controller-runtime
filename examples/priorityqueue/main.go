@@ -50,7 +50,8 @@ func run() error {
 	}))
 
 	// Setup a Manager
-	mgr, err := manager.New(kubeconfig.GetConfigOrDie(), manager.Options{
+	ctx := signals.SetupSignalHandler()
+	mgr, err := manager.New(ctx, kubeconfig.GetConfigOrDie(), manager.Options{
 		Controller: config.Controller{},
 	})
 	if err != nil {
@@ -68,7 +69,7 @@ func run() error {
 		return fmt.Errorf("failed to set up controller: %w", err)
 	}
 
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start manager: %w", err)
 	}
 

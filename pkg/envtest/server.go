@@ -397,7 +397,7 @@ func (te *Environment) startControlPlane() error {
 }
 
 func (te *Environment) waitForDefaultNamespace(config *rest.Config) error {
-	cs, err := client.New(config, client.Options{})
+	cs, err := client.New(context.TODO(), config, client.Options{})
 	if err != nil {
 		return fmt.Errorf("unable to create client: %w", err)
 	}

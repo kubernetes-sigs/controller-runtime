@@ -36,7 +36,7 @@ var testenv *envtest.Environment
 var cfg *rest.Config
 var c client.Client
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx SpecContext) {
 	var err error
 
 	testenv = &envtest.Environment{}
@@ -44,7 +44,7 @@ var _ = BeforeSuite(func() {
 	cfg, err = testenv.Start()
 	Expect(err).NotTo(HaveOccurred())
 
-	c, err = client.New(cfg, client.Options{})
+	c, err = client.New(ctx, cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred())
 })
 

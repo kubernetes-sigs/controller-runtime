@@ -71,8 +71,8 @@ func (c interceptor) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersio
 	return c.client.GroupVersionKindFor(obj)
 }
 
-func (c interceptor) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return c.client.IsObjectNamespaced(obj)
+func (c interceptor) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return c.client.IsObjectNamespaced(ctx, obj)
 }
 
 func (c interceptor) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
@@ -151,7 +151,7 @@ func (c interceptor) Scheme() *runtime.Scheme {
 	return c.client.Scheme()
 }
 
-func (c interceptor) RESTMapper() meta.RESTMapper {
+func (c interceptor) RESTMapper() meta.RESTMapperWithContext {
 	return c.client.RESTMapper()
 }
 

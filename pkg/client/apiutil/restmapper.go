@@ -34,10 +34,14 @@ import (
 // NewDynamicRESTMapper returns a dynamic RESTMapper for cfg. The dynamic
 // RESTMapper dynamically discovers resource types at runtime.
 //
-// The returned mapper also implements meta.RESTMapperWithContext. The methods of
+// The returned mapper also implements meta.RESTMapper, but the methods of
 // meta.RESTMapperWithContext should be preferred because they support
 // cancellation and contextual logging.
-func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) {
+//
+// The context is only used for the duration of the call and does not bound the lifetime
+// of the returned mapper. The mapper does not run discovery on construction, but only
+// lazily when mapping is requested.
+func NewDynamicRESTMapper(_ context.Context, cfg *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
 	if httpClient == nil {
 		return nil, fmt.Errorf("httpClient must not be nil, consider using rest.HTTPClientFor(c) to create a client")
 	}

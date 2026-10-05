@@ -33,7 +33,8 @@ import (
 func ExampleWebhookBuilder() {
 	var log = logf.Log.WithName("webhookbuilder-example")
 
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
+	ctx := signals.SetupSignalHandler()
+	mgr, err := manager.New(ctx, config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -47,7 +48,7 @@ func ExampleWebhookBuilder() {
 		os.Exit(1)
 	}
 
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		log.Error(err, "could not start manager")
 		os.Exit(1)
 	}

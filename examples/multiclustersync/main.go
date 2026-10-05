@@ -54,14 +54,15 @@ const (
 func run() error {
 	log.SetLogger(zap.New())
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	ctx := signals.SetupSignalHandler()
+	mgr, err := ctrl.NewManager(ctx, ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to construct manager: %w", err)
 	}
 
 	allTargets := map[string]cluster.Cluster{}
 
-	cluster, err := cluster.New(ctrl.GetConfigOrDie())
+	cluster, err := cluster.New(ctx, ctrl.GetConfigOrDie())
 	if err != nil {
 		return fmt.Errorf("failed to construct clusters: %w", err)
 	}
@@ -128,7 +129,6 @@ func run() error {
 		return fmt.Errorf("failed to build reconciler: %w", err)
 	}
 
-	ctx := signals.SetupSignalHandler()
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start manager: %w", err)
 	}

@@ -85,7 +85,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("scaffold a defaulting webhook",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaulterObject])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -166,7 +166,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom defaulting webhook with a custom path",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaulterObject])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -250,7 +250,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom defaulting webhook which recovers from panics",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaulterObject])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -318,7 +318,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom validating webhook",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestValidatorObject])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -440,7 +440,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom validating webhook with a custom path",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestValidatorObject])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -524,7 +524,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom validating webhook which recovers from panics",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestValidatorObject])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -594,7 +594,7 @@ func runTests(admissionReviewVersion string) {
 			By("creating a controller manager")
 			ctx, cancel := context.WithCancel(specCtx)
 
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -689,7 +689,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom defaulting and validating webhook",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaultValidator])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -786,7 +786,7 @@ func runTests(admissionReviewVersion string) {
 	DescribeTable("should scaffold a custom defaulting and validating webhook with a custom path for each of them",
 		func(specCtx SpecContext, build func(*WebhookBuilder[*TestDefaultValidator])) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(specCtx, cfg, manager.Options{})
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -904,8 +904,8 @@ func runTests(admissionReviewVersion string) {
 		}),
 	)
 
-	It("should error if both a defaulter and a custom defaulter are set", func() {
-		m, err := manager.New(cfg, manager.Options{})
+	It("should error if both a defaulter and a custom defaulter are set", func(ctx SpecContext) {
+		m, err := manager.New(ctx, cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		addToScheme(m.GetScheme())
@@ -917,8 +917,8 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("only one of Defaulter or CustomDefaulter can be set"))
 	})
-	It("should error if both a validator and a custom validator are set", func() {
-		m, err := manager.New(cfg, manager.Options{})
+	It("should error if both a validator and a custom validator are set", func(ctx SpecContext) {
+		m, err := manager.New(ctx, cfg, manager.Options{})
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 		addToScheme(m.GetScheme())

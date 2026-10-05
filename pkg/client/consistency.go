@@ -485,7 +485,7 @@ func (c *consistentClient) Scheme() *runtime.Scheme {
 	return c.upstream.Scheme()
 }
 
-func (c *consistentClient) RESTMapper() meta.RESTMapper {
+func (c *consistentClient) RESTMapper() meta.RESTMapperWithContext {
 	return c.upstream.RESTMapper()
 }
 
@@ -493,8 +493,8 @@ func (c *consistentClient) GroupVersionKindFor(obj runtime.Object) (schema.Group
 	return c.upstream.GroupVersionKindFor(obj)
 }
 
-func (c *consistentClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return c.upstream.IsObjectNamespaced(obj)
+func (c *consistentClient) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return c.upstream.IsObjectNamespaced(ctx, obj)
 }
 
 func (c *consistentClient) SubResource(subResource string) SubResourceClient {

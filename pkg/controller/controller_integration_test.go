@@ -43,7 +43,7 @@ import (
 var _ = Describe("controller", func() {
 	var reconciled chan reconcile.Request
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx SpecContext) {
 		reconciled = make(chan reconcile.Request)
 		Expect(cfg).NotTo(BeNil())
 	})
@@ -58,7 +58,7 @@ var _ = Describe("controller", func() {
 		// of the issue, and a discussion here: https://github.com/kubernetes-sigs/controller-runtime/pull/3192#discussion_r2186967799
 		DescribeTable("should reconcile", func(ctx SpecContext, enableWarmup bool) {
 			By("Creating the Manager")
-			cm, err := manager.New(cfg, manager.Options{})
+			cm, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Creating the Controller")

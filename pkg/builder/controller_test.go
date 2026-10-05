@@ -81,9 +81,9 @@ var _ = Describe("application", func() {
 	})
 
 	Describe("New", func() {
-		It("should return success if given valid objects", func() {
+		It("should return success if given valid objects", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -94,9 +94,9 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should return error if given two apiType objects in For function", func() {
+		It("should return error if given two apiType objects in For function", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -108,9 +108,9 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return an error if For and Named function are not called", func() {
+		It("should return an error if For and Named function are not called", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -120,9 +120,9 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return an error when using Owns without For", func() {
+		It("should return an error when using Owns without For", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -134,9 +134,9 @@ var _ = Describe("application", func() {
 
 		})
 
-		It("should return an error when there are no watches", func() {
+		It("should return an error when there are no watches", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -146,9 +146,9 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should allow creating a controller without calling For", func() {
+		It("should allow creating a controller without calling For", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := ControllerManagedBy(m).
@@ -159,9 +159,9 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func() {
+		It("should return an error if there is no GVK for an object, and thus we can't default the controller name", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating a controller with a bad For type")
@@ -177,9 +177,9 @@ var _ = Describe("application", func() {
 			// manifest when we try to default the controller name, which is good to double check.
 		})
 
-		It("should return error if in For is used with a custom request type", func() {
+		It("should return error if in For is used with a custom request type", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := TypedControllerManagedBy[empty](m).
@@ -190,9 +190,9 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should return error if in Owns is used with a custom request type", func() {
+		It("should return error if in Owns is used with a custom request type", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := TypedControllerManagedBy[empty](m).
@@ -206,9 +206,9 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should build a controller with a custom request type", func() {
+		It("should build a controller with a custom request type", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			instance, err := TypedControllerManagedBy[empty](m).
@@ -227,10 +227,10 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should return an error if it cannot create the controller", func() {
+		It("should return an error if it cannot create the controller", func(ctx SpecContext) {
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := ControllerManagedBy(m).
@@ -246,7 +246,7 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should override max concurrent reconcilers during creation of controller", func() {
+		It("should override max concurrent reconcilers during creation of controller", func(ctx SpecContext) {
 			const maxConcurrentReconciles = 5
 			newController := func(name string, mgr manager.Manager, options controller.Options) (
 				controller.Controller, error) {
@@ -257,7 +257,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := ControllerManagedBy(m).
@@ -272,7 +272,7 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should override max concurrent reconcilers during creation of controller, when using", func() {
+		It("should override max concurrent reconcilers during creation of controller, when using", func(ctx SpecContext) {
 			const maxConcurrentReconciles = 10
 			newController := func(name string, mgr manager.Manager, options controller.Options) (
 				controller.Controller, error) {
@@ -283,7 +283,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Controller: config.Controller{
 					GroupKindConcurrency: map[string]int{
 						"ReplicaSet.apps": maxConcurrentReconciles,
@@ -303,7 +303,7 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should override rate limiter during creation of controller", func() {
+		It("should override rate limiter during creation of controller", func(ctx SpecContext) {
 			rateLimiter := workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]()
 			newController := func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
 				if options.RateLimiter == rateLimiter {
@@ -313,7 +313,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := ControllerManagedBy(m).
@@ -328,7 +328,7 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should override logger during creation of controller", func() {
+		It("should override logger during creation of controller", func(ctx SpecContext) {
 			logger := &testLogger{}
 			newController := func(name string, mgr manager.Manager, options controller.Options) (controller.Controller, error) {
 				if options.LogConstructor(nil).GetSink() == logger {
@@ -338,7 +338,7 @@ var _ = Describe("application", func() {
 			}
 
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := ControllerManagedBy(m).
@@ -354,9 +354,9 @@ var _ = Describe("application", func() {
 			Expect(instance).NotTo(BeNil())
 		})
 
-		It("should not allow multiple reconcilers during creation of controller", func() {
+		It("should not allow multiple reconcilers during creation of controller", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			builder := ControllerManagedBy(m).
@@ -369,9 +369,9 @@ var _ = Describe("application", func() {
 			Expect(instance).To(BeNil())
 		})
 
-		It("should allow multiple controllers for the same kind", func() {
+		It("should allow multiple controllers for the same kind", func(ctx SpecContext) {
 			By("creating a controller manager")
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("registering the type in the Scheme")
@@ -402,7 +402,7 @@ var _ = Describe("application", func() {
 
 	Describe("Start with ControllerManagedBy", func() {
 		It("should Reconcile Owns objects", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -414,7 +414,7 @@ var _ = Describe("application", func() {
 		})
 
 		It("should Reconcile Owns objects for every owner", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -426,7 +426,7 @@ var _ = Describe("application", func() {
 		})
 
 		It("should Reconcile Watches objects", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -440,7 +440,7 @@ var _ = Describe("application", func() {
 		})
 
 		It("should Reconcile without For", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			bldr := ControllerManagedBy(m).
@@ -459,7 +459,7 @@ var _ = Describe("application", func() {
 
 	Describe("Set custom predicates", func() {
 		It("should execute registered predicates only for assigned kind", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{})
+			m, err := manager.New(ctx, cfg, manager.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			var (
@@ -518,11 +518,11 @@ var _ = Describe("application", func() {
 
 	Describe("watching with projections", func() {
 		var mgr manager.Manager
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			// use a cache that intercepts requests for fully typed objects to
 			// ensure we use the projected versions
 			var err error
-			mgr, err = manager.New(cfg, manager.Options{NewCache: newNonTypedOnlyCache})
+			mgr, err = manager.New(ctx, cfg, manager.Options{NewCache: newNonTypedOnlyCache})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -602,8 +602,8 @@ var _ = Describe("application", func() {
 
 // newNonTypedOnlyCache returns a new cache that wraps the normal cache,
 // returning an error if normal, typed objects have informers requested.
-func newNonTypedOnlyCache(config *rest.Config, opts cache.Options) (cache.Cache, error) {
-	normalCache, err := cache.New(config, opts)
+func newNonTypedOnlyCache(ctx context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error) {
+	normalCache, err := cache.New(ctx, config, opts)
 	if err != nil {
 		return nil, err
 	}

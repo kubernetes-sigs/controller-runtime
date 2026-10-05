@@ -65,7 +65,7 @@ type Cluster interface {
 	GetFieldIndexer() client.FieldIndexer
 
 	// GetRESTMapper returns a RESTMapper
-	GetRESTMapper() meta.RESTMapper
+	GetRESTMapper() meta.RESTMapperWithContext
 
 	// GetAPIReader returns a reader that will be configured to use the API server directly.
 	// This should be used sparingly and only when the cached client does not fit your
@@ -83,8 +83,10 @@ type Options struct {
 	// idea to pass your own scheme in.  See the documentation in pkg/scheme for more information.
 	Scheme *runtime.Scheme
 
-	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
-	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
+	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs.
+	// The context is only used for the duration of the call, it does not bound the lifetime
+	// of the returned mapper.
+	MapperProvider func(ctx context.Context, c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error)
 
 	// Logger is the logger that should be used by this Cluster.
 	// If none is set, it defaults to log.Log global logger.
@@ -145,7 +147,11 @@ type Options struct {
 type Option func(*Options)
 
 // New constructs a brand new cluster.
-func New(config *rest.Config, opts ...Option) (Cluster, error) {
+//
+// The context is only used for the duration of the call (e.g. for API discovery while constructing
+// the cache and client), it does not bound the lifetime of the returned Cluster. Use the context
+// passed to Cluster.Start for that.
+func New(ctx context.Context, config *rest.Config, opts ...Option) (Cluster, error) {
 	if config == nil {
 		return nil, errors.New("must specify Config")
 	}
@@ -167,7 +173,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	// Create the mapper provider
-	mapper, err := options.MapperProvider(config, options.HTTPClient)
+	mapper, err := options.MapperProvider(ctx, config, options.HTTPClient)
 	if err != nil {
 		options.Logger.Error(err, "Failed to get API Group-Resources")
 		return nil, err
@@ -186,7 +192,7 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 			cacheOpts.HTTPClient = options.HTTPClient
 		}
 	}
-	cache, err := options.NewCache(config, cacheOpts)
+	cache, err := options.NewCache(ctx, config, cacheOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -212,13 +218,13 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 			clientOpts.Cache.Reader = cache
 		}
 	}
-	clientWriter, err := options.NewClient(config, clientOpts)
+	clientWriter, err := options.NewClient(ctx, config, clientOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the API Reader, a client with no cache.
-	clientReader, err := client.New(config, client.Options{
+	clientReader, err := client.New(ctx, config, client.Options{
 		HTTPClient: options.HTTPClient,
 		Scheme:     options.Scheme,
 		Mapper:     mapper,

@@ -60,24 +60,26 @@ import (
 
 var _ = Describe("manger.Manager", func() {
 	Describe("New", func() {
-		It("should return an error if there is no Config", func() {
-			m, err := New(nil, Options{})
+		It("should return an error if there is no Config", func(ctx SpecContext) {
+			m, err := New(ctx, nil, Options{})
 			Expect(m).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
 		})
 
-		It("should return an error if it can't create a RestMapper", func() {
+		It("should return an error if it can't create a RestMapper", func(ctx SpecContext) {
 			expected := fmt.Errorf("expected error: RestMapper")
-			m, err := New(cfg, Options{
-				MapperProvider: func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected },
+			m, err := New(ctx, cfg, Options{
+				MapperProvider: func(_ context.Context, c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
+					return nil, expected
+				},
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))
 		})
 
-		It("should return an error it can't create a client.Client", func() {
-			m, err := New(cfg, Options{
-				NewClient: func(config *rest.Config, options client.Options) (client.Client, error) {
+		It("should return an error it can't create a client.Client", func(ctx SpecContext) {
+			m, err := New(ctx, cfg, Options{
+				NewClient: func(_ context.Context, config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, errors.New("expected error")
 				},
 			})
@@ -86,9 +88,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
-		It("should return an error it can't create a cache.Cache", func() {
-			m, err := New(cfg, Options{
-				NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+		It("should return an error it can't create a cache.Cache", func(ctx SpecContext) {
+			m, err := New(ctx, cfg, Options{
+				NewCache: func(_ context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
 				},
 			})
@@ -97,9 +99,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
-		It("should create a client defined in by the new client function", func() {
-			m, err := New(cfg, Options{
-				NewClient: func(config *rest.Config, options client.Options) (client.Client, error) {
+		It("should create a client defined in by the new client function", func(ctx SpecContext) {
+			m, err := New(ctx, cfg, Options{
+				NewClient: func(_ context.Context, config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, nil
 				},
 			})
@@ -108,8 +110,8 @@ var _ = Describe("manger.Manager", func() {
 			Expect(m.GetClient()).To(BeNil())
 		})
 
-		It("should return an error it can't create a recorder.Provider", func() {
-			m, err := New(cfg, Options{
+		It("should return an error it can't create a recorder.Provider", func(ctx SpecContext) {
+			m, err := New(ctx, cfg, Options{
 				newRecorderProvider: func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				},
@@ -119,9 +121,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
-		It("should lazily initialize a webhook server if needed", func() {
+		It("should lazily initialize a webhook server if needed", func(ctx SpecContext) {
 			By("creating a manager with options")
-			m, err := New(cfg, Options{WebhookServer: webhook.NewServer(webhook.Options{Port: 9440, Host: "foo.com"})})
+			m, err := New(ctx, cfg, Options{WebhookServer: webhook.NewServer(webhook.Options{Port: 9440, Host: "foo.com"})})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
@@ -132,10 +134,10 @@ var _ = Describe("manger.Manager", func() {
 			Expect(svr.(*webhook.DefaultServer).Options.Host).To(Equal("foo.com"))
 		})
 
-		It("should not initialize a webhook server if Options.WebhookServer is set", func() {
+		It("should not initialize a webhook server if Options.WebhookServer is set", func(ctx SpecContext) {
 			By("creating a manager with options")
 			srv := webhook.NewServer(webhook.Options{Port: 9440})
-			m, err := New(cfg, Options{WebhookServer: srv})
+			m, err := New(ctx, cfg, Options{WebhookServer: srv})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
@@ -146,11 +148,11 @@ var _ = Describe("manger.Manager", func() {
 			Expect(svr.(*webhook.DefaultServer).Options.Port).To(Equal(9440))
 		})
 
-		It("should allow passing a custom webhook.Server implementation", func() {
+		It("should allow passing a custom webhook.Server implementation", func(ctx SpecContext) {
 			type customWebhook struct {
 				webhook.Server
 			}
-			m, err := New(cfg, Options{WebhookServer: customWebhook{}})
+			m, err := New(ctx, cfg, Options{WebhookServer: customWebhook{}})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m).NotTo(BeNil())
 
@@ -164,7 +166,7 @@ var _ = Describe("manger.Manager", func() {
 		It("should create a webhook server that is disabled", func(specCtx SpecContext) {
 			By("setting the port to -1", func() {
 				srv := webhook.NewServer(webhook.Options{Port: -1})
-				m, err := New(cfg, Options{WebhookServer: srv})
+				m, err := New(specCtx, cfg, Options{WebhookServer: srv})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(m).NotTo(BeNil())
 
@@ -178,7 +180,7 @@ var _ = Describe("manger.Manager", func() {
 
 		Context("with leader election enabled", func() {
 			It("should only cancel the leader election after all runnables are done", func(specCtx SpecContext) {
-				m, err := New(cfg, Options{
+				m, err := New(specCtx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-2",
@@ -226,7 +228,7 @@ var _ = Describe("manger.Manager", func() {
 				<-mgrDone
 			})
 			It("should disable gracefulShutdown when stopping to lead", func(ctx SpecContext) {
-				m, err := New(cfg, Options{
+				m, err := New(ctx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id-3",
@@ -255,7 +257,7 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should prevent leader election when shutting down a non-elected manager", func(specCtx SpecContext) {
 				var rl resourcelock.Interface
-				m1, err := New(cfg, Options{
+				m1, err := New(specCtx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
@@ -276,7 +278,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 				m1cm.onStoppedLeading = func() {}
 
-				m2, err := New(cfg, Options{
+				m2, err := New(specCtx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
@@ -329,9 +331,9 @@ var _ = Describe("manger.Manager", func() {
 				<-m2done
 			})
 
-			It("should default RenewDeadline for leader election config", func() {
+			It("should default RenewDeadline for leader election config", func(ctx SpecContext) {
 				var rl resourcelock.Interface
-				m1, err := New(cfg, Options{
+				m1, err := New(ctx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
@@ -353,7 +355,7 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should default ID to controller-runtime if ID is not set", func(specCtx SpecContext) {
 				var rl resourcelock.Interface
-				m1, err := New(cfg, Options{
+				m1, err := New(specCtx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
@@ -374,7 +376,7 @@ var _ = Describe("manger.Manager", func() {
 				Expect(ok).To(BeTrue())
 				m1cm.onStoppedLeading = func() {}
 
-				m2, err := New(cfg, Options{
+				m2, err := New(specCtx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionNamespace: "default",
 					LeaderElectionID:        "test-leader-election-id",
@@ -431,8 +433,8 @@ var _ = Describe("manger.Manager", func() {
 				<-m2done
 			})
 
-			It("should return an error if it can't create a ResourceLock", func() {
-				m, err := New(cfg, Options{
+			It("should return an error if it can't create a ResourceLock", func(ctx SpecContext) {
+				m, err := New(ctx, cfg, Options{
 					newResourceLock: func(_ *rest.Config, _ recorder.Provider, _ leaderelection.Options) (resourcelock.Interface, error) {
 						return nil, fmt.Errorf("expected error")
 					},
@@ -441,8 +443,8 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(MatchError(ContainSubstring("expected error")))
 			})
 
-			It("should return an error if namespace not set and not running in cluster", func() {
-				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
+			It("should return an error if namespace not set and not running in cluster", func(ctx SpecContext) {
+				m, err := New(ctx, cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime"})
 				Expect(m).To(BeNil())
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unable to find leader election namespace: not running in-cluster, please specify LeaderElectionNamespace"))
@@ -451,8 +453,8 @@ var _ = Describe("manger.Manager", func() {
 			// We must keep this default until we are sure all controller-runtime users have upgraded from the original default
 			// ConfigMap lock to a controller-runtime version that has this new default. Many users of controller-runtime skip
 			// versions, so we should be extremely conservative here.
-			It("should default to LeasesResourceLock", func() {
-				m, err := New(cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
+			It("should default to LeasesResourceLock", func(ctx SpecContext) {
+				m, err := New(ctx, cfg, Options{LeaderElection: true, LeaderElectionID: "controller-runtime", LeaderElectionNamespace: "my-ns"})
 				Expect(m).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
 				cm, ok := m.(*controllerManager)
@@ -460,8 +462,8 @@ var _ = Describe("manger.Manager", func() {
 				_, isLeaseLock := cm.resourceLock.(*resourcelock.LeaseLock)
 				Expect(isLeaseLock).To(BeTrue())
 			})
-			It("should use the specified ResourceLock", func() {
-				m, err := New(cfg, Options{
+			It("should use the specified ResourceLock", func(ctx SpecContext) {
+				m, err := New(ctx, cfg, Options{
 					LeaderElection:             true,
 					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 					LeaderElectionID:           "controller-runtime",
@@ -476,7 +478,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 			It("should release lease if ElectionReleaseOnCancel is true", func(specCtx SpecContext) {
 				var rl resourcelock.Interface
-				m, err := New(cfg, Options{
+				m, err := New(specCtx, cfg, Options{
 					LeaderElection:                true,
 					LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
 					LeaderElectionID:              "controller-runtime",
@@ -505,9 +507,9 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(record.HolderIdentity).To(BeEmpty())
 			})
-			It("should set the leaselocks's label field when LeaderElectionLabels is set", func() {
+			It("should set the leaselocks's label field when LeaderElectionLabels is set", func(ctx SpecContext) {
 				labels := map[string]string{"my-key": "my-val"}
-				m, err := New(cfg, Options{
+				m, err := New(ctx, cfg, Options{
 					LeaderElection:             true,
 					LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 					LeaderElectionID:           "controller-runtime",
@@ -525,11 +527,11 @@ var _ = Describe("manger.Manager", func() {
 				Expect(val).To(Equal("my-val"))
 			})
 			When("using a custom LeaderElectionResourceLockInterface", func() {
-				It("should use the custom LeaderElectionResourceLockInterface", func() {
+				It("should use the custom LeaderElectionResourceLockInterface", func(ctx SpecContext) {
 					rl, err := fakeleaderelection.NewResourceLock(nil, nil, leaderelection.Options{})
 					Expect(err).NotTo(HaveOccurred())
 
-					m, err := New(cfg, Options{
+					m, err := New(ctx, cfg, Options{
 						LeaderElection:                      true,
 						LeaderElectionResourceLockInterface: rl,
 						newResourceLock: func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error) {
@@ -547,7 +549,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should create a metrics server if a valid address is provided", func(specCtx SpecContext) {
 			var srv metricsserver.Server
-			m, err := New(cfg, Options{
+			m, err := New(specCtx, cfg, Options{
 				Metrics: metricsserver.Options{BindAddress: ":0"},
 				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 					var err error
@@ -568,7 +570,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should create a metrics server if a valid address is provided and secure serving is enabled", func(specCtx SpecContext) {
 			var srv metricsserver.Server
-			m, err := New(cfg, Options{
+			m, err := New(specCtx, cfg, Options{
 				Metrics: metricsserver.Options{BindAddress: ":0", SecureServing: true},
 				newMetricsServer: func(options metricsserver.Options, config *rest.Config, httpClient *http.Client) (metricsserver.Server, error) {
 					var err error
@@ -587,8 +589,8 @@ var _ = Describe("manger.Manager", func() {
 			cancel()
 		})
 
-		It("should be able to create a manager with a cache that fails on missing informer", func() {
-			m, err := New(cfg, Options{
+		It("should be able to create a manager with a cache that fails on missing informer", func(ctx SpecContext) {
+			m, err := New(ctx, cfg, Options{
 				Cache: cache.Options{
 					ReaderFailOnMissingInformer: true,
 				},
@@ -602,7 +604,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			var srv metricsserver.Server
-			m, err := New(cfg, Options{
+			m, err := New(ctx, cfg, Options{
 				Metrics: metricsserver.Options{
 					BindAddress: ln.Addr().String(),
 				},
@@ -627,7 +629,7 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			var srv metricsserver.Server
-			m, err := New(cfg, Options{
+			m, err := New(ctx, cfg, Options{
 				Metrics: metricsserver.Options{
 					BindAddress:   ln.Addr().String(),
 					SecureServing: true,
@@ -648,9 +650,9 @@ var _ = Describe("manger.Manager", func() {
 			Expect(ln.Close()).To(Succeed())
 		})
 
-		It("should create a listener for the health probes if a valid address is provided", func() {
+		It("should create a listener for the health probes if a valid address is provided", func(ctx SpecContext) {
 			var listener net.Listener
-			m, err := New(cfg, Options{
+			m, err := New(ctx, cfg, Options{
 				HealthProbeBindAddress: ":0",
 				newHealthProbeListener: func(addr string) (net.Listener, error) {
 					var err error
@@ -664,12 +666,12 @@ var _ = Describe("manger.Manager", func() {
 			Expect(listener.Close()).ToNot(HaveOccurred())
 		})
 
-		It("should return an error if the health probes bind address is already in use", func() {
+		It("should return an error if the health probes bind address is already in use", func(ctx SpecContext) {
 			ln, err := defaultHealthProbeListener(":0")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			var listener net.Listener
-			m, err := New(cfg, Options{
+			m, err := New(ctx, cfg, Options{
 				HealthProbeBindAddress: ln.Addr().String(),
 				newHealthProbeListener: func(addr string) (net.Listener, error) {
 					var err error
@@ -688,7 +690,7 @@ var _ = Describe("manger.Manager", func() {
 	Describe("Start", func() {
 		startSuite := func(options Options, callbacks ...func(Manager)) {
 			It("should Start each Component", func(ctx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -717,7 +719,7 @@ var _ = Describe("manger.Manager", func() {
 				wgRunnableStarted.Wait()
 			})
 
-			It("should not manipulate the provided config", func() {
+			It("should not manipulate the provided config", func(ctx SpecContext) {
 				// strip WrapTransport, cause func values are PartialEq, not Eq --
 				// specifically, for reflect.DeepEqual, for all functions F,
 				// F != nil implies F != F, which means no full equivalence relation.
@@ -728,7 +730,7 @@ var _ = Describe("manger.Manager", func() {
 				// into our scope so we manipulate it for this testcase only
 				options := options
 				options.newResourceLock = nil
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -737,7 +739,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should stop when context is cancelled", func(specCtx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -748,7 +750,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should return an error if it can't start the cache", func(ctx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -764,10 +766,10 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should start the cache before starting anything else", func(ctx SpecContext) {
 				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
-				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+				options.NewCache = func(_ context.Context, _ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return fakeCache, nil
 				}
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -794,18 +796,18 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should start additional clusters before anything else", func(ctx SpecContext) {
 				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
-				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+				options.NewCache = func(_ context.Context, _ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return fakeCache, nil
 				}
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
 				}
 
 				additionalClusterCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
-				additionalCluster, err := cluster.New(cfg, func(o *cluster.Options) {
-					o.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+				additionalCluster, err := cluster.New(ctx, cfg, func(o *cluster.Options) {
+					o.NewCache = func(_ context.Context, _ *rest.Config, _ cache.Options) (cache.Cache, error) {
 						return additionalClusterCache, nil
 					}
 				})
@@ -834,7 +836,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should return an error if any Components fail to Start", func(ctx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -863,10 +865,10 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should start caches added after Manager has started", func(ctx SpecContext) {
 				fakeCache := &startSignalingInformer{Cache: &informertest.FakeInformers{}}
-				options.NewCache = func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
+				options.NewCache = func(_ context.Context, _ *rest.Config, _ cache.Options) (cache.Cache, error) {
 					return fakeCache, nil
 				}
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -903,7 +905,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should wait for runnables to stop", func(specCtx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -953,7 +955,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should return an error if any Components fail to Start and wait for runnables to stop", func(ctx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -985,7 +987,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should refuse to add runnable if stop procedure is already engaged", func(specCtx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1027,7 +1029,7 @@ var _ = Describe("manger.Manager", func() {
 					log.Unlock()
 				}, funcr.Options{})
 
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1075,7 +1077,7 @@ var _ = Describe("manger.Manager", func() {
 				}, funcr.Options{})
 				options.LeaderElection = false
 
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1112,7 +1114,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should return both runnables and stop errors when both error", func(ctx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1143,7 +1145,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should return only stop errors if runnables dont error", func(specCtx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1181,7 +1183,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should return only runnables error if stop doesn't error", func(ctx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(ctx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1197,7 +1199,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should not wait for runnables if gracefulShutdownTimeout is 0", func(specCtx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1227,7 +1229,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should wait forever for runnables if gracefulShutdownTimeout is <0 (-1)", func(specCtx SpecContext) {
-				m, err := New(cfg, options)
+				m, err := New(specCtx, cfg, options)
 				Expect(err).NotTo(HaveOccurred())
 				for _, cb := range callbacks {
 					cb(m)
@@ -1292,7 +1294,7 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should return an error if leader election param incorrect", func(specCtx SpecContext) {
 				renewDeadline := time.Second * 20
-				m, err := New(cfg, Options{
+				m, err := New(specCtx, cfg, Options{
 					LeaderElection:          true,
 					LeaderElectionID:        "controller-runtime",
 					LeaderElectionNamespace: "default",
@@ -1331,7 +1333,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should stop serving metrics when stop is called", func(specCtx SpecContext) {
-				m, err := New(cfg, opts)
+				m, err := New(specCtx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				ctx, cancel := context.WithCancel(specCtx)
@@ -1360,7 +1362,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should serve metrics endpoint", func(ctx SpecContext) {
-				m, err := New(cfg, opts)
+				m, err := New(ctx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				go func() {
@@ -1379,7 +1381,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 			It("should not serve anything other than metrics endpoint by default", func(ctx SpecContext) {
-				m, err := New(cfg, opts)
+				m, err := New(ctx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				go func() {
@@ -1407,7 +1409,7 @@ var _ = Describe("manger.Manager", func() {
 				err := metrics.Registry.Register(one)
 				Expect(err).NotTo(HaveOccurred())
 
-				m, err := New(cfg, opts)
+				m, err := New(ctx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				go func() {
@@ -1444,7 +1446,7 @@ var _ = Describe("manger.Manager", func() {
 						_, _ = w.Write([]byte("Some debug info"))
 					}),
 				}
-				m, err := New(cfg, opts)
+				m, err := New(ctx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Should error when we add another extra endpoint on the already registered path.
@@ -1498,7 +1500,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should stop serving health probes when stop is called", func(specCtx SpecContext) {
 			opts.HealthProbeBindAddress = ":0"
-			m, err := New(cfg, opts)
+			m, err := New(specCtx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithCancel(specCtx)
@@ -1525,7 +1527,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should serve readiness endpoint", func(ctx SpecContext) {
 			opts.HealthProbeBindAddress = ":0"
-			m, err := New(cfg, opts)
+			m, err := New(ctx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
 			res := fmt.Errorf("not ready yet")
@@ -1578,7 +1580,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should serve liveness endpoint", func(ctx SpecContext) {
 			opts.HealthProbeBindAddress = ":0"
-			m, err := New(cfg, opts)
+			m, err := New(ctx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
 			res := fmt.Errorf("not alive")
@@ -1653,7 +1655,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should stop serving pprof when stop is called", func(specCtx SpecContext) {
 			opts.PprofBindAddress = ":0"
-			m, err := New(cfg, opts)
+			m, err := New(specCtx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithCancel(specCtx)
@@ -1680,7 +1682,7 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should serve pprof endpoints", func(ctx SpecContext) {
 			opts.PprofBindAddress = ":0"
-			m, err := New(cfg, opts)
+			m, err := New(ctx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 
 			go func() {
@@ -1724,7 +1726,7 @@ var _ = Describe("manger.Manager", func() {
 	Describe("Add", func() {
 		It("should immediately start the Component if the Manager has already Started another Component",
 			func(ctx SpecContext) {
-				m, err := New(cfg, Options{})
+				m, err := New(ctx, cfg, Options{})
 				Expect(err).NotTo(HaveOccurred())
 				mgr, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
@@ -1760,7 +1762,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 		It("should immediately start the Component if the Manager has already Started", func(ctx SpecContext) {
-			m, err := New(cfg, Options{})
+			m, err := New(ctx, cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -1785,7 +1787,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should fail if attempted to start a second time", func(ctx SpecContext) {
-			m, err := New(cfg, Options{})
+			m, err := New(ctx, cfg, Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			go func() {
@@ -1808,7 +1810,7 @@ var _ = Describe("manger.Manager", func() {
 	It("should not leak goroutines when stopped", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
-		m, err := New(cfg, Options{})
+		m, err := New(specCtx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx, cancel := context.WithCancel(specCtx)
@@ -1824,7 +1826,7 @@ var _ = Describe("manger.Manager", func() {
 	It("should not leak goroutines if the deprecated event broadcaster is used & events are emitted", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
-		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
+		m, err := New(specCtx, cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
 		Expect(err).NotTo(HaveOccurred())
 
 		By("adding a runnable that emits an event")
@@ -1872,7 +1874,7 @@ var _ = Describe("manger.Manager", func() {
 	It("should not leak goroutines if the default event broadcaster is used & events are emitted", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
-		m, err := New(cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
+		m, err := New(specCtx, cfg, Options{ /* implicit: default setting for EventBroadcaster */ })
 		Expect(err).NotTo(HaveOccurred())
 
 		By("adding a runnable that emits an event")
@@ -1931,7 +1933,7 @@ var _ = Describe("manger.Manager", func() {
 
 		// Create manager with a very short graceful shutdown timeout to reliablytrigger the race condition
 		shortGracefulShutdownTimeout := 10 * time.Millisecond
-		m, err := New(cfg, Options{
+		m, err := New(specCtx, cfg, Options{
 			GracefulShutdownTimeout: &shortGracefulShutdownTimeout,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -1971,50 +1973,50 @@ var _ = Describe("manger.Manager", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
-	It("should provide a function to get the Config", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the Config", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
 		Expect(m.GetConfig()).To(Equal(mgr.cluster.GetConfig()))
 	})
 
-	It("should provide a function to get the Client", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the Client", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
 		Expect(m.GetClient()).To(Equal(mgr.cluster.GetClient()))
 	})
 
-	It("should provide a function to get the Scheme", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the Scheme", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
 		Expect(m.GetScheme()).To(Equal(mgr.cluster.GetScheme()))
 	})
 
-	It("should provide a function to get the FieldIndexer", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the FieldIndexer", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
 		Expect(m.GetFieldIndexer()).To(Equal(mgr.cluster.GetFieldIndexer()))
 	})
 
-	It("should provide a function to get the deprecated EventRecorder", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the deprecated EventRecorder", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
 	})
-	It("should provide a function to get the EventRecorder", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the EventRecorder", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetEventRecorder("test")).NotTo(BeNil())
 	})
-	It("should provide a function to get the APIReader", func() {
-		m, err := New(cfg, Options{})
+	It("should provide a function to get the APIReader", func(ctx SpecContext) {
+		m, err := New(ctx, cfg, Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetAPIReader()).NotTo(BeNil())
 	})
@@ -2026,7 +2028,7 @@ var _ = Describe("manger.Manager", func() {
 		const warmupRunnableName = "warmupRunnable"
 
 		By("Creating a manager with leader election enabled")
-		m, err := New(cfg, Options{
+		m, err := New(ctx, cfg, Options{
 			LeaderElection:          true,
 			LeaderElectionNamespace: "default",
 			LeaderElectionID:        "test-leader-election-warmup",

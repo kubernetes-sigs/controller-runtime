@@ -21,8 +21,8 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -178,11 +178,11 @@ type Client interface {
 	// Scheme returns the scheme this client is using.
 	Scheme() *runtime.Scheme
 	// RESTMapper returns the rest this client is using.
-	RESTMapper() meta.RESTMapper
+	RESTMapper() apiutil.RESTMapper
 	// GroupVersionKindFor returns the GroupVersionKind for the given object.
 	GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error)
 	// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-	IsObjectNamespaced(obj runtime.Object) (bool, error)
+	IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error)
 }
 
 // WithWatch supports Watch on top of the CRUD operations supported by

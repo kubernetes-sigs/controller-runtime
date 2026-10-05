@@ -44,7 +44,7 @@ var _ = Describe("Eventhandler", func() {
 	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
-	var mapper meta.RESTMapper
+	var mapper meta.RESTMapperWithContext
 	BeforeEach(func() {
 		q = &controllertest.Queue{TypedInterface: workqueue.NewTyped[reconcile.Request]()}
 		pod = &corev1.Pod{

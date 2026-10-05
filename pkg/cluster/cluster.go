@@ -271,7 +271,9 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	}
 
 	if options.MapperProvider == nil {
-		options.MapperProvider = apiutil.NewDynamicRESTMapper
+		options.MapperProvider = func(ctx context.Context, c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
+			return apiutil.NewDynamicRESTMapper(ctx, c, httpClient)
+		}
 	}
 
 	// Allow users to define how to create a new client

@@ -779,7 +779,7 @@ func TestDynamicRESTMapperWithContext(t *testing.T) {
 	podGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 	podGVK := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
 
-	newMapper := func(g gmg.Gomega) meta.RESTMapperWithContext {
+	newMapper := func(g gmg.Gomega) apiutil.DynamicRESTMapper {
 		httpClient, err := rest.HTTPClientFor(restCfg)
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 
@@ -787,6 +787,19 @@ func TestDynamicRESTMapperWithContext(t *testing.T) {
 		g.Expect(err).NotTo(gmg.HaveOccurred())
 		return m
 	}
+
+	t.Run("the mapper should also work through the legacy meta.RESTMapper methods", func(t *testing.T) {
+		g := gmg.NewWithT(t)
+		var m meta.RESTMapper = newMapper(g)
+
+		mapping, err := m.RESTMapping(podGVK.GroupKind(), "v1")
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(mapping.Resource).To(gmg.Equal(podGVR))
+
+		gvk, err := m.KindFor(podGVR)
+		g.Expect(err).NotTo(gmg.HaveOccurred())
+		g.Expect(gvk).To(gmg.Equal(podGVK))
+	})
 
 	t.Run("the mapper should work through all WithContext methods", func(t *testing.T) {
 		g := gmg.NewWithT(t)

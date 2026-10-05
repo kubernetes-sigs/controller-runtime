@@ -39,6 +39,14 @@ import (
 	conversionmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/conversion/metrics"
 )
 
+// maxRequestSize bounds the number of bytes buffered from a conversion
+// request body. A single ConversionReview may carry many objects (the
+// apiserver converts LIST responses in batches), so the cap is larger than
+// the 7MB used for admission requests in pkg/webhook/admission/http.go.
+// If your use case requires larger max request sizes, please
+// open an issue (https://github.com/kubernetes-sigs/controller-runtime/issues/new).
+const maxRequestSize = int64(128 * 1024 * 1024)
+
 var (
 	log = logf.Log.WithName("conversion-webhook")
 )
@@ -60,9 +68,22 @@ var _ http.Handler = &webhook{}
 func (wh *webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
+		log.Error(fmt.Errorf("contentType=%s, expected application/json", contentType), "unable to process a request with unknown content type")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+
 	convertReview := &apix.ConversionReview{}
-	err := json.NewDecoder(r.Body).Decode(convertReview)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(convertReview); err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			log.Error(err, "unable to read conversion request; limit reached", "limit", maxRequestSize)
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
 		log.Error(err, "failed to read conversion request")
 		w.WriteHeader(http.StatusBadRequest)
 		return

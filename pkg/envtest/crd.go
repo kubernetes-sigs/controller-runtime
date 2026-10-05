@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
@@ -195,7 +196,7 @@ func (p *poller) poll(ctx context.Context) (done bool, err error) {
 
 		// Get the Resources for this GroupVersion
 		// TODO: Maybe the controller-runtime client should be able to do this...
-		resourceList, err := cs.Discovery().ServerResourcesForGroupVersion(gv.Group + "/" + gv.Version)
+		resourceList, err := discovery.ToDiscoveryInterfaceWithContext(cs.Discovery()).ServerResourcesForGroupVersionWithContext(ctx, gv.Group+"/"+gv.Version)
 		if err != nil {
 			return false, nil //nolint:nilerr
 		}

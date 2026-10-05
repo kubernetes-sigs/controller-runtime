@@ -17,6 +17,7 @@ limitations under the License.
 package apiutil
 
 import (
+	"context"
 	"testing"
 
 	gmg "github.com/onsi/gomega"
@@ -191,12 +192,12 @@ func TestLazyRestMapper_fetchGroupVersionResourcesLocked_CacheInvalidation(t *te
 		t.Run(tt.name, func(t *testing.T) {
 			g := gmg.NewWithT(t)
 			m := &mapper{
-				mapper:      restmapper.NewDiscoveryRESTMapper([]*restmapper.APIGroupResources{}),
-				client:      &fakeAggregatedDiscoveryClient{DiscoveryInterface: fake.NewClientset().Discovery()},
+				mapper:      restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{}),
+				client:      &fakeAggregatedDiscoveryClient{DiscoveryInterfaceWithContext: discovery.ToDiscoveryInterfaceWithContext(fake.NewClientset().Discovery())},
 				apiGroups:   tt.cachedAPIGroups,
 				knownGroups: tt.cachedKnownGroups,
 			}
-			_, err := m.fetchGroupVersionResourcesLocked(tt.groupName, tt.versions...)
+			_, err := m.fetchGroupVersionResourcesLocked(t.Context(), tt.groupName, tt.versions...)
 			g.Expect(err).NotTo(gmg.HaveOccurred())
 			g.Expect(m.apiGroups).To(gmg.BeComparableTo(tt.expectedAPIGroups))
 			g.Expect(m.knownGroups).To(gmg.BeComparableTo(tt.expectedKnownGroups))
@@ -205,10 +206,10 @@ func TestLazyRestMapper_fetchGroupVersionResourcesLocked_CacheInvalidation(t *te
 }
 
 type fakeAggregatedDiscoveryClient struct {
-	discovery.DiscoveryInterface
+	discovery.DiscoveryInterfaceWithContext
 }
 
-func (f *fakeAggregatedDiscoveryClient) GroupsAndMaybeResources() (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
-	groupList, err := f.DiscoveryInterface.ServerGroups()
+func (f *fakeAggregatedDiscoveryClient) GroupsAndMaybeResourcesWithContext(ctx context.Context) (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
+	groupList, err := f.DiscoveryInterfaceWithContext.ServerGroupsWithContext(ctx)
 	return groupList, nil, nil, err
 }

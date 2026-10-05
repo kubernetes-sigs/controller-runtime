@@ -487,10 +487,10 @@ func TestDefaultOptsRace(t *testing.T) {
 }
 
 type fakeRESTMapper struct {
-	meta.RESTMapper
+	meta.RESTMapperWithContext
 }
 
-func (f *fakeRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+func (f *fakeRESTMapper) RESTMappingWithContext(_ context.Context, gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
 	return &meta.RESTMapping{Scope: meta.RESTScopeNamespace}, nil
 }
 

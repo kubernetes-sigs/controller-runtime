@@ -50,7 +50,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
-	Mapper meta.RESTMapper
+	Mapper meta.RESTMapperWithContext
 
 	// Cache, if provided, is used to read objects from the cache.
 	Cache *CacheOptions
@@ -287,7 +287,7 @@ type client struct {
 	unstructuredClient unstructuredClient
 	metadataClient     metadataClient
 	scheme             *runtime.Scheme
-	mapper             meta.RESTMapper
+	mapper             meta.RESTMapperWithContext
 
 	cache             Reader
 	uncachedGVKs      map[schema.GroupVersionKind]struct{}
@@ -333,8 +333,8 @@ func (c *client) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKin
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (c *client) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return apiutil.IsObjectNamespaced(obj, c.scheme, c.mapper)
+func (c *client) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return apiutil.IsObjectNamespaced(ctx, obj, c.scheme, c.mapper)
 }
 
 // Scheme returns the scheme this client is using.
@@ -343,7 +343,7 @@ func (c *client) Scheme() *runtime.Scheme {
 }
 
 // RESTMapper returns the scheme this client is using.
-func (c *client) RESTMapper() meta.RESTMapper {
+func (c *client) RESTMapper() meta.RESTMapperWithContext {
 	return c.mapper
 }
 
@@ -406,7 +406,7 @@ func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllO
 		if err != nil {
 			return err
 		}
-		if err := c.rejectNamespaceForClusterScoped("DeleteAllOf", gvk, deleteAllOfOpts.Namespace); err != nil {
+		if err := c.rejectNamespaceForClusterScoped(ctx, "DeleteAllOf", gvk, deleteAllOfOpts.Namespace); err != nil {
 			return err
 		}
 	}
@@ -423,8 +423,8 @@ func (c *client) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllO
 
 // rejectNamespaceForClusterScoped returns an error if gvk is cluster-scoped and
 // namespace is non-empty; it is a no-op for namespace-scoped resources.
-func (c *client) rejectNamespaceForClusterScoped(op string, gvk schema.GroupVersionKind, namespace string) error {
-	namespaced, err := apiutil.IsGVKNamespaced(gvk, c.mapper)
+func (c *client) rejectNamespaceForClusterScoped(ctx context.Context, op string, gvk schema.GroupVersionKind, namespace string) error {
+	namespaced, err := apiutil.IsGVKNamespaced(ctx, gvk, c.mapper)
 	if err != nil {
 		return fmt.Errorf("failed to determine if %s is namespace-scoped: %w", gvk, err)
 	}
@@ -496,7 +496,7 @@ func (c *client) List(ctx context.Context, obj ObjectList, opts ...ListOption) e
 			return err
 		}
 		gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
-		if err := c.rejectNamespaceForClusterScoped("List", gvk, listOpts.Namespace); err != nil {
+		if err := c.rejectNamespaceForClusterScoped(ctx, "List", gvk, listOpts.Namespace); err != nil {
 			return err
 		}
 	}

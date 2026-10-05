@@ -43,7 +43,7 @@ func (c *dryRunClient) Scheme() *runtime.Scheme {
 }
 
 // RESTMapper returns the rest mapper this client is using.
-func (c *dryRunClient) RESTMapper() meta.RESTMapper {
+func (c *dryRunClient) RESTMapper() meta.RESTMapperWithContext {
 	return c.client.RESTMapper()
 }
 
@@ -53,8 +53,8 @@ func (c *dryRunClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVers
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (c *dryRunClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return c.client.IsObjectNamespaced(obj)
+func (c *dryRunClient) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return c.client.IsObjectNamespaced(ctx, obj)
 }
 
 // Create implements client.Client.

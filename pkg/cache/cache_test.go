@@ -74,7 +74,7 @@ func createPodWithLabels(ctx context.Context, name, namespace string, restartPol
 			ActiveDeadlineSeconds: &three,
 		},
 	}
-	cl, err := client.New(cfg, client.Options{})
+	cl, err := client.New(ctx, cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred())
 	err = cl.Create(ctx, pod)
 	Expect(err).NotTo(HaveOccurred())
@@ -113,7 +113,7 @@ func createPod(ctx context.Context, name, namespace string, restartPolicy corev1
 }
 
 func deletePod(ctx context.Context, pod client.Object) {
-	cl, err := client.New(cfg, client.Options{})
+	cl, err := client.New(ctx, cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred())
 	err = cl.Delete(ctx, pod)
 	Expect(err).NotTo(HaveOccurred())
@@ -185,7 +185,7 @@ var _ = Describe("Cache with transformers", func() {
 		Expect(cfg).NotTo(BeNil())
 
 		By("creating three pods")
-		cl, err := client.New(cfg, client.Options{})
+		cl, err := client.New(ctx, cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 		err = ensureNode(ctx, testNodeOne, cl)
 		Expect(err).NotTo(HaveOccurred())
@@ -216,7 +216,7 @@ var _ = Describe("Cache with transformers", func() {
 		knownPod6.GetObjectKind().SetGroupVersionKind(podGVK)
 
 		By("creating the informer cache")
-		informerCache, err = cache.New(cfg, cache.Options{
+		informerCache, err = cache.New(ctx, cfg, cache.Options{
 			DefaultTransform: func(i any) (any, error) {
 				obj := i.(runtime.Object)
 				Expect(obj).NotTo(BeNil())
@@ -385,7 +385,7 @@ var _ = Describe("Cache with selectors", func() {
 		// BeforeEach.
 		informerCacheCtx, informerCacheCancel = context.WithCancel(context.Background()) //nolint:forbidigo
 		Expect(cfg).NotTo(BeNil())
-		cl, err := client.New(cfg, client.Options{})
+		cl, err := client.New(ctx, cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 		err = ensureNamespace(ctx, testNamespaceOne, cl)
 		Expect(err).NotTo(HaveOccurred())
@@ -406,7 +406,7 @@ var _ = Describe("Cache with selectors", func() {
 		}
 
 		By("creating the informer cache")
-		informerCache, err = cache.New(cfg, opts)
+		informerCache, err = cache.New(ctx, cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		By("running the cache and waiting for it to sync")
 		// pass as an arg so that we don't race between close and re-assign
@@ -418,7 +418,7 @@ var _ = Describe("Cache with selectors", func() {
 	})
 
 	AfterEach(func(ctx SpecContext) {
-		cl, err := client.New(cfg, client.Options{})
+		cl, err := client.New(ctx, cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 		for idx, namespace := range []string{testNamespaceOne, testNamespaceTwo} {
 			err = cl.Delete(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "test-sa-" + strconv.Itoa(idx)}})
@@ -446,7 +446,7 @@ var _ = Describe("Cache with selectors", func() {
 	})
 })
 
-func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
+func CacheTestReaderFailOnMissingInformer(createCacheFunc func(ctx context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
 	Describe("Cache test with ReaderFailOnMissingInformer = true", func() {
 		var (
 			informerCache       cache.Cache
@@ -462,7 +462,7 @@ func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Conf
 			Expect(cfg).NotTo(BeNil())
 			By("creating the informer cache")
 			var err error
-			informerCache, err = createCacheFunc(cfg, opts)
+			informerCache, err = createCacheFunc(ctx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")
 			// pass as an arg so that we don't race between close and re-assign
@@ -526,7 +526,7 @@ func CacheTestReaderFailOnMissingInformer(createCacheFunc func(config *rest.Conf
 	})
 }
 
-func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
+func NonBlockingGetTest(createCacheFunc func(ctx context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
 	Describe("non-blocking get test", func() {
 		var (
 			informerCache       cache.Cache
@@ -540,7 +540,7 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 			Expect(cfg).NotTo(BeNil())
 
 			By("creating expected namespaces")
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(ctx, cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			err = ensureNode(ctx, testNodeOne, cl)
 			Expect(err).NotTo(HaveOccurred())
@@ -555,7 +555,7 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 			opts.NewInformer = func(_ kcache.ListerWatcher, _ runtime.Object, _ time.Duration, _ kcache.Indexers) kcache.SharedIndexInformer {
 				return controllertest.NewFakeInformer()
 			}
-			informerCache, err = createCacheFunc(cfg, opts)
+			informerCache, err = createCacheFunc(ctx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")
 			// pass as an arg so that we don't race between close and re-assign
@@ -600,7 +600,7 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 	})
 }
 
-func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
+func CacheTest(createCacheFunc func(ctx context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error), opts cache.Options) {
 	Describe("Cache test", func() {
 		var (
 			informerCache       cache.Cache
@@ -621,7 +621,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			Expect(cfg).NotTo(BeNil())
 
 			By("creating three pods")
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(ctx, cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			err = ensureNode(ctx, testNodeOne, cl)
 			Expect(err).NotTo(HaveOccurred())
@@ -654,7 +654,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			knownPod6.GetObjectKind().SetGroupVersionKind(podGVK)
 
 			By("creating the informer cache")
-			informerCache, err = createCacheFunc(cfg, opts)
+			informerCache, err = createCacheFunc(ctx, cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			By("running the cache and waiting for it to sync")
 			// pass as an arg so that we don't race between close and re-assign
@@ -851,7 +851,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying that an error is returned")
 					Expect(err).To(HaveOccurred())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 
 				It("should set the Limit option and limit number of objects to Limit when List is called", func(ctx SpecContext) {
@@ -1028,7 +1028,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				for _, tc := range cacheRestrictSubTests {
 					It("should be able to restrict cache to a namespace "+tc.nameSuffix, func(ctx SpecContext) {
 						By("creating a namespaced cache")
-						namespacedCache, err := cache.New(cfg, tc.cacheOpts)
+						namespacedCache, err := cache.New(ctx, cfg, tc.cacheOpts)
 						Expect(err).NotTo(HaveOccurred())
 
 						By("running the cache and waiting for it to sync")
@@ -1172,7 +1172,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				It("test multinamespaced cache for cluster scoped resources", func(ctx SpecContext) {
 					By("creating a multinamespaced cache to watch specific namespaces")
-					m, err := cache.New(cfg, cache.Options{
+					m, err := cache.New(ctx, cfg, cache.Options{
 						DefaultNamespaces: map[string]cache.Config{
 							"default":        {},
 							testNamespaceOne: {},
@@ -1342,7 +1342,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace", func(ctx SpecContext) {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{DefaultNamespaces: map[string]cache.Config{testNamespaceOne: {}}})
+					namespacedCache, err := cache.New(ctx, cfg, cache.Options{DefaultNamespaces: map[string]cache.Config{testNamespaceOne: {}}})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("running the cache and waiting for it to sync")
@@ -1403,7 +1403,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to restrict cache to a namespace for namespaced object and to given selectors for non namespaced object", func(ctx SpecContext) {
 					By("creating a namespaced cache")
-					namespacedCache, err := cache.New(cfg, cache.Options{
+					namespacedCache, err := cache.New(ctx, cfg, cache.Options{
 						DefaultNamespaces: map[string]cache.Config{testNamespaceOne: {}},
 						ByObject: map[client.Object]cache.ByObject{
 							&corev1.Node{}: {
@@ -1585,7 +1585,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 			}
 			DescribeTable(" and cache with selectors", func(ctx SpecContext, tc selectorsTestCase) {
 				By("creating the cache")
-				informer, err := cache.New(cfg, tc.options)
+				informer, err := cache.New(ctx, cfg, tc.options)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("running the cache and waiting for it to sync")
@@ -1983,7 +1983,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
-					cl, err := client.New(cfg, client.Options{})
+					cl, err := client.New(ctx, cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl.Create(ctx, pod)).To(Succeed())
 					defer deletePod(ctx, pod)
@@ -2059,7 +2059,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
-					cl, err := client.New(cfg, client.Options{})
+					cl, err := client.New(ctx, cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					pod := &corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
@@ -2083,7 +2083,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				})
 				It("should be able to index an object field then retrieve objects by that field", func(ctx SpecContext) {
 					By("creating the cache")
-					informer, err := cache.New(cfg, cache.Options{})
+					informer, err := cache.New(ctx, cfg, cache.Options{})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the restartPolicy field of the Pod object before starting")
@@ -2134,7 +2134,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 
 				It("should allow getting an informer by group/version/kind to be cancelled", func(specCtx SpecContext) {
@@ -2147,12 +2147,12 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformerForKind(ctx, gvk)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 
 				It("should be able not to change indexer values after indexing cluster-scope objects", func(ctx SpecContext) {
 					By("creating the cache")
-					informer, err := cache.New(cfg, cache.Options{})
+					informer, err := cache.New(ctx, cfg, cache.Options{})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the Namespace objects with fixed values before starting")
@@ -2186,7 +2186,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to matching fields with multiple indexes", func(ctx SpecContext) {
 					By("creating the cache")
-					informer, err := cache.New(cfg, cache.Options{})
+					informer, err := cache.New(ctx, cfg, cache.Options{})
 					Expect(err).NotTo(HaveOccurred())
 
 					pod := &corev1.Pod{}
@@ -2281,7 +2281,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
-					cl, err := client.New(cfg, client.Options{})
+					cl, err := client.New(ctx, cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl.Create(ctx, pod)).To(Succeed())
 					defer deletePod(ctx, pod)
@@ -2333,7 +2333,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to index an object field then retrieve objects by that field", func(ctx SpecContext) {
 					By("creating the cache")
-					informer, err := cache.New(cfg, cache.Options{})
+					informer, err := cache.New(ctx, cfg, cache.Options{})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the restartPolicy field of the Pod object before starting")
@@ -2397,7 +2397,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 			})
 			Context("with metadata-only objects", func() {
@@ -2456,7 +2456,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					Expect(handlerRegistration.HasSyncedChecker().Done()).Should(BeClosed())
 
 					By("adding an object")
-					cl, err := client.New(cfg, client.Options{})
+					cl, err := client.New(ctx, cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cl.Create(ctx, pod)).To(Succeed())
 					defer deletePod(ctx, pod)
@@ -2469,7 +2469,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 				It("should be able to index an object field then retrieve objects by that field", func(ctx SpecContext) {
 					By("creating the cache")
-					informer, err := cache.New(cfg, cache.Options{})
+					informer, err := cache.New(ctx, cfg, cache.Options{})
 					Expect(err).NotTo(HaveOccurred())
 
 					By("indexing the restartPolicy field of the Pod object before starting")
@@ -2537,7 +2537,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 			})
 		})
@@ -2653,6 +2653,14 @@ func isPodDisableDeepCopy(opts cache.Options) bool {
 	return false
 }
 
+// isCancelledOrTimeout returns true if err is the result of a cancelled context.
+// If the RESTMapper has to run discovery to create the informer, the cancellation surfaces
+// as a context.Canceled error. Otherwise the cache returns a timeout error while waiting for
+// the informer to sync.
+func isCancelledOrTimeout(err error) bool {
+	return errors.Is(err, context.Canceled) || apierrors.IsTimeout(err)
+}
+
 func cancelledCtx(ctx context.Context) context.Context {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
@@ -2660,10 +2668,10 @@ func cancelledCtx(ctx context.Context) context.Context {
 }
 
 type fakeRESTMapper struct {
-	meta.RESTMapper
+	meta.RESTMapperWithContext
 }
 
-func (f *fakeRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+func (f *fakeRESTMapper) RESTMappingWithContext(_ context.Context, gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
 	return &meta.RESTMapping{Scope: meta.RESTScopeNamespace}, nil
 }
 
@@ -2676,7 +2684,7 @@ func TestReaderWaitsForCacheSync(t *testing.T) {
 				g := NewWithT(t)
 
 				fakeInformer := controllertest.NewFakeInformer()
-				c, err := cache.New(&rest.Config{}, cache.Options{
+				c, err := cache.New(t.Context(), &rest.Config{}, cache.Options{
 					ReaderFailOnMissingInformer: readerFailOnMissingInformer,
 					Mapper:                      &fakeRESTMapper{},
 					NewInformer: func(kcache.ListerWatcher, runtime.Object, time.Duration, kcache.Indexers) kcache.SharedIndexInformer {
@@ -2730,7 +2738,7 @@ func TestIndexFieldDoesNotBlock(t *testing.T) {
 		g := NewWithT(t)
 
 		fakeInformer := controllertest.NewFakeInformer()
-		c, err := cache.New(&rest.Config{}, cache.Options{
+		c, err := cache.New(t.Context(), &rest.Config{}, cache.Options{
 			Mapper: &fakeRESTMapper{},
 			NewInformer: func(kcache.ListerWatcher, runtime.Object, time.Duration, kcache.Indexers) kcache.SharedIndexInformer {
 				return fakeInformer

@@ -55,7 +55,8 @@ var (
 func Example() {
 	// Create a manager
 	// Note: GetConfigOrDie will os.Exit(1) w/o any message if no kube-config can be found
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	ctx := ctrl.SetupSignalHandler()
+	mgr, err := ctrl.NewManager(ctx, ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
 		panic(err)
 	}
@@ -73,7 +74,7 @@ func Example() {
 	hookServer.Register("/validating", validatingHook)
 
 	// Start the server by starting a previously-set-up manager
-	err = mgr.Start(ctrl.SetupSignalHandler())
+	err = mgr.Start(ctx)
 	if err != nil {
 		// handle error
 		panic(err)

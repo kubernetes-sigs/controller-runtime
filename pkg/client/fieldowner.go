@@ -66,13 +66,13 @@ func (f *clientWithFieldManager) DeleteAllOf(ctx context.Context, obj Object, op
 	return f.c.DeleteAllOf(ctx, obj, opts...)
 }
 
-func (f *clientWithFieldManager) Scheme() *runtime.Scheme     { return f.c.Scheme() }
-func (f *clientWithFieldManager) RESTMapper() meta.RESTMapper { return f.c.RESTMapper() }
+func (f *clientWithFieldManager) Scheme() *runtime.Scheme                { return f.c.Scheme() }
+func (f *clientWithFieldManager) RESTMapper() meta.RESTMapperWithContext { return f.c.RESTMapper() }
 func (f *clientWithFieldManager) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return f.c.GroupVersionKindFor(obj)
 }
-func (f *clientWithFieldManager) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return f.c.IsObjectNamespaced(obj)
+func (f *clientWithFieldManager) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return f.c.IsObjectNamespaced(ctx, obj)
 }
 
 func (f *clientWithFieldManager) Status() StatusWriter {

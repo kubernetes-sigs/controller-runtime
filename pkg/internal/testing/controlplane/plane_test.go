@@ -74,7 +74,7 @@ var _ = Describe("Control Plane", func() {
 			By("grabbing the legacy REST config and testing it")
 			cfg, err := plane.RESTClientConfig()
 			Expect(err).NotTo(HaveOccurred(), "should be able to grab the legacy REST config")
-			cl, err := client.New(cfg, client.Options{})
+			cl, err := client.New(ctx, cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred(), "should be able to create a client")
 
 			sar := &kauthn.SelfSubjectAccessReview{

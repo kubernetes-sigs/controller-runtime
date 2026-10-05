@@ -43,13 +43,13 @@ var _ = Describe("Test", func() {
 	var teardownTimeoutSeconds float64 = 10
 
 	// Initialize the client
-	BeforeEach(func() {
+	BeforeEach(func(ctx SpecContext) {
 		crds = []*apiextensionsv1.CustomResourceDefinition{}
 		s = scheme.Scheme
 		err = apiextensionsv1.AddToScheme(s)
 		Expect(err).NotTo(HaveOccurred())
 
-		c, err = client.New(env.Config, client.Options{Scheme: s})
+		c, err = client.New(ctx, env.Config, client.Options{Scheme: s})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -684,7 +684,7 @@ var _ = Describe("Test", func() {
 	It("should set a working KubeConfig", func(ctx SpecContext) {
 		kubeconfigRESTConfig, err := clientcmd.RESTConfigFromKubeConfig(env.KubeConfig)
 		Expect(err).ToNot(HaveOccurred())
-		kubeconfigClient, err := client.New(kubeconfigRESTConfig, client.Options{Scheme: s})
+		kubeconfigClient, err := client.New(ctx, kubeconfigRESTConfig, client.Options{Scheme: s})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kubeconfigClient.List(ctx, &apiextensionsv1.CustomResourceDefinitionList{})).To(Succeed())
 	})

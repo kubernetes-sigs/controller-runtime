@@ -131,7 +131,7 @@ var _ = Describe("manger.Manager Start", func() {
 		defer func() {
 			Expect(env.Stop()).To(Succeed())
 		}()
-		c, err := client.New(cfg, client.Options{})
+		c, err := client.New(ctx, cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create driver CR (which is stored as v1).
@@ -143,7 +143,7 @@ var _ = Describe("manger.Manager Start", func() {
 
 		// Set up Manager.
 		ctrl.SetLogger(zap.New())
-		mgr, err := manager.New(env.Config, manager.Options{
+		mgr, err := manager.New(ctx, env.Config, manager.Options{
 			Scheme:                 scheme,
 			HealthProbeBindAddress: ":0",
 			// Disable metrics to avoid port conflicts.

@@ -39,10 +39,10 @@ import (
 var _ = Describe("Webhook", func() {
 	var c client.Client
 	var obj *appsv1.Deployment
-	BeforeEach(func() {
+	BeforeEach(func(ctx SpecContext) {
 		Expect(cfg).NotTo(BeNil())
 		var err error
-		c, err = client.New(cfg, client.Options{})
+		c, err = client.New(ctx, cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 
 		obj = &appsv1.Deployment{
@@ -74,7 +74,7 @@ var _ = Describe("Webhook", func() {
 	})
 	Context("when running a webhook server with a manager", func() {
 		It("should reject create request for webhook that rejects all requests", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{
+			m, err := manager.New(ctx, cfg, manager.Options{
 				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    testenv.WebhookInstallOptions.LocalServingPort,
 					Host:    testenv.WebhookInstallOptions.LocalServingHost,
@@ -97,7 +97,7 @@ var _ = Describe("Webhook", func() {
 			}, 1*time.Second).Should(BeTrue())
 		})
 		It("should reject create request for multi-webhook that rejects all requests", func(ctx SpecContext) {
-			m, err := manager.New(cfg, manager.Options{
+			m, err := manager.New(ctx, cfg, manager.Options{
 				Metrics: metricsserver.Options{BindAddress: "0"},
 				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    testenv.WebhookInstallOptions.LocalServingPort,

@@ -39,7 +39,7 @@ import (
 var _ = Describe("Test", func() {
 	Describe("Webhook", func() {
 		It("should reject create request for webhook that rejects all requests", func(specCtx SpecContext) {
-			m, err := manager.New(env.Config, manager.Options{
+			m, err := manager.New(specCtx, env.Config, manager.Options{
 				WebhookServer: webhook.NewServer(webhook.Options{
 					Port:    env.WebhookInstallOptions.LocalServingPort,
 					Host:    env.WebhookInstallOptions.LocalServingHost,
@@ -56,7 +56,7 @@ var _ = Describe("Test", func() {
 				_ = server.Start(ctx)
 			}()
 
-			c, err := client.New(env.Config, client.Options{})
+			c, err := client.New(specCtx, env.Config, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			obj := &appsv1.Deployment{

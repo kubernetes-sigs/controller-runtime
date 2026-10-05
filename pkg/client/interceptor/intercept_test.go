@@ -442,7 +442,7 @@ func (d dummyClient) Scheme() *runtime.Scheme {
 	return nil
 }
 
-func (d dummyClient) RESTMapper() meta.RESTMapper {
+func (d dummyClient) RESTMapper() meta.RESTMapperWithContext {
 	return nil
 }
 
@@ -450,7 +450,7 @@ func (d dummyClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersio
 	return schema.GroupVersionKind{}, nil
 }
 
-func (d dummyClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+func (d dummyClient) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
 	return false, nil
 }
 

@@ -448,7 +448,7 @@ func TestDefaultOpts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.in.Mapper = &fakeRESTMapper{}
 
-			defaulted, err := defaultOpts(&rest.Config{}, tc.in)
+			defaulted, err := defaultOpts(t.Context(), &rest.Config{}, tc.in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -478,7 +478,7 @@ func TestDefaultOptsRace(t *testing.T) {
 	wg := sync.WaitGroup{}
 	for range 2 {
 		wg.Go(func() {
-			_, _ = defaultOpts(&rest.Config{}, opts)
+			_, _ = defaultOpts(t.Context(), &rest.Config{}, opts)
 		})
 	}
 
@@ -487,10 +487,10 @@ func TestDefaultOptsRace(t *testing.T) {
 }
 
 type fakeRESTMapper struct {
-	meta.RESTMapper
+	meta.RESTMapperWithContext
 }
 
-func (f *fakeRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+func (f *fakeRESTMapper) RESTMappingWithContext(_ context.Context, gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
 	return &meta.RESTMapping{Scope: meta.RESTScopeNamespace}, nil
 }
 

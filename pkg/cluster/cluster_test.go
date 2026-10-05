@@ -39,24 +39,26 @@ import (
 
 var _ = Describe("cluster.Cluster", func() {
 	Describe("New", func() {
-		It("should return an error if there is no Config", func() {
-			c, err := New(nil)
+		It("should return an error if there is no Config", func(ctx SpecContext) {
+			c, err := New(ctx, nil)
 			Expect(c).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
 		})
 
-		It("should return an error if it can't create a RestMapper", func() {
+		It("should return an error if it can't create a RestMapper", func(ctx SpecContext) {
 			expected := fmt.Errorf("expected error: RestMapper")
-			c, err := New(cfg, func(o *Options) {
-				o.MapperProvider = func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected }
+			c, err := New(ctx, cfg, func(o *Options) {
+				o.MapperProvider = func(_ context.Context, c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
+					return nil, expected
+				}
 			})
 			Expect(c).To(BeNil())
 			Expect(err).To(Equal(expected))
 		})
 
-		It("should return an error it can't create a client.Client", func() {
-			c, err := New(cfg, func(o *Options) {
-				o.NewClient = func(config *rest.Config, options client.Options) (client.Client, error) {
+		It("should return an error it can't create a client.Client", func(ctx SpecContext) {
+			c, err := New(ctx, cfg, func(o *Options) {
+				o.NewClient = func(_ context.Context, config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, errors.New("expected error")
 				}
 			})
@@ -65,9 +67,9 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
-		It("should return an error it can't create a cache.Cache", func() {
-			c, err := New(cfg, func(o *Options) {
-				o.NewCache = func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+		It("should return an error it can't create a cache.Cache", func(ctx SpecContext) {
+			c, err := New(ctx, cfg, func(o *Options) {
+				o.NewCache = func(_ context.Context, config *rest.Config, opts cache.Options) (cache.Cache, error) {
 					return nil, fmt.Errorf("expected error")
 				}
 			})
@@ -76,9 +78,9 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
-		It("should create a client defined in by the new client function", func() {
-			c, err := New(cfg, func(o *Options) {
-				o.NewClient = func(config *rest.Config, options client.Options) (client.Client, error) {
+		It("should create a client defined in by the new client function", func(ctx SpecContext) {
+			c, err := New(ctx, cfg, func(o *Options) {
+				o.NewClient = func(_ context.Context, config *rest.Config, options client.Options) (client.Client, error) {
 					return nil, nil
 				}
 			})
@@ -87,8 +89,8 @@ var _ = Describe("cluster.Cluster", func() {
 			Expect(c.GetClient()).To(BeNil())
 		})
 
-		It("should return an error it can't create a recorder.Provider", func() {
-			c, err := New(cfg, func(o *Options) {
+		It("should return an error it can't create a recorder.Provider", func(ctx SpecContext) {
+			c, err := New(ctx, cfg, func(o *Options) {
 				o.newRecorderProvider = func(_ *rest.Config, _ *http.Client, _ *runtime.Scheme, _ logr.Logger, _ intrec.EventBroadcasterProducer) (*intrec.Provider, error) {
 					return nil, fmt.Errorf("expected error")
 				}
@@ -101,7 +103,7 @@ var _ = Describe("cluster.Cluster", func() {
 
 	Describe("Start", func() {
 		It("should stop when context is cancelled", func(specCtx SpecContext) {
-			c, err := New(cfg)
+			c, err := New(specCtx, cfg)
 			Expect(err).NotTo(HaveOccurred())
 			ctx, cancel := context.WithCancel(specCtx)
 			cancel()
@@ -112,7 +114,7 @@ var _ = Describe("cluster.Cluster", func() {
 	It("should not leak goroutines when stopped", func(specCtx SpecContext) {
 		currentGRs := goleak.IgnoreCurrent()
 
-		c, err := New(cfg)
+		c, err := New(specCtx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx, cancel := context.WithCancel(specCtx)
@@ -125,40 +127,40 @@ var _ = Describe("cluster.Cluster", func() {
 		Eventually(func() error { return goleak.Find(currentGRs) }).Should(Succeed())
 	})
 
-	It("should provide a function to get the Config", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the Config", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		cluster, ok := c.(*cluster)
 		Expect(ok).To(BeTrue())
 		Expect(c.GetConfig()).To(Equal(cluster.config))
 	})
 
-	It("should provide a function to get the Client", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the Client", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		cluster, ok := c.(*cluster)
 		Expect(ok).To(BeTrue())
 		Expect(c.GetClient()).To(Equal(cluster.client))
 	})
 
-	It("should provide a function to get the Scheme", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the Scheme", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		cluster, ok := c.(*cluster)
 		Expect(ok).To(BeTrue())
 		Expect(c.GetScheme()).To(Equal(cluster.scheme))
 	})
 
-	It("should provide a function to get the FieldIndexer", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the FieldIndexer", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		cluster, ok := c.(*cluster)
 		Expect(ok).To(BeTrue())
 		Expect(c.GetFieldIndexer()).To(Equal(cluster.cache))
 	})
 
-	It("should provide a function to get the EventRecorder", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the EventRecorder", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		recorder := c.GetEventRecorder("test")
 		Expect(recorder).NotTo(BeNil())
@@ -167,13 +169,13 @@ var _ = Describe("cluster.Cluster", func() {
 		var _ events.AnnotatedEventRecorder = recorder
 	})
 
-	It("should provide a function to get the deprecated EventRecorder", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the deprecated EventRecorder", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.GetEventRecorderFor("test")).NotTo(BeNil()) //nolint:staticcheck
 	})
-	It("should provide a function to get the APIReader", func() {
-		c, err := New(cfg)
+	It("should provide a function to get the APIReader", func(ctx SpecContext) {
+		c, err := New(ctx, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.GetAPIReader()).NotTo(BeNil())
 	})

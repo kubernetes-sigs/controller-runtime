@@ -17,6 +17,7 @@ limitations under the License.
 package cache
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"net/http"
@@ -89,7 +90,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
-	Mapper meta.RESTMapper
+	Mapper meta.RESTMapperWithContext
 
 	// SyncPeriod determines the minimum frequency at which watched resources are
 	// reconciled. A lower period will correct entropy more quickly, but reduce
@@ -362,11 +363,16 @@ type Config struct {
 }
 
 // NewCacheFunc - Function for creating a new cache from the options and a rest config.
-type NewCacheFunc func(config *rest.Config, opts Options) (Cache, error)
+// The context is only used for the duration of the call (e.g. for API discovery), it does not
+// bound the lifetime of the returned Cache.
+type NewCacheFunc func(ctx context.Context, config *rest.Config, opts Options) (Cache, error)
 
 // New initializes and returns a new Cache.
-func New(cfg *rest.Config, opts Options) (Cache, error) {
-	opts, err := defaultOpts(cfg, opts)
+//
+// The context is only used for the duration of the call (e.g. for API discovery), it does not
+// bound the lifetime of the returned Cache.
+func New(ctx context.Context, cfg *rest.Config, opts Options) (Cache, error) {
+	opts, err := defaultOpts(ctx, cfg, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +477,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 	}
 }
 
-func defaultOpts(config *rest.Config, opts Options) (Options, error) {
+func defaultOpts(ctx context.Context, config *rest.Config, opts Options) (Options, error) {
 	config = rest.CopyConfig(config)
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
@@ -494,7 +500,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	// Construct a new Mapper if unset
 	if opts.Mapper == nil {
 		var err error
-		opts.Mapper, err = apiutil.NewDynamicRESTMapper(config, opts.HTTPClient)
+		opts.Mapper, err = apiutil.NewDynamicRESTMapper(ctx, config, opts.HTTPClient)
 		if err != nil {
 			return Options{}, fmt.Errorf("could not create RESTMapper from config: %w", err)
 		}
@@ -503,7 +509,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	opts.ByObject = maps.Clone(opts.ByObject)
 	opts.DefaultNamespaces = maps.Clone(opts.DefaultNamespaces)
 	for obj, byObject := range opts.ByObject {
-		isNamespaced, err := apiutil.IsObjectNamespaced(obj, opts.Scheme, opts.Mapper)
+		isNamespaced, err := apiutil.IsObjectNamespaced(ctx, obj, opts.Scheme, opts.Mapper)
 		if err != nil {
 			return opts, fmt.Errorf("failed to determine if %T is namespaced: %w", obj, err)
 		}

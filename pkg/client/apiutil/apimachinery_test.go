@@ -85,7 +85,7 @@ func TestApiMachinery(t *testing.T) {
 				httpClient, err := rest.HTTPClientFor(restCfg)
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 
-				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(t.Context(), restCfg, httpClient)
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 
 				s := scheme.Scheme
@@ -94,6 +94,7 @@ func TestApiMachinery(t *testing.T) {
 
 				// Query the scope of a GVK that was registered at initialization.
 				scope, err := apiutil.IsGVKNamespaced(
+					t.Context(),
 					schema.GroupVersionKind(initialGvk),
 					lazyRestMapper,
 				)
@@ -108,18 +109,19 @@ func TestApiMachinery(t *testing.T) {
 					httpClient, err := rest.HTTPClientFor(restCfg)
 					g.Expect(err).NotTo(gmg.HaveOccurred())
 
-					lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+					lazyRestMapper, err := apiutil.NewDynamicRESTMapper(t.Context(), restCfg, httpClient)
 					g.Expect(err).NotTo(gmg.HaveOccurred())
 
 					s := scheme.Scheme
 					err = apiextensionsv1.AddToScheme(s)
 					g.Expect(err).NotTo(gmg.HaveOccurred())
 
-					c, err := client.New(restCfg, client.Options{Scheme: s})
+					c, err := client.New(t.Context(), restCfg, client.Options{Scheme: s})
 					g.Expect(err).NotTo(gmg.HaveOccurred())
 
 					// Run a valid query to initialize cache.
 					scope, err := apiutil.IsGVKNamespaced(
+						t.Context(),
 						schema.GroupVersionKind(initialGvk),
 						lazyRestMapper,
 					)
@@ -149,6 +151,7 @@ func TestApiMachinery(t *testing.T) {
 
 					// Query the scope of the GVK registered at runtime.
 					scope, err = apiutil.IsGVKNamespaced(
+						t.Context(),
 						schema.GroupVersionKind(runtimeGvk.gvk),
 						lazyRestMapper,
 					)

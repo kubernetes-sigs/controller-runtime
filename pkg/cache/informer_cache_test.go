@@ -28,15 +28,15 @@ import (
 )
 
 var _ = Describe("informerCache", func() {
-	It("should not require LeaderElection", func() {
+	It("should not require LeaderElection", func(ctx SpecContext) {
 		cfg := &rest.Config{}
 
 		httpClient, err := rest.HTTPClientFor(cfg)
 		Expect(err).ToNot(HaveOccurred())
-		mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+		mapper, err := apiutil.NewDynamicRESTMapper(ctx, cfg, httpClient)
 		Expect(err).ToNot(HaveOccurred())
 
-		c, err := cache.New(cfg, cache.Options{Mapper: mapper})
+		c, err := cache.New(ctx, cfg, cache.Options{Mapper: mapper})
 		Expect(err).ToNot(HaveOccurred())
 
 		leaderElectionRunnable, ok := c.(manager.LeaderElectionRunnable)

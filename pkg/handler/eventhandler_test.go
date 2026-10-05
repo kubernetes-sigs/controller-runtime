@@ -44,8 +44,8 @@ var _ = Describe("Eventhandler", func() {
 	var q workqueue.TypedRateLimitingInterface[reconcile.Request]
 	var instance handler.EnqueueRequestForObject
 	var pod *corev1.Pod
-	var mapper meta.RESTMapper
-	BeforeEach(func() {
+	var mapper meta.RESTMapperWithContext
+	BeforeEach(func(ctx SpecContext) {
 		q = &controllertest.Queue{TypedInterface: workqueue.NewTyped[reconcile.Request]()}
 		pod = &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
@@ -54,7 +54,7 @@ var _ = Describe("Eventhandler", func() {
 
 		httpClient, err := rest.HTTPClientFor(cfg)
 		Expect(err).ShouldNot(HaveOccurred())
-		mapper, err = apiutil.NewDynamicRESTMapper(cfg, httpClient)
+		mapper, err = apiutil.NewDynamicRESTMapper(ctx, cfg, httpClient)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 

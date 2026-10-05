@@ -35,7 +35,7 @@ import (
 
 var _ = Describe("ClientWithFieldValidation", func() {
 	It("should return errors for invalid fields when using strict validation", func(ctx SpecContext) {
-		cl, err := client.New(cfg, client.Options{})
+		cl, err := client.New(ctx, cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cl).NotTo(BeNil())
 

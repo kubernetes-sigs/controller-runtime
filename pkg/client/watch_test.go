@@ -66,13 +66,13 @@ var _ = Describe("ClientWithWatch", func() {
 
 	Describe("NewWithWatch", func() {
 		It("should return a new Client", func(ctx SpecContext) {
-			cl, err := client.NewWithWatch(cfg, client.Options{})
+			cl, err := client.NewWithWatch(ctx, cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
 		})
 
 		watchSuite := func(ctx context.Context, through client.ObjectList, expectedType client.Object, checkGvk bool) {
-			cl, err := client.NewWithWatch(cfg, client.Options{})
+			cl, err := client.NewWithWatch(ctx, cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
 

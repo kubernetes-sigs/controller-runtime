@@ -84,7 +84,7 @@ var _ = Describe("manger.Manager", func() {
 				err := metrics.Registry.Register(one)
 				Expect(err).NotTo(HaveOccurred())
 
-				m, err := manager.New(cfg, opts)
+				m, err := manager.New(ctx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				go func() {
@@ -131,7 +131,7 @@ var _ = Describe("manger.Manager", func() {
 						_, _ = w.Write([]byte("Some debug info"))
 					}),
 				}
-				m, err := manager.New(cfg, opts)
+				m, err := manager.New(ctx, cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 
 				go func() {

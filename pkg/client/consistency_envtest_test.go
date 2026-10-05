@@ -99,7 +99,7 @@ var _ = Describe("ConsistentClient", func() {
 				// node returns and it thus would not outlive it, stopping the cache's watches.
 				ctx, cancel = context.WithCancel(context.WithoutCancel(specCtx))
 
-				c, err := cache.New(cfg, cache.Options{Scheme: kscheme.Scheme})
+				c, err := cache.New(ctx, cfg, cache.Options{Scheme: kscheme.Scheme})
 				Expect(err).NotTo(HaveOccurred())
 
 				// Set up informers for types used through the consistent client.
@@ -114,7 +114,7 @@ var _ = Describe("ConsistentClient", func() {
 				}()
 				Expect(c.WaitForCacheSync(ctx)).To(BeTrue())
 
-				cl, err = client.New(cfg, client.Options{
+				cl, err = client.New(ctx, cfg, client.Options{
 					Scheme: kscheme.Scheme,
 					Cache: &client.CacheOptions{
 						Reader:                          c,
@@ -291,7 +291,7 @@ var _ = Describe("ConsistentClient", func() {
 			// node returns and it thus would not outlive it, stopping the cache's watches.
 			ctx, cancel = context.WithCancel(context.WithoutCancel(specCtx))
 
-			c, err := cache.New(cfg, cache.Options{Scheme: kscheme.Scheme})
+			c, err := cache.New(ctx, cfg, cache.Options{Scheme: kscheme.Scheme})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = c.GetInformer(ctx, &corev1.Pod{})
@@ -305,7 +305,7 @@ var _ = Describe("ConsistentClient", func() {
 			}()
 			Expect(c.WaitForCacheSync(ctx)).To(BeTrue())
 
-			cl, err = client.New(cfg, client.Options{
+			cl, err = client.New(ctx, cfg, client.Options{
 				Scheme: kscheme.Scheme,
 				Cache: &client.CacheOptions{
 					Reader:                          c,

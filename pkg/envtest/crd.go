@@ -221,7 +221,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 	}
 
 	// Delete the CRDs from the apiserver
-	cs, err := client.New(config, client.Options{})
+	cs, err := client.New(context.TODO(), config, client.Options{})
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func UninstallCRDs(config *rest.Config, options CRDInstallOptions) error {
 
 // CreateCRDs creates the CRDs.
 func CreateCRDs(config *rest.Config, crds []*apiextensionsv1.CustomResourceDefinition) error {
-	cs, err := client.New(config, client.Options{})
+	cs, err := client.New(context.TODO(), config, client.Options{})
 	if err != nil {
 		return fmt.Errorf("unable to create client: %w", err)
 	}

@@ -64,7 +64,7 @@ var _ error = (*ErrResourceNotCached)(nil)
 type InformersOpts struct {
 	HTTPClient            *http.Client
 	Scheme                *runtime.Scheme
-	Mapper                meta.RESTMapper
+	Mapper                meta.RESTMapperWithContext
 	ResyncPeriod          time.Duration
 	Namespace             string
 	NewInformer           func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
@@ -152,7 +152,7 @@ type Informers struct {
 	config *rest.Config
 
 	// mapper maps GroupVersionKinds to Resources
-	mapper meta.RESTMapper
+	mapper meta.RESTMapperWithContext
 
 	// tracker tracks informers keyed by their type and groupVersionKind
 	tracker tracker
@@ -314,7 +314,7 @@ func (ip *Informers) Get(ctx context.Context, gvk schema.GroupVersionKind, obj r
 			return false, nil, &ErrResourceNotCached{GVK: gvk}
 		}
 		var err error
-		if i, started, err = ip.addInformerToMap(gvk, obj); err != nil {
+		if i, started, err = ip.addInformerToMap(ctx, gvk, obj); err != nil {
 			return started, nil, err
 		}
 	}
@@ -361,7 +361,7 @@ func (ip *Informers) informersByType(obj runtime.Object) map[schema.GroupVersion
 }
 
 // addInformerToMap either returns an existing informer or creates a new informer, adds it to the map and returns it.
-func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.Object) (*Cache, bool, error) {
+func (ip *Informers) addInformerToMap(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (*Cache, bool, error) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 
@@ -373,7 +373,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 	}
 
 	// Create a NewSharedIndexInformer and add it to the map.
-	listWatcher, err := ip.makeListWatcher(gvk, obj)
+	listWatcher, err := ip.makeListWatcher(ctx, gvk, obj)
 	if err != nil {
 		return nil, false, err
 	}
@@ -405,7 +405,7 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 		return nil, false, err
 	}
 
-	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := ip.mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, false, err
 	}
@@ -431,10 +431,10 @@ func (ip *Informers) addInformerToMap(gvk schema.GroupVersionKind, obj runtime.O
 	return i, ip.started, nil
 }
 
-func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Object) (*cache.ListWatch, error) {
+func (ip *Informers) makeListWatcher(ctx context.Context, gvk schema.GroupVersionKind, obj runtime.Object) (*cache.ListWatch, error) {
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
-	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	mapping, err := ip.mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}

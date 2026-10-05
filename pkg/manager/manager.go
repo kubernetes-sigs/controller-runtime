@@ -116,7 +116,7 @@ type Options struct {
 	//
 	// If set, the RESTMapper returned by this function is used to create the RESTMapper
 	// used by the Client and Cache.
-	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
+	MapperProvider func(ctx context.Context, c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error)
 
 	// Cache is the cache.Options that will be used to create the default Cache.
 	// By default, the cache will watch and list requested objects in all namespaces.
@@ -338,7 +338,11 @@ type warmupRunnable interface {
 // Note that if ContentType in the given config is not set, "application/vnd.kubernetes.protobuf"
 // will be used for all built-in resources of Kubernetes, and "application/json" is for other types
 // including all CRD resources.
-func New(config *rest.Config, options Options) (Manager, error) {
+//
+// The context is only used for the duration of the call (e.g. for API discovery while constructing
+// the cache and client), it does not bound the lifetime of the returned Manager. Use the context
+// passed to Manager.Start for that.
+func New(ctx context.Context, config *rest.Config, options Options) (Manager, error) {
 	if config == nil {
 		return nil, errors.New("must specify Config")
 	}
@@ -348,7 +352,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, fmt.Errorf("failed setting manager default options: %w", err)
 	}
 
-	cluster, err := cluster.New(config, func(clusterOptions *cluster.Options) {
+	cluster, err := cluster.New(ctx, config, func(clusterOptions *cluster.Options) {
 		clusterOptions.Scheme = options.Scheme
 		clusterOptions.MapperProvider = options.MapperProvider
 		clusterOptions.Logger = options.Logger

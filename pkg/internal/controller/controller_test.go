@@ -307,7 +307,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should error when cache sync timeout occurs", func(ctx SpecContext) {
-			c, err := cache.New(cfg, cache.Options{})
+			c, err := cache.New(ctx, cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
@@ -326,7 +326,7 @@ var _ = Describe("controller", func() {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			sourceSynced := make(chan struct{})
-			c, err := cache.New(cfg, cache.Options{})
+			c, err := cache.New(specCtx, cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
@@ -410,7 +410,7 @@ var _ = Describe("controller", func() {
 				}
 			}()
 
-			testCache, err := cache.New(cfg, cache.Options{})
+			testCache, err := cache.New(specCtx, cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 
 			ctx, cancel := context.WithCancel(specCtx)
@@ -1404,7 +1404,7 @@ var _ = Describe("controller", func() {
 		})
 
 		It("should error when cache sync timeout occurs", func(ctx SpecContext) {
-			c, err := cache.New(cfg, cache.Options{})
+			c, err := cache.New(ctx, cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 
@@ -1423,7 +1423,7 @@ var _ = Describe("controller", func() {
 			ctrl.CacheSyncTimeout = 1 * time.Second
 
 			sourceSynced := make(chan struct{})
-			c, err := cache.New(cfg, cache.Options{})
+			c, err := cache.New(specCtx, cfg, cache.Options{})
 			Expect(err).NotTo(HaveOccurred())
 			c = &cacheWithIndefinitelyBlockingGetInformer{c}
 			ctrl.startWatches = []source.TypedSource[reconcile.Request]{
@@ -1674,7 +1674,7 @@ var _ = Describe("controller", func() {
 			testenv = &envtest.Environment{}
 			cfg, err := testenv.Start()
 			Expect(err).NotTo(HaveOccurred())
-			m, err := manager.New(cfg, manager.Options{
+			m, err := manager.New(specCtx, cfg, manager.Options{
 				LeaderElection:                      true,
 				LeaderElectionID:                    "some-leader-election-id",
 				LeaderElectionNamespace:             "default",
@@ -1816,7 +1816,7 @@ var _ = Describe("controller", func() {
 					return rt
 				}
 
-				m, err := manager.New(cfg, manager.Options{
+				m, err := manager.New(ctx, cfg, manager.Options{
 					LeaderElection:          leaderElection,
 					LeaderElectionID:        "some-leader-election-id",
 					LeaderElectionNamespace: "default",

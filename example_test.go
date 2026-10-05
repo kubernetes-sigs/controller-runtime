@@ -46,8 +46,9 @@ import (
 // * Start the application.
 func Example() {
 	log := ctrl.Log.WithName("builder-examples")
+	ctx := ctrl.SetupSignalHandler()
 
-	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	manager, err := ctrl.NewManager(ctx, ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -63,7 +64,7 @@ func Example() {
 		os.Exit(1)
 	}
 
-	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := manager.Start(ctx); err != nil {
 		log.Error(err, "could not start manager")
 		os.Exit(1)
 	}
@@ -110,8 +111,9 @@ func (in *ExampleCRDWithConfigMapRefList) DeepCopyObject() runtime.Object {
 // due to the implementation of the .Watches method of "sigs.k8s.io/controller-runtime/pkg/builder".Builder.
 func Example_customHandler() {
 	log := ctrl.Log.WithName("builder-examples")
+	ctx := ctrl.SetupSignalHandler()
 
-	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
+	manager, err := ctrl.NewManager(ctx, ctrl.GetConfigOrDie(), ctrl.Options{})
 	if err != nil {
 		log.Error(err, "could not create manager")
 		os.Exit(1)
@@ -151,7 +153,7 @@ func Example_customHandler() {
 		os.Exit(1)
 	}
 
-	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := manager.Start(ctx); err != nil {
 		log.Error(err, "could not start manager")
 		os.Exit(1)
 	}
@@ -174,7 +176,9 @@ func Example_updateLeaderElectionDurations() {
 	leaseDuration := 100 * time.Second
 	renewDeadline := 80 * time.Second
 	retryPeriod := 20 * time.Second
+	ctx := ctrl.SetupSignalHandler()
 	manager, err := ctrl.NewManager(
+		ctx,
 		ctrl.GetConfigOrDie(),
 		ctrl.Options{
 			LeaseDuration: &leaseDuration,
@@ -196,7 +200,7 @@ func Example_updateLeaderElectionDurations() {
 		os.Exit(1)
 	}
 
-	if err := manager.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := manager.Start(ctx); err != nil {
 		log.Error(err, "could not start manager")
 		os.Exit(1)
 	}

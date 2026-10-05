@@ -119,13 +119,13 @@ var _ = Describe("reconcile", func() {
 		var testenv *envtest.Environment
 		var testClient client.Client
 
-		BeforeEach(func() {
+		BeforeEach(func(ctx SpecContext) {
 			testenv = &envtest.Environment{}
 
 			cfg, err := testenv.Start()
 			Expect(err).NotTo(HaveOccurred())
 
-			testClient, err = client.New(cfg, client.Options{})
+			testClient, err = client.New(ctx, cfg, client.Options{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 

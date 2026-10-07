@@ -56,7 +56,6 @@ func newCountingRoundTripper(rt http.RoundTripper) *countingRoundTripper {
 // RoundTrip implements http.RoundTripper.RoundTrip that additionally counts requests.
 func (crt *countingRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
 	crt.requestCount++
-
 	return crt.roundTripper.RoundTrip(r)
 }
 
@@ -598,25 +597,40 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				c, err := client.New(restCfg, client.Options{Scheme: s})
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 
-				// Register another CRD in runtime - "riders.crew.example.com".
-				createNewCRD(t.Context(), g, c, "crew.example.com", "Rider", "riders")
+				// Register another CRD in runtime - "riders.crew.example.com" with differents versions (v1alpha1 and v1alpha2)
+				newCRD := newCRD(t.Context(), g, c, "crew.example.com", "Rider", "riders")
+				newCRD.Spec.Versions[0].Name = "v1alpha1"
+				newCRD.Spec.Versions[1].Name = "v1alpha2"
+				g.Expect(c.Create(t.Context(), newCRD)).To(gmg.Succeed())
 
 				// Wait a bit until the CRD is registered.
-				g.Eventually(func() error {
-					_, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "rider"})
-					return err
-				}).Should(gmg.Succeed())
+				discHTTP, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				discClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, discHTTP)
+				g.Eventually(func(g gmg.Gomega) {
+					_, err = discClient.ServerResourcesForGroupVersion("crew.example.com/v1alpha1")
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+				}).Should(gmg.Succeed(), "v1alpha1 should be available")
 
+				// Verify that when requesting the new kind without a version, it doesn't error
 				// Since we don't specify what version we expect, restmapper will fetch them all and search there.
 				// To fetch a list of available versions
 				//  #1: GET https://host/api
 				//  #2: GET https://host/apis
-				// Then, for each currently registered version:
-				// 	#3: GET https://host/apis/crew.example.com/v1
-				//	#4: GET https://host/apis/crew.example.com/v2
+				// Then, if aggregatedDiscovery is disabled, each currently registered version:
+				// 	#3: GET https://host/apis/crew.example.com/v1alpha1
+				//	#4: GET https://host/apis/crew.example.com/v1alpha2
+				// 	#5: GET https://host/apis/crew.example.com/v1
+				//	#6: GET https://host/apis/crew.example.com/v2
+				crt.Reset()
 				mapping, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "rider"})
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 				g.Expect(mapping.GroupVersionKind.Kind).To(gmg.Equal("rider"))
+				expectedAPIRequestCount = 6
+				if aggregatedDiscovery {
+					expectedAPIRequestCount = 2
+				}
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(expectedAPIRequestCount))
 			})
 
 			t.Run("LazyRESTMapper should invalidate the group cache if a version is not found", func(t *testing.T) {
@@ -719,13 +733,18 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
 				// We request Limo, which is not in the mapper because it doesn't exist.
-				// This will trigger a reload of the lazy mapper cache.
-				// Reloading the cache will read v2 again and since it's not available anymore, it should invalidate the cache.
-				// 	#1: GET https://host/apis/inventory.example.com/v1alpha1
-				// 	#2: GET https://host/apis/inventory.example.com/v1
+				// This will trigger a reload of the lazy mapper cache. It will first fetch a list of available versions
+				//  #1: GET https://host/api
+				//  #2: GET https://host/apis
+				// Then, if aggregatedDiscovery is disabled, since v1alpha1 is not available anymore, it will only fetch v1 version
+				// 	#3: GET https://host/apis/inventory.example.com/v1
 				_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: "Limo"})
 				g.Expect(err).To(beNoMatchError())
-				g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
+				expectedAPIRequestCount = 3
+				if aggregatedDiscovery {
+					expectedAPIRequestCount = 2
+				}
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(expectedAPIRequestCount))
 				crt.Reset()
 
 				// Now we request v1alpha1 again and it should return an error since the cache was invalidated.
@@ -769,14 +788,6 @@ func TestLazyRestMapperProvider(t *testing.T) {
 			})
 		})
 	}
-}
-
-// createNewCRD creates a new CRD with the given group, kind, and plural and returns it.
-func createNewCRD(ctx context.Context, g gmg.Gomega, c client.Client, group, kind, plural string) *apiextensionsv1.CustomResourceDefinition {
-	newCRD := newCRD(ctx, g, c, group, kind, plural)
-	g.Expect(c.Create(ctx, newCRD)).To(gmg.Succeed())
-
-	return newCRD
 }
 
 // newCRD returns a new CRD with the given group, kind, and plural.

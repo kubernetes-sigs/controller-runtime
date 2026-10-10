@@ -77,7 +77,7 @@ var _ = Describe("manger.Manager", func() {
 
 			It("should serve metrics in its registry", func(ctx SpecContext) {
 				one := prometheus.NewCounter(prometheus.CounterOpts{
-					Name: "test_one",
+					Name: "test_one_total",
 					Help: "test metric for testing",
 				})
 				one.Inc()
@@ -115,9 +115,9 @@ var _ = Describe("manger.Manager", func() {
 				data, err := io.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(data)).To(ContainSubstring("%s\n%s\n%s\n",
-					`# HELP test_one test metric for testing`,
-					`# TYPE test_one counter`,
-					`test_one 1`,
+					`# HELP test_one_total test metric for testing`,
+					`# TYPE test_one_total counter`,
+					`test_one_total 1`,
 				))
 
 				// Unregister will return false if the metric was never registered

@@ -36,6 +36,8 @@ linters:
     - nilerr
     - nolintlint
     - prealloc
+    - promlinter
+    - reassign
     - revive
     - staticcheck
     - tagliatelle

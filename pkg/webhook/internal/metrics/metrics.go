@@ -17,6 +17,7 @@ limitations under the License.
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -25,6 +26,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
+
+type webhookPathKey struct{}
 
 var (
 	// RequestLatency is a prometheus metric which is a histogram of the latency
@@ -80,11 +83,23 @@ func InstrumentedHook(path string, hookRaw http.Handler) http.Handler {
 	cnt.WithLabelValues("200")
 	cnt.WithLabelValues("500")
 
+	hook := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), webhookPathKey{}, path)
+		hookRaw.ServeHTTP(w, r.WithContext(ctx))
+	})
+
 	return promhttp.InstrumentHandlerDuration(
 		lat,
 		promhttp.InstrumentHandlerCounter(
 			cnt,
-			promhttp.InstrumentHandlerInFlight(gge, hookRaw),
+			promhttp.InstrumentHandlerInFlight(gge, hook),
 		),
 	)
+}
+
+// WebhookPathFromContext returns the path used to register the webhook, if the
+// webhook is instrumented.
+func WebhookPathFromContext(ctx context.Context) (string, bool) {
+	path, ok := ctx.Value(webhookPathKey{}).(string)
+	return path, ok
 }

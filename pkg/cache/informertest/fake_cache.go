@@ -18,7 +18,9 @@ package informertest
 
 import (
 	"context"
+	"sync"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -26,29 +28,40 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 )
 
 var _ cache.Cache = &FakeInformers{}
 
-// FakeInformers is a fake implementation of Informers.
+// FakeInformers uses a fake client for reads and field indexes.
+// Write through Client to change stored objects. Fake informer methods only send
+// events; they do not update Client. Index functions run during List.
+// Set the fields before use.
 type FakeInformers struct {
 	InformersByGVK map[schema.GroupVersionKind]toolscache.SharedIndexInformer
 	Scheme         *runtime.Scheme
-	Error          error
-	Synced         *bool
+	// Client must come from fake.NewClientBuilder; interceptors are supported.
+	// If nil, first use creates an empty fake client with Scheme and RESTMapper.
+	// Supply a client to seed or change stored objects.
+	Client client.Client
+	// RESTMapper lets Get ignore key.Namespace for cluster-scoped objects.
+	// If nil, Get uses Client's mapper, preserving the key for unmapped kinds.
+	RESTMapper apimeta.RESTMapper
+	Error      error
+	Synced     *bool
+
+	clientOnce sync.Once
+	backend    client.Client
 }
 
 // GetInformerForKind implements Informers.
 func (c *FakeInformers) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, opts ...cache.InformerGetOption) (cache.Informer, error) {
-	if c.Scheme == nil {
-		c.Scheme = scheme.Scheme
-	}
-	obj, err := c.Scheme.New(gvk)
-	if err != nil {
+	if _, err := c.objectScheme().New(gvk); err != nil {
 		return nil, err
 	}
-	return c.informerFor(gvk, obj)
+	return c.informerFor(gvk)
 }
 
 // FakeInformerForKind implements Informers.
@@ -62,27 +75,19 @@ func (c *FakeInformers) FakeInformerForKind(ctx context.Context, gvk schema.Grou
 
 // GetInformer implements Informers.
 func (c *FakeInformers) GetInformer(ctx context.Context, obj client.Object, opts ...cache.InformerGetOption) (cache.Informer, error) {
-	if c.Scheme == nil {
-		c.Scheme = scheme.Scheme
-	}
-	gvks, _, err := c.Scheme.ObjectKinds(obj)
+	gvk, err := apiutil.GVKForObject(obj, c.objectScheme())
 	if err != nil {
 		return nil, err
 	}
-	gvk := gvks[0]
-	return c.informerFor(gvk, obj)
+	return c.informerFor(gvk)
 }
 
 // RemoveInformer implements Informers.
 func (c *FakeInformers) RemoveInformer(ctx context.Context, obj client.Object) error {
-	if c.Scheme == nil {
-		c.Scheme = scheme.Scheme
-	}
-	gvks, _, err := c.Scheme.ObjectKinds(obj)
+	gvk, err := apiutil.GVKForObject(obj, c.objectScheme())
 	if err != nil {
 		return err
 	}
-	gvk := gvks[0]
 	delete(c.InformersByGVK, gvk)
 	return nil
 }
@@ -104,7 +109,7 @@ func (c *FakeInformers) FakeInformerFor(ctx context.Context, obj client.Object) 
 	return i.(*controllertest.FakeInformer), nil
 }
 
-func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Object) (toolscache.SharedIndexInformer, error) {
+func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind) (toolscache.SharedIndexInformer, error) {
 	if c.Error != nil {
 		return nil, c.Error
 	}
@@ -116,7 +121,7 @@ func (c *FakeInformers) informerFor(gvk schema.GroupVersionKind, _ runtime.Objec
 		return informer, nil
 	}
 
-	// Set Synced to true by default so that WaitForCacheSync returns immediately
+	// Fake informers start synced.
 	c.InformersByGVK[gvk] = controllertest.NewFakeInformer(controllertest.Synced)
 	return c.InformersByGVK[gvk], nil
 }
@@ -126,17 +131,59 @@ func (c *FakeInformers) Start(ctx context.Context) error {
 	return c.Error
 }
 
-// IndexField implements Cache.
-func (c *FakeInformers) IndexField(ctx context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
-	return nil
+// IndexField registers an index on the backing fake client.
+func (c *FakeInformers) IndexField(_ context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
+	if c.Error != nil {
+		return c.Error
+	}
+	return fake.AddIndex(c.backingClient(), obj, field, extractValue)
 }
 
-// Get implements Cache.
+// Get delegates to the backing fake client.
 func (c *FakeInformers) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	return nil
+	if c.Error != nil {
+		return c.Error
+	}
+	mapper := c.RESTMapper
+	if mapper == nil && c.Client != nil {
+		mapper = c.Client.RESTMapper()
+	}
+	if mapper != nil {
+		namespaced, err := apiutil.IsObjectNamespaced(obj, c.objectScheme(), mapper)
+		if err != nil && (c.RESTMapper != nil || !apimeta.IsNoMatchError(err)) {
+			return err
+		}
+		if err == nil && !namespaced {
+			key.Namespace = ""
+		}
+	}
+	return c.backingClient().Get(ctx, key, obj, opts...)
 }
 
-// List implements Cache.
+// List delegates to the backing fake client.
 func (c *FakeInformers) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	return nil
+	if c.Error != nil {
+		return c.Error
+	}
+	return c.backingClient().List(ctx, list, opts...)
+}
+
+func (c *FakeInformers) backingClient() client.Client {
+	if c.Client != nil {
+		return c.Client
+	}
+	c.clientOnce.Do(func() {
+		c.backend = fake.NewClientBuilder().WithScheme(c.objectScheme()).WithRESTMapper(c.RESTMapper).Build()
+	})
+	return c.backend
+}
+
+func (c *FakeInformers) objectScheme() *runtime.Scheme {
+	if c.Scheme != nil {
+		return c.Scheme
+	}
+	if c.Client != nil {
+		return c.Client.Scheme()
+	}
+	return scheme.Scheme
 }

@@ -221,12 +221,18 @@ func NewTyped[request comparable](name string, mgr manager.Manager, options Type
 // NewUnmanaged returns a new controller without adding it to the manager. The
 // caller is responsible for starting the returned controller.
 //
+// Unlike New, the options are not defaulted from the manager's controller config.
+// Call options.DefaultFromConfig(mgr.GetControllerOptions()) to apply those defaults.
+//
 // The name must be unique as it is used to identify the controller in metrics and logs.
 func NewUnmanaged(name string, options Options) (Controller, error) {
 	return NewTypedUnmanaged(name, options)
 }
 
 // NewTypedUnmanaged returns a new typed controller without adding it to the manager.
+//
+// Unlike NewTyped, the options are not defaulted from the manager's controller config.
+// Call options.DefaultFromConfig(mgr.GetControllerOptions()) to apply those defaults.
 //
 // The name must be unique as it is used to identify the controller in metrics and logs.
 func NewTypedUnmanaged[request comparable](name string, options TypedOptions[request]) (TypedController[request], error) {

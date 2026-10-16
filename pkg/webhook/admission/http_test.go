@@ -28,8 +28,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	admissionv1 "k8s.io/api/admission/v1"
 )
 
 var _ = Describe("Admission Webhooks", func() {
@@ -244,9 +242,9 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return Response{AdmissionResponse: admissionv1.AdmissionResponse{
+	return Response{
 		Allowed: true,
-	}}
+	}
 }
 
 type brokenWriter struct {

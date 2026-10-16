@@ -74,11 +74,9 @@ var _ = Describe("Fake client", func() {
 	BeforeEach(func() {
 		replicas := int32(1)
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "test-deployment",
-				Namespace:       "ns1",
-				ResourceVersion: trackerAddResourceVersion,
-			},
+			Name:            "test-deployment",
+			Namespace:       "ns1",
+			ResourceVersion: trackerAddResourceVersion,
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicas,
 				Strategy: appsv1.DeploymentStrategy{
@@ -87,24 +85,20 @@ var _ = Describe("Fake client", func() {
 			},
 		}
 		dep2 = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-deployment-2",
-				Namespace: "ns1",
-				Labels: map[string]string{
-					"test-label": "label-value",
-				},
-				ResourceVersion: trackerAddResourceVersion,
+			Name:      "test-deployment-2",
+			Namespace: "ns1",
+			Labels: map[string]string{
+				"test-label": "label-value",
 			},
+			ResourceVersion: trackerAddResourceVersion,
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicas,
 			},
 		}
 		cm = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "test-cm",
-				Namespace:       "ns2",
-				ResourceVersion: trackerAddResourceVersion,
-			},
+			Name:            "test-cm",
+			Namespace:       "ns2",
+			ResourceVersion: trackerAddResourceVersion,
 			Data: map[string]string{
 				"test-key": "test-value",
 			},
@@ -350,20 +344,16 @@ var _ = Describe("Fake client", func() {
 		It("should be able to retrieve objects by PartialObjectMetadata", func(ctx SpecContext) {
 			By("Creating a Resource")
 			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-				},
+				Name:      "foo",
+				Namespace: "bar",
 			}
 			err := cl.Create(ctx, secret)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Fetching the resource using a PartialObjectMeta")
 			partialObjMeta := &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "bar",
-				},
+				Name:      "foo",
+				Namespace: "bar",
 			}
 			partialObjMeta.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
 
@@ -377,16 +367,16 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Get an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
 			By("Creating an object of an unregistered type")
 			item := &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v9", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v9", Kind: "Image",
 			}
 			err := cl.Create(ctx, item)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Getting and the object")
 			item = &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v9", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v9", Kind: "Image",
 			}
 			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
 			Expect(err).ToNot(HaveOccurred())
@@ -394,7 +384,7 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to List an unregistered type using PartialObjectMetadata with ListKind", func(ctx SpecContext) {
 			list := &metav1.PartialObjectMetadataList{
-				TypeMeta: metav1.TypeMeta{APIVersion: "custom/v10", Kind: "ImageList"},
+				APIVersion: "custom/v10", Kind: "ImageList",
 			}
 			err := cl.List(ctx, list)
 			Expect(list.GroupVersionKind().GroupVersion().String()).To(Equal("custom/v10"))
@@ -404,7 +394,7 @@ var _ = Describe("Fake client", func() {
 
 		It("should be able to List an unregistered type using PartialObjectMetadata with Kind", func(ctx SpecContext) {
 			list := &metav1.PartialObjectMetadataList{
-				TypeMeta: metav1.TypeMeta{APIVersion: "custom/v11", Kind: "Image"},
+				APIVersion: "custom/v11", Kind: "Image",
 			}
 			err := cl.List(ctx, list)
 			Expect(err).ToNot(HaveOccurred())
@@ -415,8 +405,8 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Patch an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
 			By("Creating an object of an unregistered type")
 			item := &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v13", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v13", Kind: "Image",
 			}
 			err := cl.Create(ctx, item)
 			Expect(err).ToNot(HaveOccurred())
@@ -429,8 +419,8 @@ var _ = Describe("Fake client", func() {
 
 			By("Getting the object")
 			item = &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v13", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v13", Kind: "Image",
 			}
 			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
 			Expect(err).ToNot(HaveOccurred())
@@ -442,8 +432,8 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Delete an unregistered type using PartialObjectMetadata", func(ctx SpecContext) {
 			By("Creating an object of an unregistered type")
 			item := &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v14", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v14", Kind: "Image",
 			}
 			err := cl.Create(ctx, item)
 			Expect(err).ToNot(HaveOccurred())
@@ -454,8 +444,8 @@ var _ = Describe("Fake client", func() {
 
 			By("Getting the object")
 			item = &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v14", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v14", Kind: "Image",
 			}
 			err = cl.Get(ctx, client.ObjectKeyFromObject(item), item)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
@@ -464,15 +454,15 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Get an unregistered type that was initialized using PartialObjectMetadata", func(ctx SpecContext) {
 			By("Initializing the client with an object of an unregistered type")
 			item := &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v15", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v15", Kind: "Image",
 			}
 			cl := NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(item).Build()
 
 			By("Getting the object")
 			item = &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "my-item"},
-				TypeMeta:   metav1.TypeMeta{APIVersion: "custom/v15", Kind: "Image"},
+				Name:       "my-item",
+				APIVersion: "custom/v15", Kind: "Image",
 			}
 			err := cl.Get(ctx, client.ObjectKeyFromObject(item), item)
 			Expect(err).ToNot(HaveOccurred())
@@ -503,10 +493,8 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Create", func(ctx SpecContext) {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "new-test-cm",
-					Namespace: "ns2",
-				},
+				Name:      "new-test-cm",
+				Namespace: "ns2",
 			}
 			err := cl.Create(ctx, newcm)
 			Expect(err).ToNot(HaveOccurred())
@@ -526,11 +514,9 @@ var _ = Describe("Fake client", func() {
 		It("should error on create with set resourceVersion", func(ctx SpecContext) {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "new-test-cm",
-					Namespace:       "ns2",
-					ResourceVersion: "1",
-				},
+				Name:            "new-test-cm",
+				Namespace:       "ns2",
+				ResourceVersion: "1",
 			}
 			err := cl.Create(ctx, newcm)
 			Expect(apierrors.IsBadRequest(err)).To(BeTrue())
@@ -550,9 +536,7 @@ var _ = Describe("Fake client", func() {
 		It("should error on Create with empty Name", func(ctx SpecContext) {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "ns2",
-				},
+				Namespace: "ns2",
 			}
 			err := cl.Create(ctx, newcm)
 			Expect(err.Error()).To(Equal("ConfigMap \"\" is invalid: metadata.name: Required value: name is required"))
@@ -561,9 +545,7 @@ var _ = Describe("Fake client", func() {
 		It("should error on Update with empty Name", func(ctx SpecContext) {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "ns2",
-				},
+				Namespace: "ns2",
 			}
 			err := cl.Update(ctx, newcm)
 			Expect(err.Error()).To(Equal("ConfigMap \"\" is invalid: metadata.name: Required value: name is required"))
@@ -572,12 +554,10 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Create with GenerateName", func(ctx SpecContext) {
 			By("Creating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "new-test-cm",
-					Namespace:    "ns2",
-					Labels: map[string]string{
-						"test-label": "label-value",
-					},
+				GenerateName: "new-test-cm",
+				Namespace:    "ns2",
+				Labels: map[string]string{
+					"test-label": "label-value",
 				},
 			}
 			err := cl.Create(ctx, newcm)
@@ -602,10 +582,8 @@ var _ = Describe("Fake client", func() {
 			names := sets.New[string]()
 			for i := range n {
 				cm := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "this-generate-name-prefix-is-longer-than-max-generated-name-length-and-will-be-truncated-",
-						Namespace:    "ns2",
-					},
+					GenerateName: "this-generate-name-prefix-is-longer-than-max-generated-name-length-and-will-be-truncated-",
+					Namespace:    "ns2",
 				}
 				Expect(cl.Create(ctx, cm)).To(Succeed(), "create #%d failed", i)
 				Expect(cm.Name).NotTo(BeEmpty())
@@ -617,19 +595,15 @@ var _ = Describe("Fake client", func() {
 
 		It("should not retry AlreadyExists when Name is set explicitly", func(ctx SpecContext) {
 			cm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "explicit-name",
-					Namespace: "ns2",
-				},
+				Name:      "explicit-name",
+				Namespace: "ns2",
 			}
 			Expect(cl.Create(ctx, cm)).To(Succeed())
 
 			// Second create with the same explicit name must fail immediately.
 			cm2 := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "explicit-name",
-					Namespace: "ns2",
-				},
+				Name:      "explicit-name",
+				Namespace: "ns2",
 			}
 			err := cl.Create(ctx, cm2)
 			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
@@ -638,11 +612,9 @@ var _ = Describe("Fake client", func() {
 		It("should be able to Update", func(ctx SpecContext) {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-cm",
-					Namespace:       "ns2",
-					ResourceVersion: "",
-				},
+				Name:            "test-cm",
+				Namespace:       "ns2",
+				ResourceVersion: "",
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -665,10 +637,8 @@ var _ = Describe("Fake client", func() {
 		It("should allow updates with non-set ResourceVersion for a resource that allows unconditional updates", func(ctx SpecContext) {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-cm",
-					Namespace: "ns2",
-				},
+				Name:      "test-cm",
+				Namespace: "ns2",
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -691,21 +661,17 @@ var _ = Describe("Fake client", func() {
 		It("should allow patch when the patch sets RV to 'null'", func(ctx SpecContext) {
 			cl := NewClientBuilder().Build()
 			original := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "obj",
-					Namespace: "ns2",
-				}}
+				Name:      "obj",
+				Namespace: "ns2"}
 
 			err := cl.Create(ctx, original)
 			Expect(err).ToNot(HaveOccurred())
 
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      original.Name,
-					Namespace: original.Namespace,
-					Annotations: map[string]string{
-						"foo": "bar",
-					},
+				Name:      original.Name,
+				Namespace: original.Namespace,
+				Annotations: map[string]string{
+					"foo": "bar",
 				}}
 
 			Expect(cl.Patch(ctx, newObj, client.MergeFrom(original))).To(Succeed())
@@ -718,10 +684,8 @@ var _ = Describe("Fake client", func() {
 		It("should reject updates with non-set ResourceVersion for a resource that doesn't allow unconditional updates", func(ctx SpecContext) {
 			By("Creating a new binding")
 			binding := &corev1.Binding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-binding",
-					Namespace: "ns2",
-				},
+				Name:      "test-binding",
+				Namespace: "ns2",
 				Target: corev1.ObjectReference{
 					Kind:       "ConfigMap",
 					APIVersion: "v1",
@@ -733,10 +697,8 @@ var _ = Describe("Fake client", func() {
 
 			By("Updating the binding with a new resource lacking resource version")
 			newBinding := &corev1.Binding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      binding.Name,
-					Namespace: binding.Namespace,
-				},
+				Name:      binding.Name,
+				Namespace: binding.Namespace,
 				Target: corev1.ObjectReference{
 					Namespace: binding.Namespace,
 					Name:      "blue",
@@ -748,11 +710,9 @@ var _ = Describe("Fake client", func() {
 		It("should allow create on update for a resource that allows create on update", func(ctx SpecContext) {
 			By("Creating a new lease with update")
 			lease := &coordinationv1.Lease{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-lease",
-					Namespace: "ns2",
-				},
-				Spec: coordinationv1.LeaseSpec{},
+				Name:      "test-lease",
+				Namespace: "ns2",
+				Spec:      coordinationv1.LeaseSpec{},
 			}
 			Expect(cl.Create(ctx, lease)).To(Succeed())
 
@@ -770,10 +730,8 @@ var _ = Describe("Fake client", func() {
 		It("should reject create on update for a resource that does not allow create on update", func(ctx SpecContext) {
 			By("Attemping to create a new configmap with update")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "different-test-cm",
-					Namespace: "ns2",
-				},
+				Name:      "different-test-cm",
+				Namespace: "ns2",
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -784,11 +742,9 @@ var _ = Describe("Fake client", func() {
 		It("should reject updates with non-matching ResourceVersion", func(ctx SpecContext) {
 			By("Updating a new configmap")
 			newcm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-cm",
-					Namespace:       "ns2",
-					ResourceVersion: "1",
-				},
+				Name:            "test-cm",
+				Namespace:       "ns2",
+				ResourceVersion: "1",
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -884,10 +840,9 @@ var _ = Describe("Fake client", func() {
 			Expect(cl.Apply(ctx, cm)).To(Succeed())
 
 			By("Deleting the object")
-			obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			obj := &corev1.ConfigMap{
 				Name:      *cm.Name,
-				Namespace: *cm.Namespace,
-			}}
+				Namespace: *cm.Namespace}
 			Expect(cl.Delete(ctx, obj)).NotTo(HaveOccurred())
 
 			By("Getting the object")
@@ -911,11 +866,9 @@ var _ = Describe("Fake client", func() {
 			}
 			By("Updating a new object")
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       namespacedName.Name,
-					Namespace:  namespacedName.Namespace,
-					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
-				},
+				Name:       namespacedName.Name,
+				Namespace:  namespacedName.Namespace,
+				Finalizers: []string{"finalizers.sigs.k8s.io/test"},
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -951,10 +904,8 @@ var _ = Describe("Fake client", func() {
 			}
 			By("Updating a new object")
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      namespacedName.Name,
-					Namespace: namespacedName.Namespace,
-				},
+				Name:      namespacedName.Name,
+				Namespace: namespacedName.Namespace,
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1012,11 +963,9 @@ var _ = Describe("Fake client", func() {
 				}
 				By("Creating a new object")
 				newObj := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       namespacedName.Name,
-						Namespace:  namespacedName.Namespace,
-						Finalizers: []string{"finalizers.sigs.k8s.io/test"},
-					},
+					Name:       namespacedName.Name,
+					Namespace:  namespacedName.Namespace,
+					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
 					Data: map[string]string{
 						"test-key": "new-value",
 					},
@@ -1052,7 +1001,7 @@ var _ = Describe("Fake client", func() {
 				// in the outer routine, sleep to make sure this is always true
 				time.Sleep(100 * time.Millisecond)
 
-				err := cl.Create(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "for-watch"}})
+				err := cl.Create(ctx, &corev1.Service{Namespace: "default", Name: "for-watch"})
 				Expect(err).ToNot(HaveOccurred())
 			}()
 
@@ -1069,10 +1018,8 @@ var _ = Describe("Fake client", func() {
 			It("should not create a new object", func(ctx SpecContext) {
 				By("Creating a new configmap with DryRun")
 				newcm := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "new-test-cm",
-						Namespace: "ns2",
-					},
+					Name:      "new-test-cm",
+					Namespace: "ns2",
 				}
 				err := cl.Create(ctx, newcm, client.DryRunAll)
 				Expect(err).ToNot(HaveOccurred())
@@ -1092,11 +1039,9 @@ var _ = Describe("Fake client", func() {
 			It("should not Update the object", func(ctx SpecContext) {
 				By("Updating a new configmap with DryRun")
 				newcm := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "test-cm",
-						Namespace:       "ns2",
-						ResourceVersion: "1",
-					},
+					Name:            "test-cm",
+					Namespace:       "ns2",
+					ResourceVersion: "1",
 					Data: map[string]string{
 						"test-key": "new-value",
 					},
@@ -1171,12 +1116,10 @@ var _ = Describe("Fake client", func() {
 			By("Creating a new object")
 			now := metav1.Now()
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              namespacedName.Name,
-					Namespace:         namespacedName.Namespace,
-					Finalizers:        []string{"finalizers.sigs.k8s.io/test"},
-					DeletionTimestamp: &now,
-				},
+				Name:              namespacedName.Name,
+				Namespace:         namespacedName.Namespace,
+				Finalizers:        []string{"finalizers.sigs.k8s.io/test"},
+				DeletionTimestamp: &now,
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1201,11 +1144,9 @@ var _ = Describe("Fake client", func() {
 			By("Build with a new object without finalizer")
 			now := metav1.Now()
 			obj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              namespacedName.Name,
-					Namespace:         namespacedName.Namespace,
-					DeletionTimestamp: &now,
-				},
+				Name:              namespacedName.Name,
+				Namespace:         namespacedName.Namespace,
+				DeletionTimestamp: &now,
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1215,12 +1156,10 @@ var _ = Describe("Fake client", func() {
 
 			By("Build with a new object with finalizer")
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              namespacedName.Name,
-					Namespace:         namespacedName.Namespace,
-					Finalizers:        []string{"finalizers.sigs.k8s.io/test"},
-					DeletionTimestamp: &now,
-				},
+				Name:              namespacedName.Name,
+				Namespace:         namespacedName.Namespace,
+				Finalizers:        []string{"finalizers.sigs.k8s.io/test"},
+				DeletionTimestamp: &now,
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1243,11 +1182,9 @@ var _ = Describe("Fake client", func() {
 			By("Creating a new object")
 			now := metav1.Now()
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       namespacedName.Name,
-					Namespace:  namespacedName.Namespace,
-					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
-				},
+				Name:       namespacedName.Name,
+				Namespace:  namespacedName.Namespace,
+				Finalizers: []string{"finalizers.sigs.k8s.io/test"},
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1257,12 +1194,10 @@ var _ = Describe("Fake client", func() {
 
 			By("Add a deletionTimestamp")
 			obj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              namespacedName.Name,
-					Namespace:         namespacedName.Namespace,
-					Finalizers:        []string{},
-					DeletionTimestamp: &now,
-				},
+				Name:              namespacedName.Name,
+				Namespace:         namespacedName.Namespace,
+				Finalizers:        []string{},
+				DeletionTimestamp: &now,
 			}
 			err = cl.Patch(ctx, obj, client.MergeFrom(newObj))
 			Expect(err).To(HaveOccurred())
@@ -1286,11 +1221,9 @@ var _ = Describe("Fake client", func() {
 
 			By("Removing deletionTimestamp")
 			newObj = &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              namespacedName.Name,
-					Namespace:         namespacedName.Namespace,
-					DeletionTimestamp: nil,
-				},
+				Name:              namespacedName.Name,
+				Namespace:         namespacedName.Namespace,
+				DeletionTimestamp: nil,
 			}
 			err = cl.Patch(ctx, newObj, client.MergeFrom(obj))
 			Expect(err).To(HaveOccurred())
@@ -1304,11 +1237,9 @@ var _ = Describe("Fake client", func() {
 			}
 			By("Creating a new object")
 			newObj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       namespacedName.Name,
-					Namespace:  namespacedName.Namespace,
-					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
-				},
+				Name:       namespacedName.Name,
+				Namespace:  namespacedName.Namespace,
+				Finalizers: []string{"finalizers.sigs.k8s.io/test"},
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1322,11 +1253,9 @@ var _ = Describe("Fake client", func() {
 
 			By("Removing the finalizer")
 			obj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       namespacedName.Name,
-					Namespace:  namespacedName.Namespace,
-					Finalizers: []string{},
-				},
+				Name:       namespacedName.Name,
+				Namespace:  namespacedName.Namespace,
+				Finalizers: []string{},
 			}
 			err = cl.Patch(ctx, obj, client.MergeFrom(newObj))
 			Expect(err).ToNot(HaveOccurred())
@@ -1344,11 +1273,9 @@ var _ = Describe("Fake client", func() {
 			}
 			By("Creating a new object")
 			obj := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       namespacedName.Name,
-					Namespace:  namespacedName.Namespace,
-					Finalizers: []string{"finalizers.sigs.k8s.io/test"},
-				},
+				Name:       namespacedName.Name,
+				Namespace:  namespacedName.Namespace,
+				Finalizers: []string{"finalizers.sigs.k8s.io/test"},
 				Data: map[string]string{
 					"test-key": "new-value",
 				},
@@ -1622,23 +1549,21 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should set the ResourceVersion to 999 when adding an object to the tracker", func(ctx SpecContext) {
-		cl := NewClientBuilder().WithObjects(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "cm"}}).Build()
+		cl := NewClientBuilder().WithObjects(&corev1.Secret{Name: "cm"}).Build()
 
 		retrieved := &corev1.Secret{}
 		Expect(cl.Get(ctx, types.NamespacedName{Name: "cm"}, retrieved)).To(Succeed())
 
 		reference := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "cm",
-				ResourceVersion: "999",
-			},
+			Name:            "cm",
+			ResourceVersion: "999",
 		}
 		Expect(retrieved).To(Equal(reference))
 	})
 
 	It("should use a per-object ResourceVersion counter by default", func(ctx SpecContext) {
 		cl := NewClientBuilder().
-			WithObjects(&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "ns1"}}).
+			WithObjects(&appsv1.Deployment{Name: "test-deployment", Namespace: "ns1"}).
 			Build()
 
 		By("Getting the deployment that was added to the tracker")
@@ -1647,7 +1572,7 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.ResourceVersion).To(Equal(trackerAddResourceVersion))
 
 		By("Creating a configMap")
-		newCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test-cm", Namespace: "ns2"}}
+		newCM := &corev1.ConfigMap{Name: "test-cm", Namespace: "ns2"}
 		Expect(cl.Create(ctx, newCM)).To(Succeed())
 		Expect(newCM.ResourceVersion).To(Equal("1"))
 
@@ -1660,7 +1585,7 @@ var _ = Describe("Fake client", func() {
 	It("should use a single global ResourceVersion counter when WithGlobalResourceVersionCounter is used", func(ctx SpecContext) {
 		cl := NewClientBuilder().
 			WithGlobalResourceVersionCounter().
-			WithObjects(&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "ns1"}}).
+			WithObjects(&appsv1.Deployment{Name: "test-deployment", Namespace: "ns1"}).
 			Build()
 
 		By("Getting the deployment that was added to the tracker")
@@ -1669,7 +1594,7 @@ var _ = Describe("Fake client", func() {
 		Expect(obj.ResourceVersion).To(Equal("1"))
 
 		By("Creating a configMap")
-		newCM := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test-cm", Namespace: "ns2"}}
+		newCM := &corev1.ConfigMap{Name: "test-cm", Namespace: "ns2"}
 		Expect(cl.Create(ctx, newCM)).To(Succeed())
 		Expect(newCM.ResourceVersion).To(Equal("2"))
 
@@ -1705,14 +1630,12 @@ var _ = Describe("Fake client", func() {
 		}
 
 		dep3 := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-deployment-3",
-				Namespace: "ns1",
-				Labels: map[string]string{
-					"test-label": "label-value",
-				},
-				ResourceVersion: trackerAddResourceVersion,
+			Name:      "test-deployment-3",
+			Namespace: "ns1",
+			Labels: map[string]string{
+				"test-label": "label-value",
 			},
+			ResourceVersion: trackerAddResourceVersion,
 		}
 
 		_, err = clientSet.AppsV1().Deployments("ns1").Create(ctx, dep3, metav1.CreateOptions{})
@@ -1726,9 +1649,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not change the status of typed objects that have a status subresource on update", func(ctx SpecContext) {
 		obj := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "pod",
-			},
+			Name: "pod",
 		}
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 
@@ -1742,10 +1663,8 @@ var _ = Describe("Fake client", func() {
 
 	It("should return a conflict error when an incorrect RV is used on status update", func(ctx SpecContext) {
 		obj := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "node",
-				ResourceVersion: trackerAddResourceVersion,
-			},
+			Name:            "node",
+			ResourceVersion: trackerAddResourceVersion,
 		}
 		cl := NewClientBuilder().WithStatusSubresource(obj).WithObjects(obj).Build()
 
@@ -1757,9 +1676,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not change non-status field of typed objects that have a status subresource on status update", func(ctx SpecContext) {
 		obj := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -1783,7 +1700,7 @@ var _ = Describe("Fake client", func() {
 		obj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cl.Status().Update(ctx, obj)).NotTo(HaveOccurred())
 
-		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		actual := &corev1.Node{Name: obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
 
 		objOriginal.APIVersion = actual.APIVersion
@@ -1795,9 +1712,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should be able to update an object after updating an object's status", func(ctx SpecContext) {
 		obj := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -1821,7 +1736,7 @@ var _ = Describe("Fake client", func() {
 		}
 		Expect(cl.Update(ctx, obj)).NotTo(HaveOccurred())
 
-		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		actual := &corev1.Node{Name: obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
 
 		expectedObj.APIVersion = actual.APIVersion
@@ -1833,9 +1748,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should be able to update an object's status after updating an object", func(ctx SpecContext) {
 		obj := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -1860,7 +1773,7 @@ var _ = Describe("Fake client", func() {
 		obj.Status.NodeInfo.MachineID = machineIDFromStatusUpdate
 		Expect(cl.Status().Update(ctx, obj)).NotTo(HaveOccurred())
 
-		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		actual := &corev1.Node{Name: obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
 
 		expectedObj.APIVersion = actual.APIVersion
@@ -1872,9 +1785,7 @@ var _ = Describe("Fake client", func() {
 
 	It("Should only override status fields of typed objects that have a status subresource on status update", func(ctx SpecContext) {
 		obj := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -1890,7 +1801,7 @@ var _ = Describe("Fake client", func() {
 		obj.Status.Phase = corev1.NodeRunning
 		Expect(cl.Status().Update(ctx, obj)).NotTo(HaveOccurred())
 
-		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		actual := &corev1.Node{Name: obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
 
 		objOriginal.APIVersion = actual.APIVersion
@@ -1903,9 +1814,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should be able to change typed objects that have a scale subresource on patch", func(ctx SpecContext) {
 		obj := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "deploy",
-			},
+			Name: "deploy",
 		}
 		cl := NewClientBuilder().WithObjects(obj).Build()
 		objOriginal := obj.DeepCopy()
@@ -1913,7 +1822,7 @@ var _ = Describe("Fake client", func() {
 		patch := []byte(fmt.Sprintf(`{"spec":{"replicas":%d}}`, 2))
 		Expect(cl.SubResource("scale").Patch(ctx, obj, client.RawPatch(types.MergePatchType, patch))).NotTo(HaveOccurred())
 
-		actual := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		actual := &appsv1.Deployment{Name: obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).To(Succeed())
 
 		objOriginal.APIVersion = actual.APIVersion
@@ -1925,9 +1834,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not change the status of typed objects that have a status subresource on patch", func(ctx SpecContext) {
 		obj := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 		}
 		Expect(cl.Create(ctx, obj)).To(Succeed())
 		original := obj.DeepCopy()
@@ -1942,9 +1849,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not change non-status field of typed objects that have a status subresource on status patch", func(ctx SpecContext) {
 		obj := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -1956,7 +1861,7 @@ var _ = Describe("Fake client", func() {
 		obj.Status.NodeInfo.MachineID = "machine-id"
 		Expect(cl.Status().Patch(ctx, obj, client.MergeFrom(objOriginal))).NotTo(HaveOccurred())
 
-		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: obj.Name}}
+		actual := &corev1.Node{Name: obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).NotTo(HaveOccurred())
 
 		objOriginal.APIVersion = actual.APIVersion
@@ -1976,7 +1881,7 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithStatusSubresource(&corev1.Pod{}).Build()
 		Expect(cl.Apply(ctx, obj, client.FieldOwner("test"))).To(Succeed())
 
-		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: *obj.Name}}
+		p := &corev1.Pod{Name: *obj.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(p), p)).To(Succeed())
 
 		Expect(p.Status).To(BeComparableTo(corev1.PodStatus{}))
@@ -1985,7 +1890,7 @@ var _ = Describe("Fake client", func() {
 	It("should not change the status of objects with status subresource when updating through apply ", func(ctx SpecContext) {
 
 		cl := NewClientBuilder().WithStatusSubresource(&corev1.Pod{}).Build()
-		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod"}}
+		pod := &corev1.Pod{Name: "pod"}
 		Expect(cl.Create(ctx, pod)).NotTo(HaveOccurred())
 
 		obj := corev1applyconfigurations.
@@ -2002,9 +1907,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should only change status on status apply", func(ctx SpecContext) {
 		initial := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -2017,7 +1920,7 @@ var _ = Describe("Fake client", func() {
 
 		Expect(cl.Status().Apply(ctx, ac, client.FieldOwner("test-owner"))).To(Succeed())
 
-		actual := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: initial.Name}}
+		actual := &corev1.Node{Name: initial.Name}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(actual), actual)).To(Succeed())
 
 		initial.ResourceVersion = actual.ResourceVersion
@@ -2043,14 +1946,10 @@ var _ = Describe("Fake client", func() {
 		addChaosPodToScheme(testScheme)
 
 		customResource := &ChaosPod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "chaosapps.metamagical.io/v1",
-				Kind:       "ChaosPod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-chaospod",
-				Namespace: "default",
-			},
+			APIVersion: "chaosapps.metamagical.io/v1",
+			Kind:       "ChaosPod",
+			Name:       "test-chaospod",
+			Namespace:  "default",
 			Spec: ChaosPodSpec{
 				Image: "test-image",
 			},
@@ -2073,14 +1972,10 @@ var _ = Describe("Fake client", func() {
 
 		// Verify the status was applied
 		finalResource := &ChaosPod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "chaosapps.metamagical.io/v1",
-				Kind:       "ChaosPod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-chaospod",
-				Namespace: "default",
-			},
+			APIVersion: "chaosapps.metamagical.io/v1",
+			Kind:       "ChaosPod",
+			Name:       "test-chaospod",
+			Namespace:  "default",
 		}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(finalResource), finalResource)).To(Succeed())
 		Expect(finalResource.Status.Phase).To(Equal("Ready"))
@@ -2091,14 +1986,10 @@ var _ = Describe("Fake client", func() {
 		addChaosPodToScheme(testScheme)
 
 		customResource := &ChaosPod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "chaosapps.metamagical.io/v1",
-				Kind:       "ChaosPod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-chaospod",
-				Namespace: "default",
-			},
+			APIVersion: "chaosapps.metamagical.io/v1",
+			Kind:       "ChaosPod",
+			Name:       "test-chaospod",
+			Namespace:  "default",
 			Spec: ChaosPodSpec{
 				Image: "test-image",
 			},
@@ -2124,9 +2015,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not be able to manually update the fieldManager through a status update", func(ctx SpecContext) {
 		node := &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node",
-			},
+			Name: "node",
 			Spec: corev1.NodeSpec{
 				PodCIDR: "old-cidr",
 			},
@@ -2155,9 +2044,7 @@ var _ = Describe("Fake client", func() {
 		}
 
 		obj := &WithSchemalessSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "a-foo",
-			},
+			Name: "a-foo",
 			Spec: spec,
 		}
 		cl := NewClientBuilder().WithScheme(scheme).WithStatusSubresource(obj).WithObjects(obj).Build()
@@ -2179,9 +2066,7 @@ var _ = Describe("Fake client", func() {
 		}
 
 		obj := &WithSchemalessSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "a-foo",
-			},
+			Name: "a-foo",
 			Spec: spec,
 		}
 		cl := NewClientBuilder().WithScheme(scheme).WithStatusSubresource(obj).WithObjects(obj).Build()
@@ -2200,7 +2085,7 @@ var _ = Describe("Fake client", func() {
 
 		c := NewClientBuilder().WithScheme(scheme).Build()
 
-		object := &EmbeddedPointerStructCRD{ObjectMeta: metav1.ObjectMeta{Name: "eps"}}
+		object := &EmbeddedPointerStructCRD{Name: "eps"}
 		Expect(c.Create(ctx, object)).NotTo(HaveOccurred())
 	})
 
@@ -2250,9 +2135,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not change the status of known unstructured objects that have a status subresource on update", func(ctx SpecContext) {
 		obj := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "pod",
-			},
+			Name: "pod",
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyAlways,
 			},
@@ -2287,9 +2170,7 @@ var _ = Describe("Fake client", func() {
 
 	It("should not change non-status field of known unstructured objects that have a status subresource on status update", func(ctx SpecContext) {
 		obj := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "pod",
-			},
+			Name: "pod",
 			Spec: corev1.PodSpec{
 				RestartPolicy: corev1.RestartPolicyAlways,
 			},
@@ -2384,7 +2265,7 @@ var _ = Describe("Fake client", func() {
 	}
 	for _, tp := range evictionTypes {
 		It("should delete a pod through the eviction subresource", func(ctx SpecContext) {
-			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+			pod := &corev1.Pod{Name: "foo"}
 
 			cl := NewClientBuilder().WithObjects(pod).Build()
 
@@ -2398,13 +2279,13 @@ var _ = Describe("Fake client", func() {
 		It("should return not found when attempting to evict a pod that doesn't exist", func(ctx SpecContext) {
 			cl := NewClientBuilder().Build()
 
-			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+			pod := &corev1.Pod{Name: "foo"}
 			err := cl.SubResource("eviction").Create(ctx, pod, tp)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("should return not found when attempting to evict something other than a pod", func(ctx SpecContext) {
-			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+			ns := &corev1.Namespace{Name: "foo"}
 			cl := NewClientBuilder().WithObjects(ns).Build()
 
 			err := cl.SubResource("eviction").Create(ctx, ns, tp)
@@ -2426,7 +2307,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should create a ServiceAccount token through the token subresource", func(ctx SpecContext) {
-		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		sa := &corev1.ServiceAccount{Name: "foo"}
 		cl := NewClientBuilder().WithObjects(sa).Build()
 
 		tokenRequest := &authenticationv1.TokenRequest{}
@@ -2438,7 +2319,7 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should return not found when creating a token for a ServiceAccount that doesn't exist", func(ctx SpecContext) {
-		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		sa := &corev1.ServiceAccount{Name: "foo"}
 		cl := NewClientBuilder().Build()
 
 		err := cl.SubResource("token").Create(ctx, sa, &authenticationv1.TokenRequest{})
@@ -2461,10 +2342,9 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should leave typemeta empty on typed get", func(ctx SpecContext) {
-		cl := NewClientBuilder().WithObjects(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		cl := NewClientBuilder().WithObjects(&corev1.Pod{
 			Namespace: "default",
-			Name:      "foo",
-		}}).Build()
+			Name:      "foo"}).Build()
 
 		var pod corev1.Pod
 		Expect(cl.Get(ctx, client.ObjectKey{Namespace: "default", Name: "foo"}, &pod)).NotTo(HaveOccurred())
@@ -2473,10 +2353,9 @@ var _ = Describe("Fake client", func() {
 	})
 
 	It("should leave typemeta empty on typed list", func(ctx SpecContext) {
-		cl := NewClientBuilder().WithObjects(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		cl := NewClientBuilder().WithObjects(&corev1.Pod{
 			Namespace: "default",
-			Name:      "foo",
-		}}).Build()
+			Name:      "foo"}).Build()
 
 		var podList corev1.PodList
 		Expect(cl.List(ctx, &podList)).NotTo(HaveOccurred())
@@ -2489,10 +2368,8 @@ var _ = Describe("Fake client", func() {
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "foo",
-				ResourceVersion: "0",
-			},
+			Name:            "foo",
+			ResourceVersion: "0",
 		}
 		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
 
@@ -2523,10 +2400,8 @@ var _ = Describe("Fake client", func() {
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "foo",
-				ResourceVersion: "0",
-			},
+			Name:            "foo",
+			ResourceVersion: "0",
 		}
 		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
 		wg := sync.WaitGroup{}
@@ -2551,10 +2426,8 @@ var _ = Describe("Fake client", func() {
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "foo",
-				ResourceVersion: "0",
-			},
+			Name:            "foo",
+			ResourceVersion: "0",
 		}
 		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
 
@@ -2593,9 +2466,7 @@ var _ = Describe("Fake client", func() {
 
 		for i := range tries {
 			obj := &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strconv.Itoa(i),
-				},
+				Name: strconv.Itoa(i),
 			}
 			go func() {
 				defer wg.Done()
@@ -2633,9 +2504,7 @@ var _ = Describe("Fake client", func() {
 
 		for i := range tries {
 			obj := &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strconv.Itoa(i),
-				},
+				Name: strconv.Itoa(i),
 			}
 			Expect(cl.Create(ctx, obj.DeepCopy())).To(Succeed())
 
@@ -2671,18 +2540,14 @@ var _ = Describe("Fake client", func() {
 
 		for i := range objects {
 			obj := &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strconv.Itoa(i),
-				},
+				Name: strconv.Itoa(i),
 			}
 			Expect(cl.Create(ctx, obj.DeepCopy())).To(Succeed())
 		}
 
 		for i := range objects {
 			obj := &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strconv.Itoa(i),
-				},
+				Name: strconv.Itoa(i),
 			}
 
 			go func() {
@@ -2711,9 +2576,7 @@ var _ = Describe("Fake client", func() {
 		const tries = 5000
 		for i := range tries {
 			dep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strconv.Itoa(i),
-				},
+				Name: strconv.Itoa(i),
 			}
 			Expect(cl.Create(ctx, dep)).To(Succeed())
 
@@ -2764,9 +2627,7 @@ var _ = Describe("Fake client", func() {
 		Expect(apiextensions.AddToScheme(scheme)).To(Succeed())
 
 		obj := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 		}
 		cl := NewClientBuilder().WithScheme(scheme).WithObjects(obj).Build()
 
@@ -2884,9 +2745,7 @@ var _ = Describe("Fake client", func() {
 
 	It("disallows scale subresources on non-existing objects", func(ctx SpecContext) {
 		obj := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 			Spec: appsv1.DeploymentSpec{
 				Replicas: new(int32(2)),
 			},
@@ -2904,13 +2763,9 @@ var _ = Describe("Fake client", func() {
 
 	It("clears typemeta from structured objects on create", func(ctx SpecContext) {
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
+			Name:       "foo",
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
 		}
 		cl := NewClientBuilder().Build()
 		Expect(cl.Create(ctx, obj)).To(Succeed())
@@ -2919,13 +2774,9 @@ var _ = Describe("Fake client", func() {
 
 	It("clears typemeta from structured objects on update", func(ctx SpecContext) {
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
+			Name:       "foo",
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
 		}
 		cl := NewClientBuilder().WithObjects(obj).Build()
 		Expect(cl.Update(ctx, obj)).To(Succeed())
@@ -2934,9 +2785,7 @@ var _ = Describe("Fake client", func() {
 
 	It("clears typemeta from structured objects on patch", func(ctx SpecContext) {
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 		}
 		cl := NewClientBuilder().WithObjects(obj).Build()
 		original := obj.DeepCopy()
@@ -2950,13 +2799,9 @@ var _ = Describe("Fake client", func() {
 
 	It("clears typemeta from structured objects on get", func(ctx SpecContext) {
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
+			Name:       "foo",
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
 		}
 		cl := NewClientBuilder().WithObjects(obj).Build()
 		target := &corev1.ConfigMap{}
@@ -2966,20 +2811,14 @@ var _ = Describe("Fake client", func() {
 
 	It("clears typemeta from structured objects on list", func(ctx SpecContext) {
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
+			Name:       "foo",
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
 		}
 		cl := NewClientBuilder().WithObjects(obj).Build()
 		target := &corev1.ConfigMapList{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
 		}
 		Expect(cl.List(ctx, target)).To(Succeed())
 		Expect(target.TypeMeta).To(Equal(metav1.TypeMeta{}))
@@ -3007,31 +2846,24 @@ var _ = Describe("Fake client", func() {
 
 		meta := func() *metav1.PartialObjectMetadata {
 			return &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "foo",
-					Namespace: "default",
-				},
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "custom/v1",
-					Kind:       "Version",
-				},
+				Name:       "foo",
+				Namespace:  "default",
+				APIVersion: "custom/v1",
+				Kind:       "Version",
 			}
 		}
 		metaList := func() *metav1.PartialObjectMetadataList {
 			return &metav1.PartialObjectMetadataList{
-				TypeMeta: metav1.TypeMeta{
 
-					APIVersion: "custom/v1",
-					Kind:       "Version",
-				},
+				APIVersion: "custom/v1",
+				Kind:       "Version",
 			}
 		}
 
 		pod := func() *corev1.Pod {
-			return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			return &corev1.Pod{
 				Name:      "foo",
-				Namespace: "default",
-			}}
+				Namespace: "default"}
 		}
 
 		ops := []func(){
@@ -3154,7 +2986,7 @@ var _ = Describe("Fake client", func() {
 
 		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
-		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		cm := &corev1.ConfigMap{Name: "foo"}
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
@@ -3216,7 +3048,7 @@ var _ = Describe("Fake client", func() {
 
 		Expect(cl.Patch(ctx, obj, client.Apply, client.FieldOwner("foo"))).To(Succeed()) //nolint:staticcheck // will be removed once client.Apply is removed
 
-		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		cm := &corev1.ConfigMap{Name: "foo"}
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(Equal(map[string]string{"some": "data"}))
@@ -3231,10 +3063,8 @@ var _ = Describe("Fake client", func() {
 	It("returns managedFields if configured to do so", func(ctx SpecContext) {
 		cl := NewClientBuilder().WithReturnManagedFields().Build()
 		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "some-cm",
-				Namespace: "default",
-			},
+			Name:      "some-cm",
+			Namespace: "default",
 			Data: map[string]string{
 				"initial": "data",
 			},
@@ -3303,7 +3133,7 @@ var _ = Describe("Fake client", func() {
 
 		Expect(cl.Apply(ctx, obj, &client.ApplyOptions{FieldManager: "test-manager"})).To(Succeed())
 
-		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+		cm := &corev1.ConfigMap{Name: "foo", Namespace: "default"}
 
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
 		Expect(cm.Data).To(BeComparableTo(map[string]string{"some": "data"}))
@@ -3433,8 +3263,8 @@ var _ = Describe("Fake client", func() {
 		)
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"},
-			Data:       map[string]string{"method": "create"},
+			Namespace: "default", Name: "foo",
+			Data: map[string]string{"method": "create"},
 		}
 		Expect(cl.Create(ctx, obj)).NotTo(HaveOccurred())
 
@@ -3466,7 +3296,7 @@ var _ = Describe("Fake client", func() {
 			owner,
 		)
 
-		obj := &corev1.Event{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+		obj := &corev1.Event{Name: "foo"}
 		Expect(cl.Update(ctx, obj, client.FieldOwner(owner))).NotTo(HaveOccurred())
 		for _, f := range obj.ManagedFields {
 			Expect(f.Manager).To(BeEquivalentTo(owner))
@@ -3478,8 +3308,8 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithReturnManagedFields().Build()
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Namespace: "default"},
-			Data:       map[string]string{"k": "v"},
+			Name: "cm-1", Namespace: "default",
+			Data: map[string]string{"k": "v"},
 		}
 		Expect(cl.Create(ctx, obj, client.FieldOwner("initial-manager"))).To(Succeed())
 
@@ -3506,8 +3336,8 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithReturnManagedFields().Build()
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Namespace: "default"},
-			Data:       map[string]string{"k": "v"},
+			Name: "cm-1", Namespace: "default",
+			Data: map[string]string{"k": "v"},
 		}
 		Expect(cl.Create(ctx, obj, client.FieldOwner("initial-manager"))).To(Succeed())
 
@@ -3530,8 +3360,8 @@ var _ = Describe("Fake client", func() {
 		cl := NewClientBuilder().WithReturnManagedFields().Build()
 
 		obj := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: "cm-1", Namespace: "default"},
-			Data:       map[string]string{"k": "v"},
+			Name: "cm-1", Namespace: "default",
+			Data: map[string]string{"k": "v"},
 		}
 		Expect(cl.Create(ctx, obj, client.FieldOwner("initial-manager"))).To(Succeed())
 
@@ -3555,28 +3385,25 @@ var _ = Describe("Fake client", func() {
 	It("does not change the object's managed fields when they are set on a scale update", func(ctx SpecContext) {
 		cl := NewClientBuilder().WithReturnManagedFields().Build()
 
-		dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+		dep := &appsv1.Deployment{
 			Name:      "dep",
 			Namespace: "default",
-			Labels:    map[string]string{"app": "dep"},
-		}}
+			Labels:    map[string]string{"app": "dep"}}
 		Expect(cl.Create(ctx, dep, client.FieldOwner("dep-manager"))).To(Succeed())
 
 		before := &appsv1.Deployment{}
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(dep), before)).To(Succeed())
 
 		scale := &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      dep.Name,
-				Namespace: dep.Namespace,
-				ManagedFields: []metav1.ManagedFieldsEntry{{
-					Manager:    "sneaky-manager",
-					Operation:  metav1.ManagedFieldsOperationUpdate,
-					APIVersion: "autoscaling/v1",
-					FieldsType: "FieldsV1",
-					FieldsV1:   metav1.NewFieldsV1(`{"f:spec":{"f:replicas":{}}}`),
-				}},
-			},
+			Name:      dep.Name,
+			Namespace: dep.Namespace,
+			ManagedFields: []metav1.ManagedFieldsEntry{{
+				Manager:    "sneaky-manager",
+				Operation:  metav1.ManagedFieldsOperationUpdate,
+				APIVersion: "autoscaling/v1",
+				FieldsType: "FieldsV1",
+				FieldsV1:   metav1.NewFieldsV1(`{"f:spec":{"f:replicas":{}}}`),
+			}},
 			Spec: autoscalingv1.ScaleSpec{Replicas: 3},
 		}
 		Expect(cl.SubResource("scale").Update(ctx, before, client.WithSubResourceBody(scale), client.FieldOwner("scale-manager"))).To(Succeed())
@@ -3672,7 +3499,7 @@ var _ = Describe("Fake client", func() {
 		fieldV1, err := json.Marshal(fieldV1Map)
 		Expect(err).NotTo(HaveOccurred())
 
-		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		obj := &corev1.ConfigMap{
 			Name:      "cm-1",
 			Namespace: "default",
 			ManagedFields: []metav1.ManagedFieldsEntry{{
@@ -3680,8 +3507,7 @@ var _ = Describe("Fake client", func() {
 				Operation:  metav1.ManagedFieldsOperationUpdate,
 				FieldsType: "FieldsV1",
 				FieldsV1:   metav1.NewFieldsV1(string(fieldV1)),
-			}},
-		}}
+			}}}
 
 		Expect(func() {
 			NewClientBuilder().WithObjects(obj).Build()
@@ -3700,7 +3526,7 @@ var _ = Describe("Fake client", func() {
 		fieldV1, err := json.Marshal(fieldV1Map)
 		Expect(err).NotTo(HaveOccurred())
 
-		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		obj := &corev1.ConfigMap{
 			Name:      "cm-1",
 			Namespace: "default",
 			ManagedFields: []metav1.ManagedFieldsEntry{{
@@ -3709,8 +3535,7 @@ var _ = Describe("Fake client", func() {
 				FieldsType: "FieldsV1",
 				FieldsV1:   metav1.NewFieldsV1(string(fieldV1)),
 				APIVersion: "v1",
-			}},
-		}}
+			}}}
 
 		NewClientBuilder().WithObjects(obj).Build()
 	})
@@ -3727,7 +3552,7 @@ var _ = Describe("Fake client", func() {
 		fieldV1, err := json.Marshal(fieldV1Map)
 		Expect(err).NotTo(HaveOccurred())
 
-		obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		obj := &corev1.ConfigMap{
 			Name:      "cm-1",
 			Namespace: "default",
 			ManagedFields: []metav1.ManagedFieldsEntry{{
@@ -3735,8 +3560,7 @@ var _ = Describe("Fake client", func() {
 				Operation:  metav1.ManagedFieldsOperationUpdate,
 				FieldsType: "FieldsV1",
 				FieldsV1:   metav1.NewFieldsV1(string(fieldV1)),
-			}},
-		}}
+			}}}
 
 		NewClientBuilder().
 			WithObjectTracker(testing.NewObjectTracker(
@@ -3749,33 +3573,25 @@ var _ = Describe("Fake client", func() {
 
 	scalableObjs := []client.Object{
 		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 			Spec: appsv1.DeploymentSpec{
 				Replicas: new(int32(2)),
 			},
 		},
 		&appsv1.ReplicaSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 			Spec: appsv1.ReplicaSetSpec{
 				Replicas: new(int32(2)),
 			},
 		},
 		&corev1.ReplicationController{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 			Spec: corev1.ReplicationControllerSpec{
 				Replicas: new(int32(2)),
 			},
 		},
 		&appsv1.StatefulSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
-			},
+			Name: "foo",
 			Spec: appsv1.StatefulSetSpec{
 				Replicas: new(int32(2)),
 			},
@@ -3789,11 +3605,9 @@ var _ = Describe("Fake client", func() {
 			Expect(cl.SubResource(subResourceScale).Get(ctx, obj, scaleActual)).NotTo(HaveOccurred())
 
 			scaleExpected := &autoscalingv1.Scale{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            obj.GetName(),
-					UID:             obj.GetUID(),
-					ResourceVersion: obj.GetResourceVersion(),
-				},
+				Name:            obj.GetName(),
+				UID:             obj.GetUID(),
+				ResourceVersion: obj.GetResourceVersion(),
 				Spec: autoscalingv1.ScaleSpec{
 					Replicas: 2,
 				},

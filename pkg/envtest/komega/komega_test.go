@@ -22,7 +22,6 @@ import (
 	_ "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -30,10 +29,8 @@ import (
 
 func exampleDeployment() *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "test",
-		},
+		Namespace: "default",
+		Name:      "test",
 		Spec: appsv1.DeploymentSpec{
 			Replicas: new(int32(5)),
 		},
@@ -53,10 +50,8 @@ func TestGet(t *testing.T) {
 	k := New(fc)
 
 	fetched := appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "test",
-		},
+		Namespace: "default",
+		Name:      "test",
 	}
 	g.Eventually(k.Get(&fetched)).Should(Succeed())
 
@@ -125,10 +120,8 @@ func TestObject(t *testing.T) {
 	k := New(fc)
 
 	fetched := appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "test",
-		},
+		Namespace: "default",
+		Name:      "test",
 	}
 	g.Eventually(k.Object(&fetched)).Should(And(
 		Not(BeNil()),

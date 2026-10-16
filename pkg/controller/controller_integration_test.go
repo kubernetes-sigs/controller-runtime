@@ -107,7 +107,7 @@ var _ = Describe("controller", func() {
 			}()
 
 			deployment := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "deployment-name"},
+				Name: "deployment-name",
 				Spec: appsv1.DeploymentSpec{
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
@@ -128,14 +128,13 @@ var _ = Describe("controller", func() {
 					},
 				},
 			}
-			expectedReconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{
+			expectedReconcileRequest := reconcile.Request{
 				Namespace: testNamespace,
-				Name:      "deployment-name",
-			}}
+				Name:      "deployment-name"}
 
 			By("Creating the test namespace")
 			_, err = clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				Name: testNamespace,
 			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -153,15 +152,13 @@ var _ = Describe("controller", func() {
 
 			By("Invoking Reconciling for an OwnedObject when it is created")
 			replicaset := &appsv1.ReplicaSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "rs-name",
-					OwnerReferences: []metav1.OwnerReference{
-						*metav1.NewControllerRef(deployment, schema.GroupVersionKind{
-							Group:   "apps",
-							Version: "v1",
-							Kind:    "Deployment",
-						}),
-					},
+				Name: "rs-name",
+				OwnerReferences: []metav1.OwnerReference{
+					*metav1.NewControllerRef(deployment, schema.GroupVersionKind{
+						Group:   "apps",
+						Version: "v1",
+						Kind:    "Deployment",
+					}),
 				},
 				Spec: appsv1.ReplicaSetSpec{
 					Selector: &metav1.LabelSelector{
@@ -208,7 +205,7 @@ var _ = Describe("controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			pod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: "pod-name"},
+				Name: "pod-name",
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
@@ -223,10 +220,9 @@ var _ = Describe("controller", func() {
 					},
 				},
 			}
-			expectedReconcileRequest = reconcile.Request{NamespacedName: types.NamespacedName{
+			expectedReconcileRequest = reconcile.Request{
 				Namespace: testNamespace,
-				Name:      "pod-name",
-			}}
+				Name:      "pod-name"}
 			_, err = clientset.CoreV1().Pods(testNamespace).Create(ctx, pod, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(<-reconciled).To(Equal(expectedReconcileRequest))

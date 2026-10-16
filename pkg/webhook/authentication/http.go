@@ -92,9 +92,10 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The actual TokenReview GVK will be used to write a typed response in case the
 	// webhook config permits multiple versions, otherwise this response will fail.
 	req := Request{}
-	ar := unversionedTokenReview{}
-	// avoid an extra copy
-	ar.TokenReview = &req.TokenReview
+	ar := unversionedTokenReview{
+		// avoid an extra copy
+		TokenReview: &req.TokenReview,
+	}
 	ar.SetGroupVersionKind(authenticationv1.SchemeGroupVersion.WithKind("TokenReview"))
 	_, actualTokRevGVK, err := authenticationCodecs.UniversalDeserializer().Decode(body, nil, &ar)
 	if err != nil {

@@ -39,7 +39,7 @@ var _ = Describe("Controllerutil", func() {
 		It("should set ownerRef on an empty list", func() {
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				Name: "foo", UID: "foo-uid",
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
@@ -54,7 +54,7 @@ var _ = Describe("Controllerutil", func() {
 			t := true
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				Name: "foo", UID: "foo-uid",
 			}
 
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme, controllerutil.WithBlockOwnerDeletion(true))).ToNot(HaveOccurred())
@@ -69,19 +69,17 @@ var _ = Describe("Controllerutil", func() {
 
 		It("should not duplicate owner references", func() {
 			rs := &appsv1.ReplicaSet{
-				ObjectMeta: metav1.ObjectMeta{
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Name:       "foo",
-							Kind:       "Deployment",
-							APIVersion: "extensions/v1beta1",
-							UID:        "foo-uid",
-						},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       "foo",
+						Kind:       "Deployment",
+						APIVersion: "extensions/v1beta1",
+						UID:        "foo-uid",
 					},
 				},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				Name: "foo", UID: "foo-uid",
 			}
 
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
@@ -95,19 +93,17 @@ var _ = Describe("Controllerutil", func() {
 
 		It("should update the reference", func() {
 			rs := &appsv1.ReplicaSet{
-				ObjectMeta: metav1.ObjectMeta{
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Name:       "foo",
-							Kind:       "Deployment",
-							APIVersion: "extensions/v1alpha1",
-							UID:        "foo-uid-1",
-						},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       "foo",
+						Kind:       "Deployment",
+						APIVersion: "extensions/v1alpha1",
+						UID:        "foo-uid-1",
 					},
 				},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
@@ -120,19 +116,17 @@ var _ = Describe("Controllerutil", func() {
 		})
 		It("should remove the owner reference", func() {
 			rs := &appsv1.ReplicaSet{
-				ObjectMeta: metav1.ObjectMeta{
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Name:       "foo",
-							Kind:       "Deployment",
-							APIVersion: "extensions/v1alpha1",
-							UID:        "foo-uid-1",
-						},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       "foo",
+						Kind:       "Deployment",
+						APIVersion: "extensions/v1alpha1",
+						UID:        "foo-uid-1",
 					},
 				},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
@@ -148,7 +142,7 @@ var _ = Describe("Controllerutil", func() {
 		It("should remove the owner reference established by the SetControllerReference function", func() {
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				Name: "foo", UID: "foo-uid",
 			}
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
@@ -169,7 +163,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.RemoveOwnerReference(dep, rs, scheme.Scheme)).To(HaveOccurred())
 			Expect(rs.GetOwnerReferences()).To(BeEmpty())
@@ -179,7 +173,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.RemoveOwnerReference(dep, rs, runtime.NewScheme())).To(HaveOccurred())
@@ -191,7 +185,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.RemoveOwnerReference(obj, rs, scheme.Scheme)).To(HaveOccurred())
@@ -203,10 +197,10 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			dep2 := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "bar", UID: "bar-uid-3"},
+				Name: "bar", UID: "bar-uid-3",
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.RemoveOwnerReference(dep2, rs, scheme.Scheme)).To(HaveOccurred())
@@ -218,7 +212,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.HasControllerReference(rs)).To(BeTrue())
@@ -229,7 +223,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.HasControllerReference(rs)).To(BeFalse())
@@ -240,7 +234,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.RemoveControllerReference(dep, rs, scheme.Scheme)).To(HaveOccurred())
@@ -251,10 +245,10 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			dep2 := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo-2", UID: "foo-uid-42"},
+				Name: "foo-2", UID: "foo-uid-42",
 			}
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.SetOwnerReference(dep2, rs, scheme.Scheme)).ToNot(HaveOccurred())
@@ -267,7 +261,7 @@ var _ = Describe("Controllerutil", func() {
 				ObjectMeta: metav1.ObjectMeta{},
 			}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid-2"},
+				Name: "foo", UID: "foo-uid-2",
 			}
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 			Expect(controllerutil.RemoveControllerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
@@ -279,7 +273,7 @@ var _ = Describe("Controllerutil", func() {
 		It("should set the OwnerReference if it can find the group version kind", func() {
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				Name: "foo", UID: "foo-uid",
 			}
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
@@ -297,7 +291,7 @@ var _ = Describe("Controllerutil", func() {
 		It("should return an error if it can't find the group version kind of the owner", func() {
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Name: "foo",
 			}
 			Expect(controllerutil.SetControllerReference(dep, rs, runtime.NewScheme())).To(HaveOccurred())
 		})
@@ -319,8 +313,8 @@ var _ = Describe("Controllerutil", func() {
 					BlockOwnerDeletion: &t,
 				},
 			}
-			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
-			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+			rs := &appsv1.ReplicaSet{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}
+			dep := &extensionsv1beta1.Deployment{Name: "foo", Namespace: "default", UID: "foo-uid"}
 
 			err := controllerutil.SetControllerReference(dep, rs, scheme.Scheme)
 
@@ -341,8 +335,8 @@ var _ = Describe("Controllerutil", func() {
 					BlockOwnerDeletion: &t,
 				},
 			}
-			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
-			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+			rs := &appsv1.ReplicaSet{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}
+			dep := &extensionsv1beta1.Deployment{Name: "foo", Namespace: "default", UID: "foo-uid"}
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
@@ -367,8 +361,8 @@ var _ = Describe("Controllerutil", func() {
 					BlockOwnerDeletion: &t,
 				},
 			}
-			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
-			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+			rs := &appsv1.ReplicaSet{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}
+			dep := &extensionsv1beta1.Deployment{Name: "foo", Namespace: "default", UID: "foo-uid"}
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
@@ -382,8 +376,8 @@ var _ = Describe("Controllerutil", func() {
 		})
 
 		It("should return an error if it's setting a cross-namespace owner reference", func() {
-			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "namespace1"}}
-			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "namespace2", UID: "foo-uid"}}
+			rs := &appsv1.ReplicaSet{Name: "foo", Namespace: "namespace1"}
+			dep := &extensionsv1beta1.Deployment{Name: "foo", Namespace: "namespace2", UID: "foo-uid"}
 
 			err := controllerutil.SetControllerReference(dep, rs, scheme.Scheme)
 
@@ -391,8 +385,8 @@ var _ = Describe("Controllerutil", func() {
 		})
 
 		It("should return an error if it's owner is namespaced resource but dependant is cluster-scoped resource", func() {
-			pv := &corev1.PersistentVolume{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
-			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+			pv := &corev1.PersistentVolume{Name: "foo"}
+			pod := &corev1.Pod{Name: "foo", Namespace: "default", UID: "foo-uid"}
 
 			err := controllerutil.SetControllerReference(pod, pv, scheme.Scheme)
 
@@ -412,8 +406,8 @@ var _ = Describe("Controllerutil", func() {
 					BlockOwnerDeletion: &t,
 				},
 			}
-			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}}
-			dep := &extensionsv1beta1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default", UID: "foo-uid"}}
+			rs := &appsv1.ReplicaSet{Name: "foo", Namespace: "default", OwnerReferences: rsOwners}
+			dep := &extensionsv1beta1.Deployment{Name: "foo", Namespace: "default", UID: "foo-uid"}
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme)).NotTo(HaveOccurred())
 			Expect(rs.OwnerReferences).To(ConsistOf(metav1.OwnerReference{
@@ -432,7 +426,7 @@ var _ = Describe("Controllerutil", func() {
 			t := true
 			rs := &appsv1.ReplicaSet{}
 			dep := &extensionsv1beta1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+				Name: "foo", UID: "foo-uid",
 			}
 
 			Expect(controllerutil.SetControllerReference(dep, rs, scheme.Scheme, controllerutil.WithBlockOwnerDeletion(false))).NotTo(HaveOccurred())
@@ -455,10 +449,8 @@ var _ = Describe("Controllerutil", func() {
 
 		BeforeEach(func() {
 			deploy = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
-					Namespace: "default",
-				},
+				Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
+				Namespace: "default",
 			}
 
 			deplSpec = appsv1.DeploymentSpec{
@@ -604,10 +596,8 @@ var _ = Describe("Controllerutil", func() {
 
 		BeforeEach(func() {
 			deploy = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
-					Namespace: "default",
-				},
+				Name:      fmt.Sprintf("deploy-%d", rand.Int31()),
+				Namespace: "default",
 			}
 
 			deplSpec = appsv1.DeploymentSpec{
@@ -860,9 +850,7 @@ var _ = Describe("Controllerutil", func() {
 
 		Describe("AddFinalizer", func() {
 			deploy = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Finalizers: []string{},
-				},
+				Finalizers: []string{},
 			}
 
 			It("should add the finalizer when not present", func() {
@@ -891,9 +879,7 @@ var _ = Describe("Controllerutil", func() {
 
 		Describe("AddFinalizer, which returns an indication of whether it modified the object's list of finalizers,", func() {
 			deploy = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Finalizers: []string{},
-				},
+				Finalizers: []string{},
 			}
 
 			When("the object's list of finalizers has no instances of the input finalizer", func() {
@@ -960,10 +946,10 @@ var _ = Describe("Controllerutil", func() {
 		Describe("HasOwnerReference", func() {
 			It("should return true if the object has the owner reference", func() {
 				rs := &appsv1.ReplicaSet{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+					Name: "foo", UID: "foo-uid",
 				}
 				dep := &extensionsv1beta1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+					Name: "foo", UID: "foo-uid",
 				}
 				Expect(controllerutil.SetOwnerReference(dep, rs, scheme.Scheme)).ToNot(HaveOccurred())
 				b, err := controllerutil.HasOwnerReference(rs.GetOwnerReferences(), dep, scheme.Scheme)
@@ -973,10 +959,10 @@ var _ = Describe("Controllerutil", func() {
 
 			It("should return false if the object does not have the owner reference", func() {
 				rs := &appsv1.ReplicaSet{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+					Name: "foo", UID: "foo-uid",
 				}
 				dep := &extensionsv1beta1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "foo-uid"},
+					Name: "foo", UID: "foo-uid",
 				}
 				b, err := controllerutil.HasOwnerReference(rs.GetOwnerReferences(), dep, scheme.Scheme)
 				Expect(err).NotTo(HaveOccurred())

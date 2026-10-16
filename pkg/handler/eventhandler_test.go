@@ -48,7 +48,7 @@ var _ = Describe("Eventhandler", func() {
 	BeforeEach(func() {
 		q = &controllertest.Queue{TypedInterface: workqueue.NewTyped[reconcile.Request]()}
 		pod = &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
+			Namespace: "biz", Name: "baz",
 		}
 		Expect(cfg).NotTo(BeNil())
 
@@ -165,10 +165,10 @@ var _ = Describe("Eventhandler", func() {
 				Expect(a).To(Equal(pod))
 				req = []reconcile.Request{
 					{
-						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+						Namespace: "foo", Name: "bar",
 					},
 					{
-						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
+						Namespace: "biz", Name: "baz",
 					},
 				}
 				return req
@@ -184,9 +184,9 @@ var _ = Describe("Eventhandler", func() {
 			i2, _ := q.Get()
 			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
+					Namespace: "foo", Name: "bar"},
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}},
+					Namespace: "biz", Name: "baz"},
 			))
 		})
 
@@ -197,10 +197,10 @@ var _ = Describe("Eventhandler", func() {
 				Expect(a).To(Equal(pod))
 				req = []reconcile.Request{
 					{
-						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+						Namespace: "foo", Name: "bar",
 					},
 					{
-						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
+						Namespace: "biz", Name: "baz",
 					},
 				}
 				return req
@@ -216,9 +216,9 @@ var _ = Describe("Eventhandler", func() {
 			i2, _ := q.Get()
 			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
+					Namespace: "foo", Name: "bar"},
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}},
+					Namespace: "biz", Name: "baz"},
 			))
 		})
 
@@ -232,10 +232,10 @@ var _ = Describe("Eventhandler", func() {
 					defer GinkgoRecover()
 					req = []reconcile.Request{
 						{
-							NamespacedName: types.NamespacedName{Namespace: "foo", Name: a.GetName() + "-bar"},
+							Namespace: "foo", Name: a.GetName() + "-bar",
 						},
 						{
-							NamespacedName: types.NamespacedName{Namespace: "biz", Name: a.GetName() + "-baz"},
+							Namespace: "biz", Name: a.GetName() + "-baz",
 						},
 					}
 					return req
@@ -249,10 +249,10 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(2))
 
 				i, _ := q.Get()
-				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "baz-bar"}}))
+				Expect(i).To(Equal(reconcile.Request{Namespace: "foo", Name: "baz-bar"}))
 
 				i, _ = q.Get()
-				Expect(i).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz-baz"}}))
+				Expect(i).To(Equal(reconcile.Request{Namespace: "biz", Name: "baz-baz"}))
 			})
 
 		It("should enqueue a Request with the function applied to the GenericEvent.", func(ctx SpecContext) {
@@ -262,10 +262,10 @@ var _ = Describe("Eventhandler", func() {
 				Expect(a).To(Equal(pod))
 				req = []reconcile.Request{
 					{
-						NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+						Namespace: "foo", Name: "bar",
 					},
 					{
-						NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"},
+						Namespace: "biz", Name: "baz",
 					},
 				}
 				return req
@@ -281,9 +281,9 @@ var _ = Describe("Eventhandler", func() {
 			i2, _ := q.Get()
 			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}},
+					Namespace: "foo", Name: "bar"},
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: "biz", Name: "baz"}},
+					Namespace: "biz", Name: "baz"},
 			))
 		})
 	})
@@ -307,7 +307,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+				Namespace: pod.GetNamespace(), Name: "foo-parent"}))
 		})
 
 		It("should enqueue a Request with the Owner of the object in the DeleteEvent.", func(ctx SpecContext) {
@@ -328,7 +328,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+				Namespace: pod.GetNamespace(), Name: "foo-parent"}))
 		})
 
 		It("should enqueue a Request with the Owners of both objects in the UpdateEvent.", func(ctx SpecContext) {
@@ -363,9 +363,9 @@ var _ = Describe("Eventhandler", func() {
 			i2, _ := q.Get()
 			Expect([]any{i1, i2}).To(ConsistOf(
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
+					Namespace: pod.GetNamespace(), Name: "foo1-parent"},
 				reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: newPod.GetNamespace(), Name: "foo2-parent"}},
+					Namespace: newPod.GetNamespace(), Name: "foo2-parent"},
 			))
 		})
 
@@ -398,7 +398,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+				Namespace: pod.GetNamespace(), Name: "foo-parent"}))
 		})
 
 		It("should enqueue a Request with the Owner of the object in the GenericEvent.", func(ctx SpecContext) {
@@ -418,7 +418,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+				Namespace: pod.GetNamespace(), Name: "foo-parent"}))
 		})
 
 		It("should not enqueue a Request if there are no owners matching Group and Kind.", func(ctx SpecContext) {
@@ -460,7 +460,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo-parent"}}))
+				Namespace: pod.GetNamespace(), Name: "foo-parent"}))
 		})
 
 		It("should enqueue a Request for a owner that is cluster scoped", func(ctx SpecContext) {
@@ -480,7 +480,7 @@ var _ = Describe("Eventhandler", func() {
 
 			i, _ := q.Get()
 			Expect(i).To(Equal(reconcile.Request{
-				NamespacedName: types.NamespacedName{Namespace: "", Name: "node-1"}}))
+				Namespace: "", Name: "node-1"}))
 
 		})
 
@@ -533,7 +533,7 @@ var _ = Describe("Eventhandler", func() {
 				Expect(q.Len()).To(Equal(1))
 				i, _ := q.Get()
 				Expect(i).To(Equal(reconcile.Request{
-					NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}}))
+					Namespace: pod.GetNamespace(), Name: "foo2-parent"}))
 			})
 
 			It("should not enqueue reconcile.Requests if there are no Controller owners.", func(ctx SpecContext) {
@@ -603,11 +603,11 @@ var _ = Describe("Eventhandler", func() {
 				i3, _ := q.Get()
 				Expect([]any{i1, i2, i3}).To(ConsistOf(
 					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo1-parent"}},
+						Namespace: pod.GetNamespace(), Name: "foo1-parent"},
 					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo2-parent"}},
+						Namespace: pod.GetNamespace(), Name: "foo2-parent"},
 					reconcile.Request{
-						NamespacedName: types.NamespacedName{Namespace: pod.GetNamespace(), Name: "foo3-parent"}},
+						Namespace: pod.GetNamespace(), Name: "foo3-parent"},
 				))
 			})
 		})
@@ -815,16 +815,14 @@ var _ = Describe("Eventhandler", func() {
 				handler: func() handler.EventHandler {
 					return handler.TypedFuncs[client.Object, reconcile.Request]{
 						CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-							wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+							wq.Add(reconcile.Request{
 								Namespace: tce.Object.GetNamespace(),
-								Name:      tce.Object.GetName(),
-							}})
+								Name:      tce.Object.GetName()})
 						},
 						UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-							wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+							wq.Add(reconcile.Request{
 								Namespace: tue.ObjectNew.GetNamespace(),
-								Name:      tue.ObjectNew.GetName(),
-							}})
+								Name:      tue.ObjectNew.GetName()})
 						},
 					}
 				},
@@ -833,10 +831,9 @@ var _ = Describe("Eventhandler", func() {
 				name: "EnqueueRequestsFromMapFunc",
 				handler: func() handler.EventHandler {
 					return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-						return []reconcile.Request{{NamespacedName: types.NamespacedName{
+						return []reconcile.Request{{
 							Name:      obj.GetName(),
-							Namespace: obj.GetNamespace(),
-						}}}
+							Namespace: obj.GetNamespace()}}
 					})
 				},
 			},
@@ -846,16 +843,14 @@ var _ = Describe("Eventhandler", func() {
 					return handler.WithLowPriorityWhenUnchanged(
 						handler.TypedFuncs[client.Object, reconcile.Request]{
 							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.Add(reconcile.Request{
 									Namespace: tce.Object.GetNamespace(),
-									Name:      tce.Object.GetName(),
-								}})
+									Name:      tce.Object.GetName()})
 							},
 							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.Add(reconcile.Request{
 									Namespace: tue.ObjectNew.GetNamespace(),
-									Name:      tue.ObjectNew.GetName(),
-								}})
+									Name:      tue.ObjectNew.GetName()})
 							},
 						})
 				},
@@ -866,16 +861,14 @@ var _ = Describe("Eventhandler", func() {
 					return handler.WithLowPriorityWhenUnchanged(
 						handler.TypedFuncs[client.Object, reconcile.Request]{
 							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-								wq.AddAfter(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.AddAfter(reconcile.Request{
 									Namespace: tce.Object.GetNamespace(),
-									Name:      tce.Object.GetName(),
-								}}, time.Second)
+									Name:      tce.Object.GetName()}, time.Second)
 							},
 							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-								wq.AddAfter(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.AddAfter(reconcile.Request{
 									Namespace: tue.ObjectNew.GetNamespace(),
-									Name:      tue.ObjectNew.GetName(),
-								}}, time.Second)
+									Name:      tue.ObjectNew.GetName()}, time.Second)
 							},
 						})
 				},
@@ -887,16 +880,14 @@ var _ = Describe("Eventhandler", func() {
 					return handler.WithLowPriorityWhenUnchanged(
 						handler.TypedFuncs[client.Object, reconcile.Request]{
 							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-								wq.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.AddRateLimited(reconcile.Request{
 									Namespace: tce.Object.GetNamespace(),
-									Name:      tce.Object.GetName(),
-								}})
+									Name:      tce.Object.GetName()})
 							},
 							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-								wq.AddRateLimited(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.AddRateLimited(reconcile.Request{
 									Namespace: tue.ObjectNew.GetNamespace(),
-									Name:      tue.ObjectNew.GetName(),
-								}})
+									Name:      tue.ObjectNew.GetName()})
 							},
 						})
 				},
@@ -909,29 +900,25 @@ var _ = Describe("Eventhandler", func() {
 						handler.TypedFuncs[client.Object, reconcile.Request]{
 							CreateFunc: func(ctx context.Context, tce event.TypedCreateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 								if pq, isPQ := wq.(priorityqueue.PriorityQueue[reconcile.Request]); isPQ {
-									pq.AddWithOpts(priorityqueue.AddOpts{Priority: new(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
+									pq.AddWithOpts(priorityqueue.AddOpts{Priority: new(100)}, reconcile.Request{
 										Namespace: tce.Object.GetNamespace(),
-										Name:      tce.Object.GetName(),
-									}})
+										Name:      tce.Object.GetName()})
 									return
 								}
-								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.Add(reconcile.Request{
 									Namespace: tce.Object.GetNamespace(),
-									Name:      tce.Object.GetName(),
-								}})
+									Name:      tce.Object.GetName()})
 							},
 							UpdateFunc: func(ctx context.Context, tue event.TypedUpdateEvent[client.Object], wq workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 								if pq, isPQ := wq.(priorityqueue.PriorityQueue[reconcile.Request]); isPQ {
-									pq.AddWithOpts(priorityqueue.AddOpts{Priority: new(100)}, reconcile.Request{NamespacedName: types.NamespacedName{
+									pq.AddWithOpts(priorityqueue.AddOpts{Priority: new(100)}, reconcile.Request{
 										Namespace: tue.ObjectNew.GetNamespace(),
-										Name:      tue.ObjectNew.GetName(),
-									}})
+										Name:      tue.ObjectNew.GetName()})
 									return
 								}
-								wq.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+								wq.Add(reconcile.Request{
 									Namespace: tue.ObjectNew.GetNamespace(),
-									Name:      tue.ObjectNew.GetName(),
-								}})
+									Name:      tue.ObjectNew.GetName()})
 							},
 						})
 				},
@@ -951,14 +938,13 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					test.handler().Create(ctx, event.CreateEvent{
-						Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+						Object: &corev1.Pod{
 							Name:              "my-pod",
 							CreationTimestamp: metav1.Now(),
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
+							}}},
 						IsInInitialList: true,
 					}, wq)
 
@@ -972,7 +958,7 @@ var _ = Describe("Eventhandler", func() {
 						After:       test.after,
 						RateLimited: test.ratelimited,
 					}))
-					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+					Expect(actualRequests).To(Equal([]reconcile.Request{{Name: "my-pod"}}))
 				})
 
 				It("should not lower the priority of a create request for an object that was not part of the initial list", func(ctx SpecContext) {
@@ -986,14 +972,13 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					test.handler().Create(ctx, event.CreateEvent{
-						Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+						Object: &corev1.Pod{
 							Name:              "my-pod",
 							CreationTimestamp: metav1.Now(),
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
+							}}},
 						IsInInitialList: false,
 					}, wq)
 
@@ -1003,7 +988,7 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: expectedPriority}))
-					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+					Expect(actualRequests).To(Equal([]reconcile.Request{{Name: "my-pod"}}))
 				})
 
 				It("should lower the priority of an update request with unchanged RV", func(ctx SpecContext) {
@@ -1017,20 +1002,18 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					test.handler().Update(ctx, event.UpdateEvent{
-						ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+						ObjectOld: &corev1.Pod{
 							Name: "my-pod",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
-						ObjectNew: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+							}}},
+						ObjectNew: &corev1.Pod{
 							Name: "my-pod",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
+							}}},
 					}, wq)
 
 					expectedPriority := handler.LowPriority
@@ -1039,7 +1022,7 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: new(expectedPriority)}))
-					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+					Expect(actualRequests).To(Equal([]reconcile.Request{{Name: "my-pod"}}))
 				})
 
 				It("should not lower the priority of an update request with changed RV", func(ctx SpecContext) {
@@ -1053,21 +1036,19 @@ var _ = Describe("Eventhandler", func() {
 					}
 
 					test.handler().Update(ctx, event.UpdateEvent{
-						ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+						ObjectOld: &corev1.Pod{
 							Name: "my-pod",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
-						ObjectNew: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+							}}},
+						ObjectNew: &corev1.Pod{
 							Name:            "my-pod",
 							ResourceVersion: "1",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
+							}}},
 					}, wq)
 
 					var expectedPriority *int
@@ -1075,46 +1056,43 @@ var _ = Describe("Eventhandler", func() {
 						expectedPriority = &test.overridePriority
 					}
 					Expect(actualOpts).To(Equal(priorityqueue.AddOpts{After: test.after, RateLimited: test.ratelimited, Priority: expectedPriority}))
-					Expect(actualRequests).To(Equal([]reconcile.Request{{NamespacedName: types.NamespacedName{Name: "my-pod"}}}))
+					Expect(actualRequests).To(Equal([]reconcile.Request{{Name: "my-pod"}}))
 				})
 
 				It("should have no effect on create if the workqueue is not a priorityqueue", func(ctx SpecContext) {
 					test.handler().Create(ctx, event.CreateEvent{
-						Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+						Object: &corev1.Pod{
 							Name: "my-pod",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
+							}}},
 					}, q)
 
 					Expect(q.Len()).To(Equal(1))
 					item, _ := q.Get()
-					Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-pod"}}))
+					Expect(item).To(Equal(reconcile.Request{Name: "my-pod"}))
 				})
 
 				It("should have no effect on Update if the workqueue is not a priorityqueue", func(ctx SpecContext) {
 					test.handler().Update(ctx, event.UpdateEvent{
-						ObjectOld: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+						ObjectOld: &corev1.Pod{
 							Name: "my-pod",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
-						ObjectNew: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+							}}},
+						ObjectNew: &corev1.Pod{
 							Name: "my-pod",
 							OwnerReferences: []metav1.OwnerReference{{
 								Kind: "Pod",
 								Name: "my-pod",
-							}},
-						}},
+							}}},
 					}, q)
 
 					Expect(q.Len()).To(Equal(1))
 					item, _ := q.Get()
-					Expect(item).To(Equal(reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-pod"}}))
+					Expect(item).To(Equal(reconcile.Request{Name: "my-pod"}))
 				})
 			})
 		}
@@ -1142,26 +1120,22 @@ func (f *fakePriorityQueue) GetWithPriority() (item reconcile.Request, priority 
 type customHandler struct{}
 
 func (ch customHandler) Create(ctx context.Context, evt event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{
 		Namespace: evt.Object.GetNamespace(),
-		Name:      evt.Object.GetName(),
-	}})
+		Name:      evt.Object.GetName()})
 }
 func (ch customHandler) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{
 		Namespace: evt.ObjectNew.GetNamespace(),
-		Name:      evt.ObjectNew.GetName(),
-	}})
+		Name:      evt.ObjectNew.GetName()})
 }
 func (ch customHandler) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{
 		Namespace: evt.Object.GetNamespace(),
-		Name:      evt.Object.GetName(),
-	}})
+		Name:      evt.Object.GetName()})
 }
 func (ch customHandler) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{
 		Namespace: evt.Object.GetNamespace(),
-		Name:      evt.Object.GetName(),
-	}})
+		Name:      evt.Object.GetName()})
 }

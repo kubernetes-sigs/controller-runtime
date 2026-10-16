@@ -50,9 +50,7 @@ var _ = Describe("Admission Webhooks", func() {
 		handler := &fakeHandler{
 			fn: func(ctx context.Context, req Request) Response {
 				return Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed: true,
-					},
+					Allowed: true,
 				}
 			},
 		}
@@ -79,7 +77,7 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(ctx, Request{AdmissionRequest: admissionv1.AdmissionRequest{UID: "foobar"}})
+		resp := webhook.Handle(ctx, Request{UID: "foobar"})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
@@ -101,10 +99,8 @@ var _ = Describe("Admission Webhooks", func() {
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
 				return Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed: true,
-						Result:  &metav1.Status{Message: "Ground Control to Major Tom"},
-					},
+					Allowed: true,
+					Result:  &metav1.Status{Message: "Ground Control to Major Tom"},
 				}
 			}),
 		}
@@ -141,16 +137,14 @@ var _ = Describe("Admission Webhooks", func() {
 				logf.FromContext(ctx).Info("Received request")
 
 				return Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed: true,
-					},
+					Allowed: true,
 				}
 			}),
 			log: testLogger,
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(ctx, Request{AdmissionRequest: admissionv1.AdmissionRequest{
+		resp := webhook.Handle(ctx, Request{
 			UID:       "test123",
 			Name:      "foo",
 			Namespace: "bar",
@@ -161,8 +155,7 @@ var _ = Describe("Admission Webhooks", func() {
 			},
 			UserInfo: authenticationv1.UserInfo{
 				Username: "tim",
-			},
-		}})
+			}})
 		Expect(resp.Allowed).To(BeTrue())
 
 		By("checking that the log message contains the request fields")
@@ -176,9 +169,7 @@ var _ = Describe("Admission Webhooks", func() {
 				logf.FromContext(ctx).Info("Received request")
 
 				return Response{
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed: true,
-					},
+					Allowed: true,
 				}
 			}),
 			LogConstructor: func(base logr.Logger, req *Request) logr.Logger {
@@ -188,10 +179,9 @@ var _ = Describe("Admission Webhooks", func() {
 		}
 
 		By("invoking the webhook")
-		resp := webhook.Handle(ctx, Request{AdmissionRequest: admissionv1.AdmissionRequest{
+		resp := webhook.Handle(ctx, Request{
 			UID:       "test123",
-			Operation: admissionv1.Create,
-		}})
+			Operation: admissionv1.Create})
 		Expect(resp.Allowed).To(BeTrue())
 
 		By("checking that the log message contains the request fields")

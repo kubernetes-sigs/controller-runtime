@@ -67,7 +67,7 @@ var _ = Describe("controller", func() {
 	var queue *controllertest.Queue
 	var reconciled chan reconcile.Request
 	var request = reconcile.Request{
-		NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"},
+		Namespace: "foo", Name: "bar",
 	}
 
 	BeforeEach(func() {
@@ -97,7 +97,7 @@ var _ = Describe("controller", func() {
 				return reconcile.Result{Requeue: true}, nil //nolint:staticcheck // testing deprecated Requeue field
 			})
 			result, err := ctrl.Reconcile(ctx,
-				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				reconcile.Request{Namespace: "foo", Name: "bar"})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{Requeue: true})) //nolint:staticcheck // testing deprecated Requeue field
 		})
@@ -112,7 +112,7 @@ var _ = Describe("controller", func() {
 				return *res, nil
 			})
 			_, _ = ctrl.Reconcile(ctx,
-				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				reconcile.Request{Namespace: "foo", Name: "bar"})
 		})
 
 		It("should recover panic if RecoverPanic is true by default", func(ctx SpecContext) {
@@ -125,7 +125,7 @@ var _ = Describe("controller", func() {
 				return *res, nil
 			})
 			_, err := ctrl.Reconcile(ctx,
-				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				reconcile.Request{Namespace: "foo", Name: "bar"})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("[recovered]"))
 		})
@@ -140,7 +140,7 @@ var _ = Describe("controller", func() {
 				return *res, nil
 			})
 			_, err := ctrl.Reconcile(ctx,
-				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				reconcile.Request{Namespace: "foo", Name: "bar"})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("[recovered]"))
 		})
@@ -152,7 +152,7 @@ var _ = Describe("controller", func() {
 				return reconcile.Result{}, ctx.Err()
 			})
 			_, err := ctrl.Reconcile(ctx,
-				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				reconcile.Request{Namespace: "foo", Name: "bar"})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(context.DeadlineExceeded))
 		})
@@ -175,7 +175,7 @@ var _ = Describe("controller", func() {
 					return reconcile.Result{}, ctx.Err()
 				})
 				_, err := ctrl.Reconcile(ctx,
-					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+					reconcile.Request{Namespace: "foo", Name: "bar"})
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(context.DeadlineExceeded))
 
@@ -194,7 +194,7 @@ var _ = Describe("controller", func() {
 					return reconcile.Result{}, context.Cause(userCtx)
 				})
 				_, err := ctrl.Reconcile(ctx,
-					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+					reconcile.Request{Namespace: "foo", Name: "bar"})
 				Expect(err).To(HaveOccurred())
 				Expect(errors.Is(err, userCancelCause)).To(BeTrue())
 
@@ -210,7 +210,7 @@ var _ = Describe("controller", func() {
 					return reconcile.Result{}, nil
 				})
 				_, err := ctrl.Reconcile(ctx,
-					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+					reconcile.Request{Namespace: "foo", Name: "bar"})
 				Expect(err).NotTo(HaveOccurred())
 
 				// Metric should not be incremented because the timeout was not exceeded
@@ -229,7 +229,7 @@ var _ = Describe("controller", func() {
 				// Call Reconcile multiple times, each should timeout and increment the metric
 				for i := range numTimeouts {
 					_, err := ctrl.Reconcile(ctx,
-						reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: fmt.Sprintf("bar%d", i)}})
+						reconcile.Request{Namespace: "foo", Name: fmt.Sprintf("bar%d", i)})
 					Expect(err).To(HaveOccurred())
 					Expect(err).To(Equal(context.DeadlineExceeded))
 				}
@@ -254,7 +254,7 @@ var _ = Describe("controller", func() {
 				cancel()
 
 				_, err := ctrl.Reconcile(parentCtx,
-					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+					reconcile.Request{Namespace: "foo", Name: "bar"})
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(context.Canceled))
 
@@ -270,7 +270,7 @@ var _ = Describe("controller", func() {
 					return reconcile.Result{}, nil
 				})
 				_, err := ctrl.Reconcile(ctx,
-					reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+					reconcile.Request{Namespace: "foo", Name: "bar"})
 				Expect(err).NotTo(HaveOccurred())
 
 				// Metric should not be incremented because ReconciliationTimeout is not set
@@ -288,7 +288,7 @@ var _ = Describe("controller", func() {
 				return reconcile.Result{}, nil
 			})
 			_, err := ctrl.Reconcile(ctx,
-				reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+				reconcile.Request{Namespace: "foo", Name: "bar"})
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -393,10 +393,8 @@ var _ = Describe("controller", func() {
 			pods := make([]*corev1.Pod, nPods)
 			for i := range nPods {
 				pods[i] = &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      strconv.Itoa(i),
-						Namespace: "default",
-					},
+					Name:      strconv.Itoa(i),
+					Namespace: "default",
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{{Name: "test", Image: "test"}},
 					},
@@ -455,7 +453,7 @@ var _ = Describe("controller", func() {
 				CreateFunc: func(ctx context.Context, evt event.TypedCreateEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					<-blockHandler
 					handlerProcessedCount.Add(1)
-					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: evt.Object.GetName(), Namespace: evt.Object.GetNamespace()}})
+					q.Add(reconcile.Request{Name: evt.Object.GetName(), Namespace: evt.Object.GetNamespace()})
 				},
 			}))
 			Expect(err).NotTo(HaveOccurred())
@@ -487,7 +485,7 @@ var _ = Describe("controller", func() {
 
 			// event to be sent to the channel
 			p := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Name: "foo", Namespace: "bar",
 			}
 			evt := event.GenericEvent{
 				Object: p,
@@ -954,11 +952,9 @@ var _ = Describe("controller", func() {
 				defer q.lock.Unlock()
 				return q.added
 			}).Should(Equal([]priorityQueueAddition{{
-				AddOpts: priorityqueue.AddOpts{
-					RateLimited: true,
-					Priority:    new(10),
-				},
-				items: []reconcile.Request{request},
+				RateLimited: true,
+				Priority:    new(10),
+				items:       []reconcile.Request{request},
 			}}))
 		})
 
@@ -983,11 +979,9 @@ var _ = Describe("controller", func() {
 				defer q.lock.Unlock()
 				return q.added
 			}).Should(Equal([]priorityQueueAddition{{
-				AddOpts: priorityqueue.AddOpts{
-					RateLimited: true,
-					Priority:    new(99),
-				},
-				items: []reconcile.Request{request},
+				RateLimited: true,
+				Priority:    new(99),
+				items:       []reconcile.Request{request},
 			}}))
 		})
 
@@ -1042,11 +1036,9 @@ var _ = Describe("controller", func() {
 				defer q.lock.Unlock()
 				return q.added
 			}).Should(Equal([]priorityQueueAddition{{
-				AddOpts: priorityqueue.AddOpts{
-					After:    time.Millisecond * 100,
-					Priority: new(10),
-				},
-				items: []reconcile.Request{request},
+				After:    time.Millisecond * 100,
+				Priority: new(10),
+				items:    []reconcile.Request{request},
 			}}))
 		})
 
@@ -1071,11 +1063,9 @@ var _ = Describe("controller", func() {
 				defer q.lock.Unlock()
 				return q.added
 			}).Should(Equal([]priorityQueueAddition{{
-				AddOpts: priorityqueue.AddOpts{
-					After:    time.Millisecond * 100,
-					Priority: new(99),
-				},
-				items: []reconcile.Request{request},
+				After:    time.Millisecond * 100,
+				Priority: new(99),
+				items:    []reconcile.Request{request},
 			}}))
 		})
 
@@ -1129,11 +1119,9 @@ var _ = Describe("controller", func() {
 				defer q.lock.Unlock()
 				return q.added
 			}).Should(Equal([]priorityQueueAddition{{
-				AddOpts: priorityqueue.AddOpts{
-					RateLimited: true,
-					Priority:    new(10),
-				},
-				items: []reconcile.Request{request},
+				RateLimited: true,
+				Priority:    new(10),
+				items:       []reconcile.Request{request},
 			}}))
 		})
 
@@ -1158,11 +1146,9 @@ var _ = Describe("controller", func() {
 				defer q.lock.Unlock()
 				return q.added
 			}).Should(Equal([]priorityQueueAddition{{
-				AddOpts: priorityqueue.AddOpts{
-					RateLimited: true,
-					Priority:    new(99),
-				},
-				items: []reconcile.Request{request},
+				RateLimited: true,
+				Priority:    new(99),
+				items:       []reconcile.Request{request},
 			}}))
 		})
 
@@ -1494,7 +1480,7 @@ var _ = Describe("controller", func() {
 
 			// event to be sent to the channel
 			p := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Name: "foo", Namespace: "bar",
 			}
 			evt := event.GenericEvent{
 				Object: p,

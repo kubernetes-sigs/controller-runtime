@@ -23,7 +23,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -103,10 +102,8 @@ func ExampleClient_get() {
 func ExampleClient_create() {
 	// Using a typed object.
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "namespace",
-			Name:      "name",
-		},
+		Namespace: "namespace",
+		Name:      "name",
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
@@ -204,10 +201,8 @@ func ExampleClient_update() {
 func ExampleClient_patch() {
 	patch := []byte(`{"metadata":{"annotations":{"version": "v2"}}}`)
 	_ = c.Patch(context.Background(), &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "namespace",
-			Name:      "name",
-		},
+		Namespace: "namespace",
+		Name:      "name",
 	}, client.RawPatch(types.StrategicMergePatchType, patch))
 }
 
@@ -258,10 +253,8 @@ func ExampleClient_patchStatus() {
 func ExampleClient_delete() {
 	// Using a typed object.
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "namespace",
-			Name:      "name",
-		},
+		Namespace: "namespace",
+		Name:      "name",
 	}
 	// c is a created client.
 	_ = c.Delete(context.Background(), pod)

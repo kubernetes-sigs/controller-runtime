@@ -35,9 +35,7 @@ var _ = Describe("gvkFixupWatcher", func() {
 	It("behaves like watch.FakeWatcher", func() {
 		newTestType := func(name string) runtime.Object {
 			return &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
+				Name: name,
 			}
 		}
 

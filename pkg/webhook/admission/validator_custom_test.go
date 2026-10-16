@@ -42,12 +42,10 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 200 in response when create succeeds", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -58,16 +56,14 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 200 in response when update succeeds", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
+				},
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeTrue())
@@ -77,12 +73,10 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 200 in response when delete succeeds", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeTrue())
@@ -101,12 +95,10 @@ var _ = Describe("customValidatingHandler", func() {
 		handler := WithCustomValidator(admissionScheme, f, val)
 		It("should return 200 in response when create succeeds, with warning messages", func(ctx SpecContext) {
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -119,16 +111,14 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 200 in response when update succeeds, with warning messages", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
+				},
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeTrue())
@@ -140,13 +130,11 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 200 in response when delete succeeds, with warning messages", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw: []byte("{}"),
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw: []byte("{}"),
 
-						Object: f,
-					},
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeTrue())
@@ -171,12 +159,10 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should propagate the Status from ValidateCreate's return value to the HTTP response", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -191,17 +177,15 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
-					OldObject: runtime.RawExtension{
-						Raw: []byte("{}"),
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
+				},
+				OldObject: runtime.RawExtension{
+					Raw: []byte("{}"),
 
-						Object: f,
-					},
+					Object: f,
 				},
 			})
 
@@ -216,13 +200,11 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Delete,
+				Operation: admissionv1.Delete,
 
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -252,12 +234,10 @@ var _ = Describe("customValidatingHandler", func() {
 
 			response := handler.Handle(ctx, Request{
 
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -270,16 +250,14 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should propagate the Status from ValidateUpdate's return value to the HTTP response", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
+				},
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -292,12 +270,10 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should propagate the Status from ValidateDelete's return value to the HTTP response", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 
@@ -321,12 +297,10 @@ var _ = Describe("customValidatingHandler", func() {
 
 			response := handler.Handle(ctx, Request{
 
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())
@@ -340,16 +314,14 @@ var _ = Describe("customValidatingHandler", func() {
 
 			response := handler.Handle(ctx, Request{
 
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
+				},
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())
@@ -361,12 +333,10 @@ var _ = Describe("customValidatingHandler", func() {
 
 		It("should return 403 response when ValidateDelete returns non-APIStatus error", func(ctx SpecContext) {
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())
@@ -386,13 +356,11 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 403 response when ValidateCreate with error message embedded", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
 
-					Operation: admissionv1.Create,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())
@@ -407,17 +375,15 @@ var _ = Describe("customValidatingHandler", func() {
 		It("should return 403 response when ValidateUpdate returns non-APIStatus error", func(ctx SpecContext) {
 
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Update,
-					Object: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
-					OldObject: runtime.RawExtension{
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
+				},
+				OldObject: runtime.RawExtension{
 
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())
@@ -432,12 +398,10 @@ var _ = Describe("customValidatingHandler", func() {
 
 		It("should return 403 response when ValidateDelete returns non-APIStatus error", func(ctx SpecContext) {
 			response := handler.Handle(ctx, Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Delete,
-					OldObject: runtime.RawExtension{
-						Raw:    []byte("{}"),
-						Object: f,
-					},
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw:    []byte("{}"),
+					Object: f,
 				},
 			})
 			Expect(response.Allowed).Should(BeFalse())

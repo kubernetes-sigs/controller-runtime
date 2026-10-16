@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
 
@@ -561,12 +560,10 @@ var _ = Describe("application", func() {
 
 			By("Creating a new stateful set")
 			set := &appsv1.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      "test1",
-					Labels: map[string]string{
-						"foo": "bar",
-					},
+				Namespace: "default",
+				Name:      "test1",
+				Labels: map[string]string{
+					"foo": "bar",
 				},
 				Spec: appsv1.StatefulSetSpec{
 					Selector: &metav1.LabelSelector{
@@ -670,10 +667,8 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 	By("Creating a Deployment")
 	// Expect a Reconcile when the Deployment is managedObjects.
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      deployName,
-		},
+		Namespace: "default",
+		Name:      deployName,
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"foo": "bar"},
@@ -696,23 +691,21 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 
 	By("Waiting for the Deployment Reconcile")
 	Eventually(ch).Should(Receive(Equal(reconcile.Request{
-		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}})))
+		Namespace: "default", Name: deployName})))
 
 	By("Creating a ReplicaSet")
 	// Expect a Reconcile when an Owned object is managedObjects.
 	rs := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      rsName,
-			Labels:    dep.Spec.Selector.MatchLabels,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       deployName,
-					Kind:       "Deployment",
-					APIVersion: "apps/v1",
-					Controller: new(true),
-					UID:        dep.UID,
-				},
+		Namespace: "default",
+		Name:      rsName,
+		Labels:    dep.Spec.Selector.MatchLabels,
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				Name:       deployName,
+				Kind:       "Deployment",
+				APIVersion: "apps/v1",
+				Controller: new(true),
+				UID:        dep.UID,
 			},
 		},
 		Spec: appsv1.ReplicaSetSpec{
@@ -725,7 +718,7 @@ func doReconcileTest(ctx context.Context, nameSuffix string, mgr manager.Manager
 
 	By("Waiting for the ReplicaSet Reconcile")
 	Eventually(ch).Should(Receive(Equal(reconcile.Request{
-		NamespacedName: types.NamespacedName{Namespace: "default", Name: deployName}})))
+		Namespace: "default", Name: deployName})))
 }
 
 var _ runtime.Object = &fakeType{}

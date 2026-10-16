@@ -235,10 +235,8 @@ var _ = Describe("APIServer", func() {
 		Context("when SecureServing host & port are set", func() {
 			BeforeEach(func() {
 				server.SecureServing = SecureServing{
-					ListenAddr: process.ListenAddr{
-						Address: "1.2.3.4",
-						Port:    "5678",
-					},
+					Address: "1.2.3.4",
+					Port:    "5678",
 				}
 			})
 
@@ -275,9 +273,7 @@ var _ = Describe("APIServer", func() {
 			It("should fail to configure", func() {
 				server := &APIServer{
 					EtcdURL: &url.URL{},
-					SecureServing: SecureServing{
-						Authn: auth,
-					},
+					Authn:   auth,
 				}
 				auth.configureErr = errors.New("Oh no")
 				Expect(PrepareAPIServer(server)).NotTo(Succeed())

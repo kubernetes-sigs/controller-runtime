@@ -35,12 +35,10 @@ func Unauthenticated(reason string, user authenticationv1.UserInfo) Response {
 // Errored creates a new Response for error-handling a request.
 func Errored(err error) Response {
 	return Response{
-		TokenReview: authenticationv1.TokenReview{
-			Spec: authenticationv1.TokenReviewSpec{},
-			Status: authenticationv1.TokenReviewStatus{
-				Authenticated: false,
-				Error:         err.Error(),
-			},
+		Spec: authenticationv1.TokenReviewSpec{},
+		Status: authenticationv1.TokenReviewStatus{
+			Authenticated: false,
+			Error:         err.Error(),
 		},
 	}
 }
@@ -48,12 +46,10 @@ func Errored(err error) Response {
 // ReviewResponse returns a response for admitting a request.
 func ReviewResponse(authenticated bool, user authenticationv1.UserInfo, err string, audiences ...string) Response {
 	resp := Response{
-		TokenReview: authenticationv1.TokenReview{
-			Status: authenticationv1.TokenReviewStatus{
-				Authenticated: authenticated,
-				User:          user,
-				Audiences:     audiences,
-			},
+		Status: authenticationv1.TokenReviewStatus{
+			Authenticated: authenticated,
+			User:          user,
+			Audiences:     audiences,
 		},
 	}
 	if len(err) > 0 {

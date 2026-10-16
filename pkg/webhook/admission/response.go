@@ -49,12 +49,10 @@ func Patched(message string, patches ...jsonpatch.JsonPatchOperation) Response {
 // Errored creates a new Response for error-handling a request.
 func Errored(code int32, err error) Response {
 	return Response{
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: false,
-			Result: &metav1.Status{
-				Code:    code,
-				Message: err.Error(),
-			},
+		Allowed: false,
+		Result: &metav1.Status{
+			Code:    code,
+			Message: err.Error(),
 		},
 	}
 }
@@ -68,12 +66,10 @@ func ValidationResponse(allowed bool, message string) Response {
 		reason = ""
 	}
 	resp := Response{
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: allowed,
-			Result: &metav1.Status{
-				Code:   int32(code),
-				Reason: reason,
-			},
+		Allowed: allowed,
+		Result: &metav1.Status{
+			Code:   int32(code),
+			Reason: reason,
 		},
 	}
 	if len(message) > 0 {
@@ -92,26 +88,22 @@ func PatchResponseFromRaw(original, current []byte) Response {
 	}
 	return Response{
 		Patches: patches,
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: true,
-			PatchType: func() *admissionv1.PatchType {
-				if len(patches) == 0 {
-					return nil
-				}
-				pt := admissionv1.PatchTypeJSONPatch
-				return &pt
-			}(),
-		},
+		Allowed: true,
+		PatchType: func() *admissionv1.PatchType {
+			if len(patches) == 0 {
+				return nil
+			}
+			pt := admissionv1.PatchTypeJSONPatch
+			return &pt
+		}(),
 	}
 }
 
 // validationResponseFromStatus returns a response for admitting a request with provided Status object.
 func validationResponseFromStatus(allowed bool, status metav1.Status) Response {
 	resp := Response{
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: allowed,
-			Result:  &status,
-		},
+		Allowed: allowed,
+		Result:  &status,
 	}
 	return resp
 }

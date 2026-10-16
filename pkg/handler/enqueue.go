@@ -20,7 +20,6 @@ import (
 	"context"
 	"reflect"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -53,10 +52,10 @@ func (e *TypedEnqueueRequestForObject[T]) Create(ctx context.Context, evt event.
 		return
 	}
 
-	item := reconcile.Request{NamespacedName: types.NamespacedName{
+	item := reconcile.Request{
 		Name:      evt.Object.GetName(),
 		Namespace: evt.Object.GetNamespace(),
-	}}
+	}
 
 	addToQueueCreate(q, evt, item)
 }
@@ -65,17 +64,17 @@ func (e *TypedEnqueueRequestForObject[T]) Create(ctx context.Context, evt event.
 func (e *TypedEnqueueRequestForObject[T]) Update(ctx context.Context, evt event.TypedUpdateEvent[T], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	switch {
 	case !isNil(evt.ObjectNew):
-		item := reconcile.Request{NamespacedName: types.NamespacedName{
+		item := reconcile.Request{
 			Name:      evt.ObjectNew.GetName(),
 			Namespace: evt.ObjectNew.GetNamespace(),
-		}}
+		}
 
 		addToQueueUpdate(q, evt, item)
 	case !isNil(evt.ObjectOld):
-		item := reconcile.Request{NamespacedName: types.NamespacedName{
+		item := reconcile.Request{
 			Name:      evt.ObjectOld.GetName(),
 			Namespace: evt.ObjectOld.GetNamespace(),
-		}}
+		}
 
 		addToQueueUpdate(q, evt, item)
 	default:
@@ -89,10 +88,10 @@ func (e *TypedEnqueueRequestForObject[T]) Delete(ctx context.Context, evt event.
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{
 		Name:      evt.Object.GetName(),
 		Namespace: evt.Object.GetNamespace(),
-	}})
+	})
 }
 
 // Generic implements EventHandler.
@@ -101,10 +100,10 @@ func (e *TypedEnqueueRequestForObject[T]) Generic(ctx context.Context, evt event
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "event", evt)
 		return
 	}
-	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+	q.Add(reconcile.Request{
 		Name:      evt.Object.GetName(),
 		Namespace: evt.Object.GetNamespace(),
-	}})
+	})
 }
 
 func isNil(arg any) bool {

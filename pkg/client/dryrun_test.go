@@ -48,11 +48,9 @@ var _ = Describe("DryRunClient", func() {
 	BeforeEach(func(ctx SpecContext) {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("dry-run-deployment-%v", count),
-				Namespace: ns,
-				Labels:    map[string]string{"name": fmt.Sprintf("dry-run-deployment-%v", count)},
-			},
+			Name:      fmt.Sprintf("dry-run-deployment-%v", count),
+			Namespace: ns,
+			Labels:    map[string]string{"name": fmt.Sprintf("dry-run-deployment-%v", count)},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicaCount,
 				Selector: &metav1.LabelSelector{
@@ -225,7 +223,7 @@ var _ = Describe("DryRunClient", func() {
 	It("should not change objects via update status with opts", func(ctx SpecContext) {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
-		opts := &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{DryRun: []string{"Bye", "Pippa"}}}
+		opts := &client.SubResourceUpdateOptions{DryRun: []string{"Bye", "Pippa"}}
 
 		Expect(getClient().Status().Update(ctx, changedDep, opts)).NotTo(HaveOccurred())
 
@@ -251,7 +249,7 @@ var _ = Describe("DryRunClient", func() {
 		changedDep := dep.DeepCopy()
 		changedDep.Status.Replicas = 99
 
-		opts := &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: []string{"Bye", "Pippa"}}}
+		opts := &client.SubResourcePatchOptions{DryRun: []string{"Bye", "Pippa"}}
 
 		Expect(getClient().Status().Patch(ctx, changedDep, client.MergeFrom(dep), opts)).ToNot(HaveOccurred())
 
@@ -283,7 +281,7 @@ var _ = Describe("DryRunClient", func() {
 			Replicas: new(int32(99)),
 		})
 
-		opts := &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{DryRun: []string{"Bye", "Pippa"}}}
+		opts := &client.SubResourceApplyOptions{DryRun: []string{"Bye", "Pippa"}}
 
 		Expect(getClient().Status().Apply(ctx, deploymentAC, client.FieldOwner("test-owner"), opts)).NotTo(HaveOccurred())
 

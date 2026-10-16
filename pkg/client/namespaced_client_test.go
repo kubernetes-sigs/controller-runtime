@@ -68,10 +68,8 @@ var _ = Describe("NamespacedClient", func() {
 	BeforeEach(func() {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   fmt.Sprintf("namespaced-deployment-%v", count),
-				Labels: map[string]string{"name": fmt.Sprintf("namespaced-deployment-%v", count)},
-			},
+			Name:   fmt.Sprintf("namespaced-deployment-%v", count),
+			Labels: map[string]string{"name": fmt.Sprintf("namespaced-deployment-%v", count)},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicaCount,
 				Selector: &metav1.LabelSelector{
@@ -84,10 +82,8 @@ var _ = Describe("NamespacedClient", func() {
 			},
 		}
 		nameSpace = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   fmt.Sprintf("namespace-%v", count),
-				Labels: map[string]string{"name": fmt.Sprintf("namespace-%v", count)},
-			},
+			Name:   fmt.Sprintf("namespace-%v", count),
+			Labels: map[string]string{"name": fmt.Sprintf("namespace-%v", count)},
 		}
 		acDep = appsv1applyconfigurations.Deployment(dep.Name, "").
 			WithLabels(dep.Labels).
@@ -231,7 +227,7 @@ var _ = Describe("NamespacedClient", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).NotTo(BeNil())
 
-			deleteClusterRole(ctx, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: *cr.Name}})
+			deleteClusterRole(ctx, &rbacv1.ClusterRole{Name: *cr.Name})
 		})
 	})
 
@@ -259,10 +255,8 @@ var _ = Describe("NamespacedClient", func() {
 		})
 		It("should create a cluster scoped object", func(ctx SpecContext) {
 			cr := &rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   fmt.Sprintf("clusterRole-%v", count),
-					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
-				},
+				Name:   fmt.Sprintf("clusterRole-%v", count),
+				Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
 			}
 			cr.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "rbac.authorization.k8s.io",
@@ -331,16 +325,14 @@ var _ = Describe("NamespacedClient", func() {
 
 		It("should not update any object from other namespace", func(ctx SpecContext) {
 			By("creating a new namespace")
-			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-1"}}
+			tns := &corev1.Namespace{Name: "non-default-1"}
 			_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			changedDep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "changed-dep",
-					Namespace: tns.Name,
-					Labels:    map[string]string{"name": "changed-dep"},
-				},
+				Name:      "changed-dep",
+				Namespace: tns.Name,
+				Labels:    map[string]string{"name": "changed-dep"},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &replicaCount,
 					Selector: &metav1.LabelSelector{
@@ -368,10 +360,8 @@ var _ = Describe("NamespacedClient", func() {
 
 		It("should update a cluster scoped resource", func(ctx SpecContext) {
 			changedCR := &rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   fmt.Sprintf("clusterRole-%v", count),
-					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
-				},
+				Name:   fmt.Sprintf("clusterRole-%v", count),
+				Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
 			}
 
 			changedCR.SetGroupVersionKind(schema.GroupVersionKind{
@@ -444,16 +434,14 @@ var _ = Describe("NamespacedClient", func() {
 
 		It("should not modify an object from a different namespace", func(ctx SpecContext) {
 			By("creating a new namespace")
-			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-2"}}
+			tns := &corev1.Namespace{Name: "non-default-2"}
 			_, err := clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			changedDep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "changed-dep",
-					Namespace: tns.Name,
-					Labels:    map[string]string{"name": "changed-dep"},
-				},
+				Name:      "changed-dep",
+				Namespace: tns.Name,
+				Labels:    map[string]string{"name": "changed-dep"},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &replicaCount,
 					Selector: &metav1.LabelSelector{
@@ -479,10 +467,8 @@ var _ = Describe("NamespacedClient", func() {
 
 		It("should successfully modify cluster scoped resource", func(ctx SpecContext) {
 			cr := &rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   fmt.Sprintf("clusterRole-%v", count),
-					Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
-				},
+				Name:   fmt.Sprintf("clusterRole-%v", count),
+				Labels: map[string]string{"name": fmt.Sprintf("clusterRole-%v", count)},
 			}
 
 			cr.SetGroupVersionKind(schema.GroupVersionKind{
@@ -541,16 +527,14 @@ var _ = Describe("NamespacedClient", func() {
 		})
 
 		It("should not delete deployments in other namespaces", func(ctx SpecContext) {
-			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "non-default-3"}}
+			tns := &corev1.Namespace{Name: "non-default-3"}
 			_, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			changedDep := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "changed-dep",
-					Namespace: tns.Name,
-					Labels:    map[string]string{"name": "changed-dep"},
-				},
+				Name:      "changed-dep",
+				Namespace: tns.Name,
+				Labels:    map[string]string{"name": "changed-dep"},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &replicaCount,
 					Selector: &metav1.LabelSelector{

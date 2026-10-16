@@ -1634,13 +1634,11 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 			selector = obj.Spec.Selector.String()
 		}
 		return &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:         obj.Namespace,
-				Name:              obj.Name,
-				UID:               obj.UID,
-				ResourceVersion:   obj.ResourceVersion,
-				CreationTimestamp: obj.CreationTimestamp,
-			},
+			Namespace:         obj.Namespace,
+			Name:              obj.Name,
+			UID:               obj.UID,
+			ResourceVersion:   obj.ResourceVersion,
+			CreationTimestamp: obj.CreationTimestamp,
 			Spec: autoscalingv1.ScaleSpec{
 				Replicas: replicas,
 			},
@@ -1659,13 +1657,11 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 			selector = obj.Spec.Selector.String()
 		}
 		return &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:         obj.Namespace,
-				Name:              obj.Name,
-				UID:               obj.UID,
-				ResourceVersion:   obj.ResourceVersion,
-				CreationTimestamp: obj.CreationTimestamp,
-			},
+			Namespace:         obj.Namespace,
+			Name:              obj.Name,
+			UID:               obj.UID,
+			ResourceVersion:   obj.ResourceVersion,
+			CreationTimestamp: obj.CreationTimestamp,
 			Spec: autoscalingv1.ScaleSpec{
 				Replicas: replicas,
 			},
@@ -1680,13 +1676,11 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 			replicas = *obj.Spec.Replicas
 		}
 		return &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:         obj.Namespace,
-				Name:              obj.Name,
-				UID:               obj.UID,
-				ResourceVersion:   obj.ResourceVersion,
-				CreationTimestamp: obj.CreationTimestamp,
-			},
+			Namespace:         obj.Namespace,
+			Name:              obj.Name,
+			UID:               obj.UID,
+			ResourceVersion:   obj.ResourceVersion,
+			CreationTimestamp: obj.CreationTimestamp,
 			Spec: autoscalingv1.ScaleSpec{
 				Replicas: replicas,
 			},
@@ -1705,13 +1699,11 @@ func extractScale(obj client.Object) (*autoscalingv1.Scale, error) {
 			selector = obj.Spec.Selector.String()
 		}
 		return &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:         obj.Namespace,
-				Name:              obj.Name,
-				UID:               obj.UID,
-				ResourceVersion:   obj.ResourceVersion,
-				CreationTimestamp: obj.CreationTimestamp,
-			},
+			Namespace:         obj.Namespace,
+			Name:              obj.Name,
+			UID:               obj.UID,
+			ResourceVersion:   obj.ResourceVersion,
+			CreationTimestamp: obj.CreationTimestamp,
 			Spec: autoscalingv1.ScaleSpec{
 				Replicas: replicas,
 			},

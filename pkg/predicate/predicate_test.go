@@ -31,7 +31,7 @@ var _ = Describe("Predicate", func() {
 	var pod *corev1.Pod
 	BeforeEach(func() {
 		pod = &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "biz", Name: "baz"},
+			Namespace: "biz", Name: "baz",
 		}
 	})
 
@@ -165,11 +165,9 @@ var _ = Describe("Predicate", func() {
 		Context("Where the old object doesn't have a ResourceVersion or metadata", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "1"}
 
 				failEvnt := event.UpdateEvent{
 					ObjectNew: newPod,
@@ -184,11 +182,9 @@ var _ = Describe("Predicate", func() {
 		Context("Where the new object doesn't have a ResourceVersion or metadata", func() {
 			It("should return false", func() {
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "1"}
 
 				failEvnt := event.UpdateEvent{
 					ObjectOld: oldPod,
@@ -204,18 +200,14 @@ var _ = Describe("Predicate", func() {
 		Context("Where the ResourceVersion hasn't changed", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "v1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "v1"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "v1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "v1"}
 
 				failEvnt := event.UpdateEvent{
 					ObjectOld: oldPod,
@@ -232,18 +224,14 @@ var _ = Describe("Predicate", func() {
 		Context("Where the ResourceVersion has changed", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "v1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "v1"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "v2",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "v2"}
 				passEvt := event.UpdateEvent{
 					ObjectOld: oldPod,
 					ObjectNew: newPod,
@@ -259,18 +247,14 @@ var _ = Describe("Predicate", func() {
 
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "v1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "v1"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "baz",
-						Namespace:       "biz",
-						ResourceVersion: "v1",
-					}}
+					Name:            "baz",
+					Namespace:       "biz",
+					ResourceVersion: "v1"}
 
 				failEvt1 := event.UpdateEvent{ObjectOld: oldPod}
 				failEvt2 := event.UpdateEvent{ObjectNew: newPod}
@@ -291,11 +275,9 @@ var _ = Describe("Predicate", func() {
 		Context("Where the old object doesn't have a Generation or metadata", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				failEvnt := event.UpdateEvent{
 					ObjectNew: newPod,
@@ -310,11 +292,9 @@ var _ = Describe("Predicate", func() {
 		Context("Where the new object doesn't have a Generation or metadata", func() {
 			It("should return false", func() {
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				failEvnt := event.UpdateEvent{
 					ObjectOld: oldPod,
@@ -329,18 +309,14 @@ var _ = Describe("Predicate", func() {
 		Context("Where the Generation hasn't changed", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				failEvnt := event.UpdateEvent{
 					ObjectOld: oldPod,
@@ -356,18 +332,14 @@ var _ = Describe("Predicate", func() {
 		Context("Where the Generation has changed", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 2,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 2}
 				passEvt := event.UpdateEvent{
 					ObjectOld: oldPod,
 					ObjectNew: newPod,
@@ -383,18 +355,14 @@ var _ = Describe("Predicate", func() {
 
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "baz",
-						Namespace:  "biz",
-						Generation: 1,
-					}}
+					Name:       "baz",
+					Namespace:  "biz",
+					Generation: 1}
 
 				failEvt1 := event.UpdateEvent{ObjectOld: oldPod}
 				failEvt2 := event.UpdateEvent{ObjectNew: newPod}
@@ -417,12 +385,10 @@ var _ = Describe("Predicate", func() {
 		Context("Where the old object is missing", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				failEvnt := event.UpdateEvent{
@@ -438,12 +404,10 @@ var _ = Describe("Predicate", func() {
 		Context("Where the new object is missing", func() {
 			It("should return false", func() {
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				failEvnt := event.UpdateEvent{
@@ -459,16 +423,12 @@ var _ = Describe("Predicate", func() {
 		Context("Where the annotations are empty", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 
 				failEvnt := event.UpdateEvent{
 					ObjectOld: oldPod,
@@ -484,21 +444,17 @@ var _ = Describe("Predicate", func() {
 		Context("Where the annotations haven't changed", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				failEvnt := event.UpdateEvent{
@@ -515,21 +471,17 @@ var _ = Describe("Predicate", func() {
 		Context("Where an annotation value has changed", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "weez",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "weez",
 					}}
 
 				passEvt := event.UpdateEvent{
@@ -546,22 +498,18 @@ var _ = Describe("Predicate", func() {
 		Context("Where an annotation has been added", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-							"zooz": "qooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
+						"zooz": "qooz",
 					}}
 
 				passEvt := event.UpdateEvent{
@@ -578,22 +526,18 @@ var _ = Describe("Predicate", func() {
 		Context("Where an annotation has been removed", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-							"zooz": "qooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
+						"zooz": "qooz",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Annotations: map[string]string{
-							"booz": "wooz",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Annotations: map[string]string{
+						"booz": "wooz",
 					}}
 
 				passEvt := event.UpdateEvent{
@@ -615,12 +559,10 @@ var _ = Describe("Predicate", func() {
 		Context("Where the old object is missing", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				evt := event.UpdateEvent{
@@ -636,12 +578,10 @@ var _ = Describe("Predicate", func() {
 		Context("Where the new object is missing", func() {
 			It("should return false", func() {
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				evt := event.UpdateEvent{
@@ -657,16 +597,12 @@ var _ = Describe("Predicate", func() {
 		Context("Where the labels are empty", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 
 				evt := event.UpdateEvent{
 					ObjectOld: oldPod,
@@ -682,21 +618,17 @@ var _ = Describe("Predicate", func() {
 		Context("Where the labels haven't changed", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				evt := event.UpdateEvent{
@@ -713,21 +645,17 @@ var _ = Describe("Predicate", func() {
 		Context("Where a label value has changed", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bee",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bee",
 					}}
 
 				evt := event.UpdateEvent{
@@ -744,22 +672,18 @@ var _ = Describe("Predicate", func() {
 		Context("Where a label has been added", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-							"faa": "bor",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
+						"faa": "bor",
 					}}
 
 				evt := event.UpdateEvent{
@@ -776,22 +700,18 @@ var _ = Describe("Predicate", func() {
 		Context("Where a label has been removed", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-							"faa": "bor",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
+						"faa": "bor",
 					}}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-						Labels: map[string]string{
-							"foo": "bar",
-						},
+					Name:      "baz",
+					Namespace: "biz",
+					Labels: map[string]string{
+						"foo": "bar",
 					}}
 
 				evt := event.UpdateEvent{
@@ -886,16 +806,12 @@ var _ = Describe("Predicate", func() {
 		Context("Where the namespace is matching", func() {
 			It("should return true", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 				passEvt1 := event.UpdateEvent{ObjectOld: oldPod, ObjectNew: newPod}
 				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: newPod})).To(BeTrue())
 				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: oldPod})).To(BeTrue())
@@ -907,16 +823,12 @@ var _ = Describe("Predicate", func() {
 		Context("Where the namespace is not matching", func() {
 			It("should return false", func() {
 				newPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "bizz",
-					}}
+					Name:      "baz",
+					Namespace: "bizz"}
 
 				oldPod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "baz",
-						Namespace: "biz",
-					}}
+					Name:      "baz",
+					Namespace: "biz"}
 				failEvt1 := event.UpdateEvent{ObjectOld: oldPod, ObjectNew: newPod}
 				Expect(byNamespaceFuncs.Create(event.CreateEvent{Object: newPod})).To(BeFalse())
 				Expect(byNamespaceFuncs.Delete(event.DeleteEvent{Object: newPod})).To(BeFalse())
@@ -945,9 +857,7 @@ var _ = Describe("Predicate", func() {
 		Context("When the Selector matches the event labels", func() {
 			It("should return true", func() {
 				successMatch := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{"foo": "bar"},
-					},
+					Labels: map[string]string{"foo": "bar"},
 				}
 				Expect(instance.Create(event.CreateEvent{Object: successMatch})).To(BeTrue())
 				Expect(instance.Delete(event.DeleteEvent{Object: successMatch})).To(BeTrue())

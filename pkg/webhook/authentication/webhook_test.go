@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -32,10 +31,8 @@ var _ = Describe("Authentication Webhooks", func() {
 		handler := &fakeHandler{
 			fn: func(ctx context.Context, req Request) Response {
 				return Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: true,
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: true,
 					},
 				}
 			},
@@ -63,7 +60,7 @@ var _ = Describe("Authentication Webhooks", func() {
 		webhook := allowHandler()
 
 		By("invoking the webhook")
-		resp := webhook.Handle(ctx, Request{TokenReview: authenticationv1.TokenReview{ObjectMeta: metav1.ObjectMeta{UID: "foobar"}}})
+		resp := webhook.Handle(ctx, Request{UID: "foobar"})
 
 		By("checking that the response share's the request's UID")
 		Expect(resp.UID).To(Equal(machinerytypes.UID("foobar")))
@@ -85,11 +82,9 @@ var _ = Describe("Authentication Webhooks", func() {
 		webhook := &Webhook{
 			Handler: HandlerFunc(func(ctx context.Context, req Request) Response {
 				return Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: true,
-							Error:         "Ground Control to Major Tom",
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: true,
+						Error:         "Ground Control to Major Tom",
 					},
 				}
 			}),

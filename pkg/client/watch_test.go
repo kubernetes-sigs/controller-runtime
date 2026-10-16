@@ -42,7 +42,7 @@ var _ = Describe("ClientWithWatch", func() {
 	BeforeEach(func(ctx SpecContext) {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("watch-deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)}},
+			Name: fmt.Sprintf("watch-deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicaCount,
 				Selector: &metav1.LabelSelector{
@@ -124,7 +124,7 @@ var _ = Describe("ClientWithWatch", func() {
 		})
 
 		It("should receive a create event when watching the metadata object", func(ctx SpecContext) {
-			m := &metav1.PartialObjectMetadataList{TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}}
+			m := &metav1.PartialObjectMetadataList{Kind: "Deployment", APIVersion: "apps/v1"}
 			watchSuite(ctx, m, &metav1.PartialObjectMetadata{}, false)
 		})
 	})

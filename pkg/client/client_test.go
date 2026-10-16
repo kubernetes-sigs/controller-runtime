@@ -159,7 +159,7 @@ var _ = Describe("Client", func() {
 	BeforeEach(func() {
 		atomic.AddUint64(&count, 1)
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)}},
+			Name: fmt.Sprintf("deployment-name-%v", count), Namespace: ns, Labels: map[string]string{"app": fmt.Sprintf("bar-%v", count)},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicaCount,
 				Selector: &metav1.LabelSelector{
@@ -178,16 +178,16 @@ var _ = Describe("Client", func() {
 		}
 		// Pod is invalid without a container field in the PodSpec
 		pod = &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod-%v", count), Namespace: ns},
-			Spec:       corev1.PodSpec{},
+			Name: fmt.Sprintf("pod-%v", count), Namespace: ns,
+			Spec: corev1.PodSpec{},
 		}
 		node = &corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-name-%v", count)},
-			Spec:       corev1.NodeSpec{},
+			Name: fmt.Sprintf("node-name-%v", count),
+			Spec: corev1.NodeSpec{},
 		}
-		serviceAccount = &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("sa-%v", count), Namespace: ns}}
+		serviceAccount = &corev1.ServiceAccount{Name: fmt.Sprintf("sa-%v", count), Namespace: ns}
 		csr = &certificatesv1.CertificateSigningRequest{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("csr-%v", count)},
+			Name: fmt.Sprintf("csr-%v", count),
 			Spec: certificatesv1.CertificateSigningRequestSpec{
 				SignerName: "org.io/my-signer",
 				Request: []byte(`-----BEGIN CERTIFICATE REQUEST-----
@@ -247,17 +247,15 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cl).NotTo(BeNil())
 
-			tns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "wh-defined"}}
+			tns := &corev1.Namespace{Name: "wh-defined"}
 			tns, err = clientset.CoreV1().Namespaces().Create(ctx, tns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tns).NotTo(BeNil())
 			defer deleteNamespace(ctx, tns)
 
 			toCreate := &pkg.ChaosPod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "example",
-					Namespace: tns.Name,
-				},
+				Name:      "example",
+				Namespace: tns.Name,
 				// The ChaosPod CRD does not define Status, so the field is unknown to the API server,
 				// but field validation is not strict by default, so the API server returns a warning,
 				// and we need a warning to check whether suppression works.
@@ -1065,11 +1063,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					"some-key": []byte("some-value"),
 				}
 				secretObject := &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "secret-one",
-						Namespace: "default",
-					},
-					Data: data,
+					Name:      "secret-one",
+					Namespace: "default",
+					Data:      data,
 				}
 
 				secretApplyConfiguration := corev1applyconfigurations.
@@ -2588,8 +2584,8 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("deleting a node through client")
 				pom := metav1.PartialObjectMetadata{
-					TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Node"},
-					ObjectMeta: metav1.ObjectMeta{Name: node.Name},
+					APIVersion: "v1", Kind: "Node",
+					Name: node.Name,
 				}
 				err = cl.Delete(ctx, &pom)
 				Expect(err).NotTo(HaveOccurred())
@@ -2629,13 +2625,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(cl).NotTo(BeNil())
 
 				By("First creating the object")
-				toCreate := &pkg.ChaosPod{ObjectMeta: metav1.ObjectMeta{Name: "retain-metadata", Namespace: ns}}
+				toCreate := &pkg.ChaosPod{Name: "retain-metadata", Namespace: ns}
 				Expect(cl.Create(ctx, toCreate)).NotTo(HaveOccurred())
 
 				By("Fetching it into a variable that has finalizers set")
 				toGetInto := &metav1.PartialObjectMetadata{
-					TypeMeta:   metav1.TypeMeta{APIVersion: "chaosapps.metamagical.io/v1", Kind: "ChaosPod"},
-					ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "retain-metadata"},
+					APIVersion: "chaosapps.metamagical.io/v1", Kind: "ChaosPod",
+					Namespace: ns, Name: "retain-metadata",
 				}
 				toGetInto.SetFinalizers([]string{"some-finalizer"})
 				Expect(cl.Get(ctx, client.ObjectKeyFromObject(toGetInto), toGetInto)).NotTo(HaveOccurred())
@@ -2787,11 +2783,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			It("should filter results by label selector", func(ctx SpecContext) {
 				By("creating a Deployment with the app=frontend label")
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: ns,
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: ns,
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -2807,11 +2801,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment with the app=backend label")
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-backend",
-						Namespace: ns,
-						Labels:    map[string]string{"app": "backend"},
-					},
+					Name:      "deployment-backend",
+					Namespace: ns,
+					Labels:    map[string]string{"app": "backend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -2846,11 +2838,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should filter results by namespace selector", func(ctx SpecContext) {
 				By("creating a Deployment in test-namespace-1")
-				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-1"}}
+				tns1 := &corev1.Namespace{Name: "test-namespace-1"}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: "test-namespace-1"},
+					Name: "deployment-frontend", Namespace: "test-namespace-1",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -2865,11 +2857,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-2")
-				tns2 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-2"}}
+				tns2 := &corev1.Namespace{Name: "test-namespace-2"}
 				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: "test-namespace-2"},
+					Name: "deployment-backend", Namespace: "test-namespace-2",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -2906,7 +2898,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			It("should filter results by field selector", func(ctx SpecContext) {
 				By("creating a Deployment with name deployment-frontend")
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
+					Name: "deployment-frontend", Namespace: ns,
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -2922,7 +2914,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment with name deployment-backend")
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: ns},
+					Name: "deployment-backend", Namespace: ns,
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -2957,15 +2949,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should filter results by namespace selector and label selector", func(ctx SpecContext) {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
-				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-3"}}
+				tns3 := &corev1.Namespace{Name: "test-namespace-3"}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend3 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: "test-namespace-3",
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: "test-namespace-3",
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -2981,11 +2971,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment in test-namespace-3 with the app=backend label")
 				depBackend3 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-backend",
-						Namespace: "test-namespace-3",
-						Labels:    map[string]string{"app": "backend"},
-					},
+					Name:      "deployment-backend",
+					Namespace: "test-namespace-3",
+					Labels:    map[string]string{"app": "backend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3000,15 +2988,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-4 with the app=frontend label")
-				tns4 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-4"}}
+				tns4 := &corev1.Namespace{Name: "test-namespace-4"}
 				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend4 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: "test-namespace-4",
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: "test-namespace-4",
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3052,9 +3038,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				makeDeployment := func(suffix string) *appsv1.Deployment {
 					return &appsv1.Deployment{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: fmt.Sprintf("deployment-%s", suffix),
-						},
+						Name: fmt.Sprintf("deployment-%s", suffix),
 						Spec: appsv1.DeploymentSpec{
 							Selector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
@@ -3210,11 +3194,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should filter results by namespace selector", func(ctx SpecContext) {
 				By("creating a Deployment in test-namespace-5")
-				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-5"}}
+				tns1 := &corev1.Namespace{Name: "test-namespace-5"}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: "test-namespace-5"},
+					Name: "deployment-frontend", Namespace: "test-namespace-5",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3229,11 +3213,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-6")
-				tns2 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-6"}}
+				tns2 := &corev1.Namespace{Name: "test-namespace-6"}
 				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: "test-namespace-6"},
+					Name: "deployment-backend", Namespace: "test-namespace-6",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3275,7 +3259,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			It("should filter results by field selector", func(ctx SpecContext) {
 				By("creating a Deployment with name deployment-frontend")
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
+					Name: "deployment-frontend", Namespace: ns,
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3291,7 +3275,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment with name deployment-backend")
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: ns},
+					Name: "deployment-backend", Namespace: ns,
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3331,15 +3315,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should filter results by namespace selector and label selector", func(ctx SpecContext) {
 				By("creating a Deployment in test-namespace-7 with the app=frontend label")
-				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-7"}}
+				tns3 := &corev1.Namespace{Name: "test-namespace-7"}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend3 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: "test-namespace-7",
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: "test-namespace-7",
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3355,11 +3337,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment in test-namespace-7 with the app=backend label")
 				depBackend3 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-backend",
-						Namespace: "test-namespace-7",
-						Labels:    map[string]string{"app": "backend"},
-					},
+					Name:      "deployment-backend",
+					Namespace: "test-namespace-7",
+					Labels:    map[string]string{"app": "backend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3374,15 +3354,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-8 with the app=frontend label")
-				tns4 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-8"}}
+				tns4 := &corev1.Namespace{Name: "test-namespace-8"}
 				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend4 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: "test-namespace-8",
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: "test-namespace-8",
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3509,11 +3487,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			It("should filter results by label selector", func(ctx SpecContext) {
 				By("creating a Deployment with the app=frontend label")
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: ns,
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: ns,
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3529,11 +3505,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment with the app=backend label")
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-backend",
-						Namespace: ns,
-						Labels:    map[string]string{"app": "backend"},
-					},
+					Name:      "deployment-backend",
+					Namespace: ns,
+					Labels:    map[string]string{"app": "backend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3573,11 +3547,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should filter results by namespace selector", func(ctx SpecContext) {
 				By("creating a Deployment in test-namespace-1")
-				tns1 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-1"}}
+				tns1 := &corev1.Namespace{Name: "test-namespace-1"}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns1, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: "test-namespace-1"},
+					Name: "deployment-frontend", Namespace: "test-namespace-1",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3592,11 +3566,11 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-2")
-				tns2 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-2"}}
+				tns2 := &corev1.Namespace{Name: "test-namespace-2"}
 				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns2, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: "test-namespace-2"},
+					Name: "deployment-backend", Namespace: "test-namespace-2",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3638,7 +3612,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			It("should filter results by field selector", func(ctx SpecContext) {
 				By("creating a Deployment with name deployment-frontend")
 				depFrontend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-frontend", Namespace: ns},
+					Name: "deployment-frontend", Namespace: ns,
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3654,7 +3628,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment with name deployment-backend")
 				depBackend := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-backend", Namespace: ns},
+					Name: "deployment-backend", Namespace: ns,
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3694,15 +3668,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 			It("should filter results by namespace selector and label selector", func(ctx SpecContext) {
 				By("creating a Deployment in test-namespace-3 with the app=frontend label")
-				tns3 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-3"}}
+				tns3 := &corev1.Namespace{Name: "test-namespace-3"}
 				_, err := clientset.CoreV1().Namespaces().Create(ctx, tns3, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend3 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: "test-namespace-3",
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: "test-namespace-3",
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3718,11 +3690,9 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("creating a Deployment in test-namespace-3 with the app=backend label")
 				depBackend3 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-backend",
-						Namespace: "test-namespace-3",
-						Labels:    map[string]string{"app": "backend"},
-					},
+					Name:      "deployment-backend",
+					Namespace: "test-namespace-3",
+					Labels:    map[string]string{"app": "backend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "backend"},
@@ -3737,15 +3707,13 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).NotTo(HaveOccurred())
 
 				By("creating a Deployment in test-namespace-4 with the app=frontend label")
-				tns4 := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace-4"}}
+				tns4 := &corev1.Namespace{Name: "test-namespace-4"}
 				_, err = clientset.CoreV1().Namespaces().Create(ctx, tns4, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				depFrontend4 := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "deployment-frontend",
-						Namespace: "test-namespace-4",
-						Labels:    map[string]string{"app": "frontend"},
-					},
+					Name:      "deployment-frontend",
+					Namespace: "test-namespace-4",
+					Labels:    map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -3793,9 +3761,7 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			It("should filter results using limit and continue options", func(ctx SpecContext) {
 				makeDeployment := func(suffix string) *appsv1.Deployment {
 					return &appsv1.Deployment{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: fmt.Sprintf("deployment-%s", suffix),
-						},
+						Name: fmt.Sprintf("deployment-%s", suffix),
 						Spec: appsv1.DeploymentSpec{
 							Selector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
@@ -4209,10 +4175,8 @@ var _ = Describe("ClientWithCache", func() {
 
 			BeforeEach(func(ctx SpecContext) {
 				dep = &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   "deployment1",
-						Labels: map[string]string{"app": "frontend"},
-					},
+					Name:   "deployment1",
+					Labels: map[string]string{"app": "frontend"},
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "frontend"},
@@ -4339,11 +4303,9 @@ var _ = Describe("Patch", func() {
 
 		BeforeEach(func() {
 			cm = &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:       metav1.NamespaceDefault,
-					Name:            "cm",
-					ResourceVersion: "10",
-				},
+				Namespace:       metav1.NamespaceDefault,
+				Name:            "cm",
+				ResourceVersion: "10",
 			}
 		})
 
@@ -4403,11 +4365,9 @@ var _ = Describe("Patch", func() {
 
 		BeforeEach(func() {
 			dep = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:       metav1.NamespaceDefault,
-					Name:            "dep",
-					ResourceVersion: "10",
-				},
+				Namespace:       metav1.NamespaceDefault,
+				Name:            "dep",
+				ResourceVersion: "10",
 				Spec: appsv1.DeploymentSpec{
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{Containers: []corev1.Container{{

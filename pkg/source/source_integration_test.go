@@ -50,7 +50,7 @@ var _ = Describe("Source", func() {
 		ns = fmt.Sprintf("controller-source-kindsource-%v", count)
 		count++
 		_, err := clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: ns},
+			Name: ns,
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -81,7 +81,7 @@ var _ = Describe("Source", func() {
 				// Get the client and Deployment used to create events
 				client := clientset.AppsV1().Deployments(ns)
 				deployment := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "deployment-name"},
+					Name: "deployment-name",
 					Spec: appsv1.DeploymentSpec{
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"foo": "bar"},
@@ -214,7 +214,7 @@ var _ = Describe("Source", func() {
 
 			c = make(chan struct{})
 			rs = &appsv1.ReplicaSet{
-				ObjectMeta: metav1.ObjectMeta{Name: "informer-rs-name"},
+				Name: "informer-rs-name",
 				Spec: appsv1.ReplicaSetSpec{
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},

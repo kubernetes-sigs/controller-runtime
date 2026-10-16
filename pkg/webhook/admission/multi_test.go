@@ -30,18 +30,14 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 	alwaysAllow := &fakeHandler{
 		fn: func(ctx context.Context, req Request) Response {
 			return Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
-					Allowed: true,
-				},
+				Allowed: true,
 			}
 		},
 	}
 	alwaysDeny := &fakeHandler{
 		fn: func(ctx context.Context, req Request) Response {
 			return Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
-					Allowed: false,
-				},
+				Allowed: false,
 			}
 		},
 	}
@@ -49,10 +45,8 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 	withWarnings := &fakeHandler{
 		fn: func(ctx context.Context, req Request) Response {
 			return Response{
-				AdmissionResponse: admissionv1.AdmissionResponse{
-					Allowed:  true,
-					Warnings: []string{"handler-warning"},
-				},
+				Allowed:  true,
+				Warnings: []string{"handler-warning"},
 			}
 		},
 	}
@@ -105,10 +99,8 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "2",
 						},
 					},
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed:   true,
-						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
-					},
+					Allowed:   true,
+					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 				}
 			},
 		}
@@ -122,10 +114,8 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "world",
 						},
 					},
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed:   true,
-						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
-					},
+					Allowed:   true,
+					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 				}
 			},
 		}
@@ -140,11 +130,9 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 							Value:     "value",
 						},
 					},
-					AdmissionResponse: admissionv1.AdmissionResponse{
-						Allowed:   true,
-						Warnings:  []string{"annotation-warning"},
-						PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
-					},
+					Allowed:   true,
+					Warnings:  []string{"annotation-warning"},
+					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 				}
 			},
 		}

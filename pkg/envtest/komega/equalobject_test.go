@@ -37,50 +37,38 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "succeed with equal objects",
 			original: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
+				Name: "test",
 			},
 			modified: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
+				Name: "test",
 			},
 			want: true,
 		},
 		{
 			name: "fail with non equal objects",
 			original: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
+				Name: "test",
 			},
 			modified: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "somethingelse",
-				},
+				Name: "somethingelse",
 			},
 			want: false,
 		},
 		{
 			name: "succeeds if ignored fields do not match",
 			original: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "test",
-					Labels: map[string]string{"somelabel": "somevalue"},
-					OwnerReferences: []metav1.OwnerReference{{
-						Name: "controller",
-					}},
-				},
+				Name:   "test",
+				Labels: map[string]string{"somelabel": "somevalue"},
+				OwnerReferences: []metav1.OwnerReference{{
+					Name: "controller",
+				}},
 			},
 			modified: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "somethingelse",
-					Labels: map[string]string{"somelabel": "anothervalue"},
-					OwnerReferences: []metav1.OwnerReference{{
-						Name: "another",
-					}},
-				},
+				Name:   "somethingelse",
+				Labels: map[string]string{"somelabel": "anothervalue"},
+				OwnerReferences: []metav1.OwnerReference{{
+					Name: "another",
+				}},
 			},
 			want: true,
 			options: []EqualObjectOption{
@@ -96,22 +84,18 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "succeeds if ignored fields in json notation do not match",
 			original: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "test",
-					Labels: map[string]string{"somelabel": "somevalue"},
-					OwnerReferences: []metav1.OwnerReference{{
-						Name: "controller",
-					}},
-				},
+				Name:   "test",
+				Labels: map[string]string{"somelabel": "somevalue"},
+				OwnerReferences: []metav1.OwnerReference{{
+					Name: "controller",
+				}},
 			},
 			modified: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "somethingelse",
-					Labels: map[string]string{"somelabel": "anothervalue"},
-					OwnerReferences: []metav1.OwnerReference{{
-						Name: "another",
-					}},
-				},
+				Name:   "somethingelse",
+				Labels: map[string]string{"somelabel": "anothervalue"},
+				OwnerReferences: []metav1.OwnerReference{{
+					Name: "another",
+				}},
 			},
 			want: true,
 			options: []EqualObjectOption{
@@ -127,16 +111,12 @@ func TestEqualObjectMatcher(t *testing.T) {
 		{
 			name: "succeeds if all allowed fields match, and some others do not",
 			original: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "default",
-				},
+				Name:      "test",
+				Namespace: "default",
 			},
 			modified: &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "special",
-				},
+				Name:      "test",
+				Namespace: "special",
 			},
 			want: true,
 			options: []EqualObjectOption{

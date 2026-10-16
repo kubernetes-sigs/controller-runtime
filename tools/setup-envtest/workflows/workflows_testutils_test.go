@@ -102,21 +102,21 @@ var (
 	// keep this sorted.
 	localVersions = []versions.Set{
 		{Version: ver(1, 17, 9), Platforms: []versions.PlatformItem{
-			{Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
+			{OS: "linux", Arch: "amd64"},
 		}},
 		{Version: ver(1, 16, 2), Platforms: []versions.PlatformItem{
-			{Platform: versions.Platform{OS: "linux", Arch: "yourimagination"}},
-			{Platform: versions.Platform{OS: "ifonlysingularitywasstillathing", Arch: "amd64"}},
+			{OS: "linux", Arch: "yourimagination"},
+			{OS: "ifonlysingularitywasstillathing", Arch: "amd64"},
 		}},
 		{Version: ver(1, 16, 1), Platforms: []versions.PlatformItem{
-			{Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
+			{OS: "linux", Arch: "amd64"},
 		}},
 		{Version: ver(1, 16, 0), Platforms: []versions.PlatformItem{
-			{Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
+			{OS: "linux", Arch: "amd64"},
 		}},
 		{Version: ver(1, 14, 26), Platforms: []versions.PlatformItem{
-			{Platform: versions.Platform{OS: "linux", Arch: "amd64"}},
-			{Platform: versions.Platform{OS: "hyperwarp", Arch: "pixiedust"}},
+			{OS: "linux", Arch: "amd64"},
+			{OS: "hyperwarp", Arch: "pixiedust"},
 		}},
 	}
 )

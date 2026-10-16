@@ -63,11 +63,9 @@ func createPodWithLabels(ctx context.Context, name, namespace string, restartPol
 	}
 	labels["test-label"] = name
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
-		},
+		Name:      name,
+		Namespace: namespace,
+		Labels:    labels,
 		Spec: corev1.PodSpec{
 			Containers:            []corev1.Container{{Name: "nginx", Image: "nginx"}},
 			RestartPolicy:         restartPolicy,
@@ -83,10 +81,8 @@ func createPodWithLabels(ctx context.Context, name, namespace string, restartPol
 
 func createSvc(ctx context.Context, name, namespace string, cl client.Client) client.Object {
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
+		Name:      name,
+		Namespace: namespace,
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{{Port: 1}},
 		},
@@ -98,10 +94,8 @@ func createSvc(ctx context.Context, name, namespace string, cl client.Client) cl
 
 func createSA(ctx context.Context, name, namespace string, cl client.Client) client.Object {
 	sa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
+		Name:      name,
+		Namespace: namespace,
 	}
 	err := cl.Create(ctx, sa)
 	Expect(err).NotTo(HaveOccurred())
@@ -421,9 +415,9 @@ var _ = Describe("Cache with selectors", func() {
 		cl, err := client.New(cfg, client.Options{})
 		Expect(err).NotTo(HaveOccurred())
 		for idx, namespace := range []string{testNamespaceOne, testNamespaceTwo} {
-			err = cl.Delete(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "test-sa-" + strconv.Itoa(idx)}})
+			err = cl.Delete(ctx, &corev1.ServiceAccount{Namespace: namespace, Name: "test-sa-" + strconv.Itoa(idx)})
 			Expect(err).NotTo(HaveOccurred())
-			err = cl.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "test-svc-" + strconv.Itoa(idx)}})
+			err = cl.Delete(ctx, &corev1.Service{Namespace: namespace, Name: "test-svc-" + strconv.Itoa(idx)})
 			Expect(err).NotTo(HaveOccurred())
 		}
 		informerCacheCancel()
@@ -575,10 +569,8 @@ func NonBlockingGetTest(createCacheFunc func(config *rest.Config, opts cache.Opt
 			It("should be able to get informer for the object without blocking", func(specCtx SpecContext) {
 				By("getting a shared index informer for a pod")
 				pod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "informer-obj",
-						Namespace: "default",
-					},
+					Name:      "informer-obj",
+					Namespace: "default",
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
 							{
@@ -1941,10 +1933,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("should be able to get informer for the object", func(ctx SpecContext) {
 					By("getting a shared index informer for a pod")
 					pod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "informer-obj",
-							Namespace: "default",
-						},
+						Name:      "informer-obj",
+						Namespace: "default",
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
@@ -1994,10 +1984,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 				It("should be able to stop and restart informers", func(ctx SpecContext) {
 					By("getting a shared index informer for a pod")
 					pod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "informer-obj",
-							Namespace: "default",
-						},
+						Name:      "informer-obj",
+						Namespace: "default",
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
@@ -2062,10 +2050,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					cl, err := client.New(cfg, client.Options{})
 					Expect(err).NotTo(HaveOccurred())
 					pod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "informer-gvk",
-							Namespace: "default",
-						},
+						Name:      "informer-gvk",
+						Namespace: "default",
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
@@ -2118,10 +2104,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("getting a shared index informer for a pod with a cancelled context")
 					pod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "informer-obj",
-							Namespace: "default",
-						},
+						Name:      "informer-obj",
+						Namespace: "default",
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
@@ -2405,10 +2389,8 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					By("getting a shared index informer for a pod")
 
 					pod := &corev1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "informer-obj",
-							Namespace: "default",
-						},
+						Name:      "informer-obj",
+						Namespace: "default",
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
@@ -2585,11 +2567,10 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 var _ = Describe("TransformStripManagedFields", func() {
 	It("should strip managed fields from an object", func() {
-		obj := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		obj := &corev1.Pod{
 			ManagedFields: []metav1.ManagedFieldsEntry{{
 				Manager: "foo",
-			}},
-		}}
+			}}}
 		transformed, err := cache.TransformStripManagedFields()(obj)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(transformed).To(Equal(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{}}))
@@ -2605,13 +2586,9 @@ var _ = Describe("TransformStripManagedFields", func() {
 // ensureNamespace installs namespace of a given name if not exists.
 func ensureNamespace(ctx context.Context, namespace string, client client.Client) error {
 	ns := corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Namespace",
-			APIVersion: "v1",
-		},
+		Name:       namespace,
+		Kind:       "Namespace",
+		APIVersion: "v1",
 	}
 	err := client.Create(ctx, &ns)
 	if apierrors.IsAlreadyExists(err) {
@@ -2622,14 +2599,10 @@ func ensureNamespace(ctx context.Context, namespace string, client client.Client
 
 func ensureNode(ctx context.Context, name string, client client.Client) error {
 	node := corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: map[string]string{"name": name},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Node",
-			APIVersion: "v1",
-		},
+		Name:       name,
+		Labels:     map[string]string{"name": name},
+		Kind:       "Node",
+		APIVersion: "v1",
 	}
 	err := client.Create(ctx, &node)
 	if apierrors.IsAlreadyExists(err) {

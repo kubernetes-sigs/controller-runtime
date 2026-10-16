@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestDefaultGet(t *testing.T) {
@@ -31,10 +30,8 @@ func TestDefaultGet(t *testing.T) {
 	SetClient(fc)
 
 	fetched := appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "test",
-		},
+		Namespace: "default",
+		Name:      "test",
 	}
 	g.Eventually(Get(&fetched)).Should(Succeed())
 
@@ -103,10 +100,8 @@ func TestDefaultObject(t *testing.T) {
 	SetClient(fc)
 
 	fetched := appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "test",
-		},
+		Namespace: "default",
+		Name:      "test",
 	}
 	g.Eventually(Object(&fetched)).Should(And(
 		Not(BeNil()),

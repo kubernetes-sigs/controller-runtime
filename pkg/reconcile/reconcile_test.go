@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -65,7 +64,7 @@ var _ = Describe("reconcile", func() {
 	Describe("Func", func() {
 		It("should call the function with the request and return a nil error.", func(ctx SpecContext) {
 			request := reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: "foo", Namespace: "bar"},
+				Name: "foo", Namespace: "bar",
 			}
 			result := reconcile.Result{
 				Requeue: true,
@@ -84,7 +83,7 @@ var _ = Describe("reconcile", func() {
 
 		It("should call the function with the request and return an error.", func(ctx SpecContext) {
 			request := reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: "foo", Namespace: "bar"},
+				Name: "foo", Namespace: "bar",
 			}
 			result := reconcile.Result{
 				Requeue: false,
@@ -138,10 +137,8 @@ var _ = Describe("reconcile", func() {
 
 			BeforeEach(func(ctx SpecContext) {
 				cm := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "default",
-						Name:      "test",
-					},
+					Namespace: "default",
+					Name:      "test",
 				}
 				key = client.ObjectKeyFromObject(cm)
 

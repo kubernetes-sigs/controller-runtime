@@ -30,11 +30,9 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 		It("should return an 'allowed' response", func() {
 			Expect(Authenticated("", authenticationv1.UserInfo{})).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: true,
-							User:          authenticationv1.UserInfo{},
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: true,
+						User:          authenticationv1.UserInfo{},
 					},
 				},
 			))
@@ -43,12 +41,10 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 		It("should populate a status with a reason when a reason is given", func() {
 			Expect(Authenticated("acceptable", authenticationv1.UserInfo{})).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: true,
-							User:          authenticationv1.UserInfo{},
-							Error:         "acceptable",
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: true,
+						User:          authenticationv1.UserInfo{},
+						Error:         "acceptable",
 					},
 				},
 			))
@@ -59,12 +55,10 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 		It("should return a 'not allowed' response", func() {
 			Expect(Unauthenticated("", authenticationv1.UserInfo{})).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: false,
-							User:          authenticationv1.UserInfo{},
-							Error:         "",
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: false,
+						User:          authenticationv1.UserInfo{},
+						Error:         "",
 					},
 				},
 			))
@@ -73,12 +67,10 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 		It("should populate a status with a reason when a reason is given", func() {
 			Expect(Unauthenticated("UNACCEPTABLE!", authenticationv1.UserInfo{})).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: false,
-							User:          authenticationv1.UserInfo{},
-							Error:         "UNACCEPTABLE!",
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: false,
+						User:          authenticationv1.UserInfo{},
+						Error:         "UNACCEPTABLE!",
 					},
 				},
 			))
@@ -89,12 +81,10 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 		It("should return a unauthenticated response with an error", func() {
 			err := errors.New("this is an error")
 			expected := Response{
-				TokenReview: authenticationv1.TokenReview{
-					Status: authenticationv1.TokenReviewStatus{
-						Authenticated: false,
-						User:          authenticationv1.UserInfo{},
-						Error:         err.Error(),
-					},
+				Status: authenticationv1.TokenReviewStatus{
+					Authenticated: false,
+					User:          authenticationv1.UserInfo{},
+					Error:         err.Error(),
 				},
 			}
 			resp := Errored(err)
@@ -107,12 +97,10 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 			By("checking that a message is populated for 'allowed' responses")
 			Expect(ReviewResponse(true, authenticationv1.UserInfo{}, "acceptable")).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: true,
-							User:          authenticationv1.UserInfo{},
-							Error:         "acceptable",
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: true,
+						User:          authenticationv1.UserInfo{},
+						Error:         "acceptable",
 					},
 				},
 			))
@@ -120,12 +108,10 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 			By("checking that a message is populated for 'Unauthenticated' responses")
 			Expect(ReviewResponse(false, authenticationv1.UserInfo{}, "UNACCEPTABLE!")).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: false,
-							User:          authenticationv1.UserInfo{},
-							Error:         "UNACCEPTABLE!",
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: false,
+						User:          authenticationv1.UserInfo{},
+						Error:         "UNACCEPTABLE!",
 					},
 				},
 			))
@@ -135,11 +121,9 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 			By("checking that it returns an 'allowed' response when allowed is true")
 			Expect(ReviewResponse(true, authenticationv1.UserInfo{}, "")).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: true,
-							User:          authenticationv1.UserInfo{},
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: true,
+						User:          authenticationv1.UserInfo{},
 					},
 				},
 			))
@@ -147,11 +131,9 @@ var _ = Describe("Authentication Webhook Response Helpers", func() {
 			By("checking that it returns an 'Unauthenticated' response when allowed is false")
 			Expect(ReviewResponse(false, authenticationv1.UserInfo{}, "")).To(Equal(
 				Response{
-					TokenReview: authenticationv1.TokenReview{
-						Status: authenticationv1.TokenReviewStatus{
-							Authenticated: false,
-							User:          authenticationv1.UserInfo{},
-						},
+					Status: authenticationv1.TokenReviewStatus{
+						Authenticated: false,
+						User:          authenticationv1.UserInfo{},
 					},
 				},
 			))

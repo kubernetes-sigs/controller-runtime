@@ -54,9 +54,7 @@ var (
 	scheme = runtime.NewScheme()
 
 	driverCRD = &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "drivers.crew.example.com",
-		},
+		Name: "drivers.crew.example.com",
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 			Group: crewv1.GroupVersion.Group,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{

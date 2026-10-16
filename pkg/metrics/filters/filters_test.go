@@ -205,10 +205,8 @@ func setupServiceAccountForURL(ctx context.Context, c client.Client, path string
 	}
 
 	sa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "metrics-test",
-			Namespace: metav1.NamespaceDefault,
-		},
+		Name:      "metrics-test",
+		Namespace: metav1.NamespaceDefault,
 	}
 	if err := c.Create(ctx, sa); err != nil {
 		return "", cleanup, err
@@ -216,9 +214,7 @@ func setupServiceAccountForURL(ctx context.Context, c client.Client, path string
 	createdObjects = append(createdObjects, sa)
 
 	cr := &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "metrics-test",
-		},
+		Name: "metrics-test",
 		Rules: []rbacv1.PolicyRule{
 			{
 				Verbs:           []string{"get", "put"},
@@ -232,9 +228,7 @@ func setupServiceAccountForURL(ctx context.Context, c client.Client, path string
 	createdObjects = append(createdObjects, cr)
 
 	crb := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "metrics-test",
-		},
+		Name: "metrics-test",
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,

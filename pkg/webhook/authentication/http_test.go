@@ -227,9 +227,9 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 	if h.fn != nil {
 		return h.fn(ctx, req)
 	}
-	return Response{TokenReview: authenticationv1.TokenReview{
+	return Response{
 		Status: authenticationv1.TokenReviewStatus{
 			Authenticated: true,
 		},
-	}}
+	}
 }

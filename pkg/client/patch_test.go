@@ -25,7 +25,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func BenchmarkMergeFrom(b *testing.B) {
@@ -49,9 +48,7 @@ func BenchmarkMergeFrom(b *testing.B) {
 			},
 		},
 		ReadinessProbe: &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{},
-			},
+			HTTPGet: &corev1.HTTPGetAction{},
 		},
 		Lifecycle: &corev1.Lifecycle{
 			PreStop: &corev1.LifecycleHandler{
@@ -103,10 +100,8 @@ var _ = Describe("MergeFrom", func() {
 		var largeInt64 int64 = 9223372036854775807
 		var similarLargeInt64 int64 = 9223372036854775800
 		j := batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "test",
-				Name:      "test",
-			},
+			Namespace: "test",
+			Name:      "test",
 			Spec: batchv1.JobSpec{
 				ActiveDeadlineSeconds: &largeInt64,
 			},

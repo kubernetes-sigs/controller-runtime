@@ -51,15 +51,13 @@ func (hs multiMutating) Handle(ctx context.Context, req Request) Response {
 		return Errored(http.StatusBadRequest, fmt.Errorf("error when marshaling the patch: %w", err))
 	}
 	return Response{
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: true,
-			Result: &metav1.Status{
-				Code: http.StatusOK,
-			},
-			Patch:     marshaledPatch,
-			Warnings:  warnings,
-			PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+		Allowed: true,
+		Result: &metav1.Status{
+			Code: http.StatusOK,
 		},
+		Patch:     marshaledPatch,
+		Warnings:  warnings,
+		PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
 	}
 }
 
@@ -83,13 +81,11 @@ func (hs multiValidating) Handle(ctx context.Context, req Request) Response {
 		warnings = append(warnings, resp.Warnings...)
 	}
 	return Response{
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: true,
-			Result: &metav1.Status{
-				Code: http.StatusOK,
-			},
-			Warnings: warnings,
+		Allowed: true,
+		Result: &metav1.Status{
+			Code: http.StatusOK,
 		},
+		Warnings: warnings,
 	}
 }
 

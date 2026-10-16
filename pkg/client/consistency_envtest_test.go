@@ -27,7 +27,6 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -138,7 +137,7 @@ var _ = Describe("ConsistentClient", func() {
 
 			DescribeTable("write then read",
 				func(ctx context.Context, write func(ctx context.Context, cl client.Client, cm client.Object) (writeResult, error)) {
-					ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-wtr-%d", counter.Add(1))}}
+					ns := &corev1.Namespace{Name: fmt.Sprintf("consistency-wtr-%d", counter.Add(1))}
 					Expect(cl.Create(ctx, ns)).To(Succeed())
 					DeferCleanup(func(ctx context.Context) {
 						Expect(client.IgnoreNotFound(cl.Delete(ctx, ns))).To(Succeed())
@@ -320,14 +319,14 @@ var _ = Describe("ConsistentClient", func() {
 		})
 
 		It("evicts a pod without erroring", func() {
-			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("consistency-evict-%d", counter.Add(1))}}
+			ns := &corev1.Namespace{Name: fmt.Sprintf("consistency-evict-%d", counter.Add(1))}
 			Expect(cl.Create(ctx, ns)).To(Succeed())
 			DeferCleanup(func(ctx context.Context) {
 				Expect(client.IgnoreNotFound(cl.Delete(ctx, ns))).To(Succeed())
 			})
 
 			pod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Namespace: ns.Name, Name: fmt.Sprintf("consistency-evict-%d", counter.Add(1))},
+				Namespace: ns.Name, Name: fmt.Sprintf("consistency-evict-%d", counter.Add(1)),
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{Name: "c", Image: "example.com/does-not-matter"}},
 				},
@@ -337,7 +336,7 @@ var _ = Describe("ConsistentClient", func() {
 			// This is the scenario from https://github.com/kubernetes-sigs/controller-runtime/issues/3590:
 			// the eviction response is decoded into a policy/v1.Eviction, not the Pod, so the client
 			// must not try to read a resource version to wait for off the Pod after this write.
-			eviction := &policyv1.Eviction{ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name}}
+			eviction := &policyv1.Eviction{Namespace: pod.Namespace, Name: pod.Name}
 			Expect(cl.SubResource("eviction").Create(ctx, pod, eviction)).To(Succeed())
 		})
 	})

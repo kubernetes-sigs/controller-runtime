@@ -20,9 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -37,9 +35,8 @@ var _ = Describe("Admission Webhook Decoder", func() {
 	})
 
 	req := Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: []byte(`{
+		Object: runtime.RawExtension{
+			Raw: []byte(`{
     "apiVersion": "v1",
     "kind": "Pod",
     "metadata": {
@@ -55,9 +52,9 @@ var _ = Describe("Admission Webhook Decoder", func() {
         ]
     }
 }`),
-			},
-			OldObject: runtime.RawExtension{
-				Raw: []byte(`{
+		},
+		OldObject: runtime.RawExtension{
+			Raw: []byte(`{
     "apiVersion": "v1",
     "kind": "Pod",
     "metadata": {
@@ -73,7 +70,6 @@ var _ = Describe("Admission Webhook Decoder", func() {
         ]
     }
 }`),
-			},
 		},
 	}
 
@@ -84,14 +80,10 @@ var _ = Describe("Admission Webhook Decoder", func() {
 
 		By("verifying that all data is present in the object")
 		Expect(actualObj).To(Equal(corev1.Pod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "Pod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: "default",
-			},
+			APIVersion: "v1",
+			Kind:       "Pod",
+			Name:       "foo",
+			Namespace:  "default",
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{Image: "bar:v2", Name: "bar"},
@@ -107,14 +99,10 @@ var _ = Describe("Admission Webhook Decoder", func() {
 
 		By("verifying that all data is present in the object")
 		Expect(actualObj).To(Equal(corev1.Pod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "Pod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: "default",
-			},
+			APIVersion: "v1",
+			Kind:       "Pod",
+			Name:       "foo",
+			Namespace:  "default",
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
 					{Image: "bar:v1", Name: "bar"},
@@ -156,10 +144,9 @@ var _ = Describe("Admission Webhook Decoder", func() {
 	})
 
 	req2 := Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: "CREATE",
-			Object: runtime.RawExtension{
-				Raw: []byte(`{
+		Operation: "CREATE",
+		Object: runtime.RawExtension{
+			Raw: []byte(`{
     "metadata": {
         "name": "foo",
         "namespace": "default"
@@ -173,10 +160,9 @@ var _ = Describe("Admission Webhook Decoder", func() {
         ]
     }
 	}`),
-			},
-			OldObject: runtime.RawExtension{
-				Object: nil,
-			},
+		},
+		OldObject: runtime.RawExtension{
+			Object: nil,
 		},
 	}
 

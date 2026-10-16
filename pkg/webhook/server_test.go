@@ -57,7 +57,7 @@ var _ = Describe("Webhook Server", func() {
 
 		// bypass needing to set up the x509 cert pool, etc ourselves
 		clientTransport, err := rest.TransportFor(&rest.Config{
-			TLSClientConfig: rest.TLSClientConfig{CAData: servingOpts.LocalServingCAData},
+			CAData: servingOpts.LocalServingCAData,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		client = &http.Client{

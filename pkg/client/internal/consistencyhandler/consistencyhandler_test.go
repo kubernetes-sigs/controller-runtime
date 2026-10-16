@@ -25,17 +25,15 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 func configMap(key types.NamespacedName, uid types.UID, rv string) *corev1.ConfigMap {
-	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+	return &corev1.ConfigMap{
 		Namespace:       key.Namespace,
 		Name:            key.Name,
 		UID:             uid,
-		ResourceVersion: rv,
-	}}
+		ResourceVersion: rv}
 }
 
 func TestWaitForGetWaitsForMinRV(t *testing.T) {

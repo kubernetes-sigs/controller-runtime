@@ -27,8 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -132,10 +130,8 @@ func Example_customHandler() {
 			for _, item := range crList.Items {
 				if item.ConfigMapRef.Name == cm.GetName() {
 					reqs = append(reqs, ctrl.Request{
-						NamespacedName: types.NamespacedName{
-							Namespace: item.GetNamespace(),
-							Name:      item.GetName(),
-						},
+						Namespace: item.GetNamespace(),
+						Name:      item.GetName(),
 					})
 				}
 			}

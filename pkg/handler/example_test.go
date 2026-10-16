@@ -21,7 +21,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -71,14 +70,12 @@ func ExampleEnqueueRequestsFromMapFunc() {
 		source.Kind(mgr.GetCache(), &appsv1.Deployment{},
 			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, a *appsv1.Deployment) []reconcile.Request {
 				return []reconcile.Request{
-					{NamespacedName: types.NamespacedName{
+					{
 						Name:      a.Name + "-1",
-						Namespace: a.Namespace,
-					}},
-					{NamespacedName: types.NamespacedName{
+						Namespace: a.Namespace},
+					{
 						Name:      a.Name + "-2",
-						Namespace: a.Namespace,
-					}},
+						Namespace: a.Namespace},
 				}
 			}),
 		),
@@ -95,28 +92,24 @@ func ExampleFuncs() {
 		source.Kind(mgr.GetCache(), &corev1.Pod{},
 			handler.TypedFuncs[*corev1.Pod, reconcile.Request]{
 				CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					q.Add(reconcile.Request{
 						Name:      e.Object.Name,
-						Namespace: e.Object.Namespace,
-					}})
+						Namespace: e.Object.Namespace})
 				},
 				UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					q.Add(reconcile.Request{
 						Name:      e.ObjectNew.Name,
-						Namespace: e.ObjectNew.Namespace,
-					}})
+						Namespace: e.ObjectNew.Namespace})
 				},
 				DeleteFunc: func(ctx context.Context, e event.TypedDeleteEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					q.Add(reconcile.Request{
 						Name:      e.Object.Name,
-						Namespace: e.Object.Namespace,
-					}})
+						Namespace: e.Object.Namespace})
 				},
 				GenericFunc: func(ctx context.Context, e event.TypedGenericEvent[*corev1.Pod], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-					q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+					q.Add(reconcile.Request{
 						Name:      e.Object.Name,
-						Namespace: e.Object.Namespace,
-					}})
+						Namespace: e.Object.Namespace})
 				},
 			},
 		),

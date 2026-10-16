@@ -23,7 +23,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -87,8 +86,8 @@ func run() error {
 				result := make([]request, 0, len(allTargets))
 				for targetCluster := range allTargets {
 					result = append(result, request{
-						NamespacedName: types.NamespacedName{Namespace: s.Namespace, Name: s.Name},
-						clusterName:    targetCluster,
+						Namespace: s.Namespace, Name: s.Name,
+						clusterName: targetCluster,
 					})
 				}
 
@@ -109,8 +108,8 @@ func run() error {
 				}
 
 				return []request{{
-					NamespacedName: types.NamespacedName{Namespace: sourceNamespace, Name: s.Name},
-					clusterName:    targetClusterName,
+					Namespace: sourceNamespace, Name: s.Name,
+					clusterName: targetClusterName,
 				}}
 			}),
 		))
@@ -159,10 +158,9 @@ func (s *secretSyncReconciler) Reconcile(ctx context.Context, req request) (reco
 		if !apierrors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("failed to get secret %s from reference cluster: %w", req.String(), err)
 		}
-		if err := targetClient.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		if err := targetClient.Delete(ctx, &corev1.Secret{
 			Name:      req.Name,
-			Namespace: targetNamespace,
-		}}); err != nil {
+			Namespace: targetNamespace}); err != nil {
 			if !apierrors.IsNotFound(err) {
 				return reconcile.Result{}, fmt.Errorf("failed to delete secret %s/%s in cluster %s: %w", targetNamespace, req.Name, req.clusterName, err)
 			}
@@ -174,10 +172,9 @@ func (s *secretSyncReconciler) Reconcile(ctx context.Context, req request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	target := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+	target := &corev1.Secret{
 		Name:      reference.Name,
-		Namespace: targetNamespace,
-	}}
+		Namespace: targetNamespace}
 	result, err := controllerutil.CreateOrUpdate(ctx, targetClient, target, func() error {
 		target.Data = reference.Data
 		return nil

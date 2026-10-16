@@ -46,14 +46,10 @@ var _ = Describe("Webhook", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		obj = &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-deployment",
-				Namespace: "default",
-			},
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+			Name:       "test-deployment",
+			Namespace:  "default",
 			Spec: appsv1.DeploymentSpec{
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"foo": "bar"},

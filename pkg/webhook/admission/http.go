@@ -104,9 +104,10 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The actual AdmissionReview GVK will be used to write a typed response in case the
 	// webhook config permits multiple versions, otherwise this response will fail.
 	req := Request{}
-	ar := unversionedAdmissionReview{}
-	// avoid an extra copy
-	ar.Request = &req.AdmissionRequest
+	ar := unversionedAdmissionReview{
+		// avoid an extra copy
+		Request: &req.AdmissionRequest,
+	}
 	ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
 	_, actualAdmRevGVK, err := admissionCodecs.UniversalDeserializer().Decode(body, nil, &ar)
 	if err != nil {

@@ -1828,8 +1828,8 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("adding a runnable that emits an event")
-		ns := corev1.Namespace{}
-		ns.Name = "default"
+		ns := corev1.Namespace{
+			Name: "default"}
 
 		recorder := m.GetEventRecorderFor("rock-and-roll") //nolint:staticcheck
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {
@@ -1876,8 +1876,8 @@ var _ = Describe("manger.Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("adding a runnable that emits an event")
-		ns := corev1.Namespace{}
-		ns.Name = "default"
+		ns := corev1.Namespace{
+			Name: "default"}
 
 		recorder := m.GetEventRecorder("rock-and-roll")
 		Expect(m.Add(RunnableFunc(func(_ context.Context) error {

@@ -67,13 +67,11 @@ var _ = Describe("KubeConfigFromREST", func() {
 
 	BeforeEach(func() {
 		restCfg = &rest.Config{
-			Host:    "https://some-host:8675",
-			APIPath: "/some-prefix",
-			TLSClientConfig: rest.TLSClientConfig{
-				CertData: []byte("cert"),
-				KeyData:  []byte("key"),
-				CAData:   []byte("ca-cert"),
-			},
+			Host:        "https://some-host:8675",
+			APIPath:     "/some-prefix",
+			CertData:    []byte("cert"),
+			KeyData:     []byte("key"),
+			CAData:      []byte("ca-cert"),
 			BearerToken: "some-tok",
 			Username:    "some-user",
 			Password:    "some-password",

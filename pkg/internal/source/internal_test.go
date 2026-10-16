@@ -308,10 +308,8 @@ var _ = Describe("Internal", func() {
 		It("should return kind source underlying type for PartialObjectMetadata", func() {
 			kind := internal.Kind[*metav1.PartialObjectMetadata, reconcile.Request]{
 				Type: &metav1.PartialObjectMetadata{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: "apps/v1",
-						Kind:       "Deployment",
-					},
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
 				},
 			}
 			Expect(kind.String()).Should(Equal("kind source: *v1.PartialObjectMetadata[apps/v1 Deployment]"))

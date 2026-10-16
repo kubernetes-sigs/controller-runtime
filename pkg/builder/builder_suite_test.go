@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -77,13 +76,9 @@ func addCRDToEnvironment(env *envtest.Environment, gvks ...schema.GroupVersionKi
 	for _, gvk := range gvks {
 		plural, singular := meta.UnsafeGuessKindToResource(gvk)
 		crd := &apiextensionsv1.CustomResourceDefinition{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apiextensions.k8s.io/v1",
-				Kind:       "CustomResourceDefinition",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: plural.Resource + "." + gvk.Group,
-			},
+			APIVersion: "apiextensions.k8s.io/v1",
+			Kind:       "CustomResourceDefinition",
+			Name:       plural.Resource + "." + gvk.Group,
 			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 				Group: gvk.Group,
 				Names: apiextensionsv1.CustomResourceDefinitionNames{

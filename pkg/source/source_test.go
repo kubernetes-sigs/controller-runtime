@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -291,7 +290,7 @@ var _ = Describe("Source", func() {
 				ch := make(chan event.GenericEvent)
 				c := make(chan struct{})
 				p := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+					Name: "foo", Namespace: "bar",
 				}
 				evt := event.GenericEvent{
 					Object: p,

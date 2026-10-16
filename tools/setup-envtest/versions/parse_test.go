@@ -33,9 +33,7 @@ func patchSpec(x, y int, z PointVersion) Spec {
 
 func tildeSel(x, y, z int) TildeSelector {
 	return TildeSelector{
-		Concrete: Concrete{
-			Major: x, Minor: y, Patch: z,
-		},
+		Major: x, Minor: y, Patch: z,
 	}
 }
 

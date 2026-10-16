@@ -71,7 +71,7 @@ var _ = Describe("recorder", func() {
 			}()
 
 			deployment := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "deprecated-deployment-name"},
+				Name: "deprecated-deployment-name",
 				Spec: appsv1.DeploymentSpec{
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},

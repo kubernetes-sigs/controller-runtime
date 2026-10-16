@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -65,25 +64,19 @@ func initializeWebhookInEnvironment() {
 	testenv.WebhookInstallOptions = envtest.WebhookInstallOptions{
 		ValidatingWebhooks: []*admissionv1.ValidatingWebhookConfiguration{
 			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "deployment-validation-webhook-config",
-				},
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "ValidatingWebhookConfiguration",
-					APIVersion: "admissionregistration.k8s.io/v1",
-				},
+				Name:       "deployment-validation-webhook-config",
+				Kind:       "ValidatingWebhookConfiguration",
+				APIVersion: "admissionregistration.k8s.io/v1",
 				Webhooks: []admissionv1.ValidatingWebhook{
 					{
 						Name: "deployment-validation.kubebuilder.io",
 						Rules: []admissionv1.RuleWithOperations{
 							{
-								Operations: []admissionv1.OperationType{"CREATE", "UPDATE"},
-								Rule: admissionv1.Rule{
-									APIGroups:   []string{"apps"},
-									APIVersions: []string{"v1"},
-									Resources:   []string{"deployments"},
-									Scope:       &namespacedScopeV1,
-								},
+								Operations:  []admissionv1.OperationType{"CREATE", "UPDATE"},
+								APIGroups:   []string{"apps"},
+								APIVersions: []string{"v1"},
+								Resources:   []string{"deployments"},
+								Scope:       &namespacedScopeV1,
 							},
 						},
 						FailurePolicy: &failedTypeV1,

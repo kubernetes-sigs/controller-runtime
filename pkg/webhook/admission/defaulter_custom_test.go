@@ -43,11 +43,9 @@ var _ = Describe("Defaulter Handler", func() {
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownOrOmitableFields)
 
 		resp := handler.Handle(ctx, Request{
-			AdmissionRequest: admissionv1.AdmissionRequest{
-				Operation: admissionv1.Create,
-				Object: runtime.RawExtension{
-					Raw: []byte(`{"newField":"foo", "totalReplicas":5}`),
-				},
+			Operation: admissionv1.Create,
+			Object: runtime.RawExtension{
+				Raw: []byte(`{"newField":"foo", "totalReplicas":5}`),
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
@@ -80,11 +78,9 @@ var _ = Describe("Defaulter Handler", func() {
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{}, DefaulterRemoveUnknownOrOmitableFields)
 
 		resp := handler.Handle(ctx, Request{
-			AdmissionRequest: admissionv1.AdmissionRequest{
-				Operation: admissionv1.Create,
-				Object: runtime.RawExtension{
-					Raw: []byte(`{"labels":{"foo": "bar"}, "replica": 2, "totalReplicas":0}`),
-				},
+			Operation: admissionv1.Create,
+			Object: runtime.RawExtension{
+				Raw: []byte(`{"labels":{"foo": "bar"}, "replica": 2, "totalReplicas":0}`),
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
@@ -103,11 +99,9 @@ var _ = Describe("Defaulter Handler", func() {
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 
 		resp := handler.Handle(ctx, Request{
-			AdmissionRequest: admissionv1.AdmissionRequest{
-				Operation: admissionv1.Create,
-				Object: runtime.RawExtension{
-					Raw: []byte(`{"newField":"foo", "totalReplicas":5}`),
-				},
+			Operation: admissionv1.Create,
+			Object: runtime.RawExtension{
+				Raw: []byte(`{"newField":"foo", "totalReplicas":5}`),
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
@@ -135,11 +129,9 @@ var _ = Describe("Defaulter Handler", func() {
 		obj := &TestDefaulter{}
 		handler := WithCustomDefaulter(admissionScheme, obj, &TestCustomDefaulter{})
 		resp := handler.Handle(ctx, Request{
-			AdmissionRequest: admissionv1.AdmissionRequest{
-				Operation: admissionv1.Delete,
-				OldObject: runtime.RawExtension{
-					Raw: []byte("{}"),
-				},
+			Operation: admissionv1.Delete,
+			OldObject: runtime.RawExtension{
+				Raw: []byte("{}"),
 			},
 		})
 		Expect(resp.Allowed).Should(BeTrue())
@@ -241,34 +233,30 @@ func (p PodDefaulter) Default(_ context.Context, pod *corev1.Pod) error {
 
 func createTestRequest(hostname string) Request {
 	return Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			UID: "12345",
-			Kind: metav1.GroupVersionKind{
-				Group:   "",
-				Version: "v1",
-				Kind:    "Pod",
-			},
-			Object:    runtime.RawExtension{Raw: mustEncodeLikeAPIServer(createSuperPod(hostname))},
-			Operation: admissionv1.Create,
+		UID: "12345",
+		Kind: metav1.GroupVersionKind{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Pod",
 		},
+		Object:    runtime.RawExtension{Raw: mustEncodeLikeAPIServer(createSuperPod(hostname))},
+		Operation: admissionv1.Create,
 	}
 }
 
 func createSuperPod(hostname string) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "monolith-service-7f8d9b",
-			Namespace: "prod",
-			Labels: map[string]string{
-				"app": "processor", "env": "prod", "version": "1.4.2",
-				"pci-compliant": "true", "team": "data-eng",
-			},
-			Annotations: map[string]string{
-				"agent-inject":    "true",
-				"checksum/config": "e3b0c23238fc1c149afbf4c8996fb92427ae",
-			},
-			Finalizers: []string{"cleanup.finalizer.my.io"},
+		Name:      "monolith-service-7f8d9b",
+		Namespace: "prod",
+		Labels: map[string]string{
+			"app": "processor", "env": "prod", "version": "1.4.2",
+			"pci-compliant": "true", "team": "data-eng",
 		},
+		Annotations: map[string]string{
+			"agent-inject":    "true",
+			"checksum/config": "e3b0c23238fc1c149afbf4c8996fb92427ae",
+		},
+		Finalizers: []string{"cleanup.finalizer.my.io"},
 		Spec: corev1.PodSpec{
 			Hostname: hostname,
 			InitContainers: []corev1.Container{
@@ -295,9 +283,7 @@ func createSuperPod(hostname string) *corev1.Pod {
 						Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")},
 					},
 					LivenessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromInt(8080)},
-						},
+						HTTPGet:             &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromInt(8080)},
 						InitialDelaySeconds: 30,
 					},
 				},
@@ -339,10 +325,8 @@ func createSuperPod(hostname string) *corev1.Pod {
 			Volumes: []corev1.Volume{
 				{
 					Name: "config",
-					VolumeSource: corev1.VolumeSource{
-						ConfigMap: &corev1.ConfigMapVolumeSource{
-							LocalObjectReference: corev1.LocalObjectReference{Name: "app-config"},
-						},
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						Name: "app-config",
 					},
 				},
 			},

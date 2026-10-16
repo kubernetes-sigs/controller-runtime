@@ -113,12 +113,12 @@ func (h *defaulterForType[T]) Handle(ctx context.Context, req Request) Response 
 
 	// Always skip when a DELETE operation received in custom mutation handler.
 	if req.Operation == admissionv1.Delete {
-		return Response{AdmissionResponse: admissionv1.AdmissionResponse{
+		return Response{
 			Allowed: true,
 			Result: &metav1.Status{
 				Code: http.StatusOK,
 			},
-		}}
+		}
 	}
 
 	ctx = NewContextWithRequest(ctx, req)
@@ -149,9 +149,7 @@ func (h *defaulterForType[T]) Handle(ctx context.Context, req Request) Response 
 	// if the objects are equal
 	if !h.removeUnknownOrOmitableFields && reflect.DeepEqual(originalObj, obj) {
 		return Response{
-			AdmissionResponse: admissionv1.AdmissionResponse{
-				Allowed: true,
-			},
+			Allowed: true,
 		}
 	}
 

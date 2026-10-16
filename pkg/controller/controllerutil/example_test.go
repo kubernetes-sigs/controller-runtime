@@ -36,7 +36,7 @@ func ExampleCreateOrUpdate() {
 	// c is client.Client
 
 	// Create or Update the deployment default/foo
-	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+	deploy := &appsv1.Deployment{Name: "foo", Namespace: "default"}
 
 	op, err := controllerutil.CreateOrUpdate(context.TODO(), c, deploy, func() error {
 		// Deployment selector is immutable so we set this value only if
@@ -49,10 +49,8 @@ func ExampleCreateOrUpdate() {
 
 		// update the Deployment pod template
 		deploy.Spec.Template = corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					"foo": "bar",
-				},
+			Labels: map[string]string{
+				"foo": "bar",
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{

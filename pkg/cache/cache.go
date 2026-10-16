@@ -17,6 +17,7 @@ limitations under the License.
 package cache
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"net/http"
@@ -89,7 +90,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// Mapper is the RESTMapper to use for mapping GroupVersionKinds to Resources
-	Mapper meta.RESTMapper
+	Mapper meta.RESTMapperWithContext
 
 	// SyncPeriod determines the minimum frequency at which watched resources are
 	// reconciled. A lower period will correct entropy more quickly, but reduce
@@ -503,7 +504,8 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 	opts.ByObject = maps.Clone(opts.ByObject)
 	opts.DefaultNamespaces = maps.Clone(opts.DefaultNamespaces)
 	for obj, byObject := range opts.ByObject {
-		isNamespaced, err := apiutil.IsObjectNamespaced(obj, opts.Scheme, opts.Mapper)
+		// Note: Probably we should get rid of this context.TODO() by moving this code to cache.Start()
+		isNamespaced, err := apiutil.IsObjectNamespaced(context.TODO(), obj, opts.Scheme, opts.Mapper)
 		if err != nil {
 			return opts, fmt.Errorf("failed to determine if %T is namespaced: %w", obj, err)
 		}

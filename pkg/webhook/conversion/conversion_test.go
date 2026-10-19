@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -88,7 +89,8 @@ func ConversionTest(withHubSpokeConverter bool) {
 
 			convReview := &apix.ConversionReview{}
 			req := &http.Request{
-				Body: io.NopCloser(bytes.NewReader(payload.Bytes())),
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Body:   io.NopCloser(bytes.NewReader(payload.Bytes())),
 			}
 			wh.ServeHTTP(respRecorder, req)
 			Expect(json.NewDecoder(respRecorder.Result().Body).Decode(convReview)).To(Succeed())
@@ -263,6 +265,27 @@ func ConversionTest(withHubSpokeConverter bool) {
 			convReview := doRequest(convReq)
 			Expect(convReview.Response.Result.Status).To(Equal("Failure"))
 			Expect(convReview.Response.ConvertedObjects).To(BeEmpty())
+		})
+
+		It("should error when given an infinite body", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				// Note: Provide string that exceed the maxRequestSize and starts with a valid JSON syntax.
+				Body: nopCloser{Reader: io.MultiReader(strings.NewReader(`{"request":{"uid":"`), infiniteReader('a'))},
+			}
+			wh.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Result()).To(HaveHTTPStatus(http.StatusRequestEntityTooLarge))
+		})
+
+		It("should error when given an invalid content type", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/foo"}},
+				Method: http.MethodPost,
+				Body:   io.NopCloser(bytes.NewReader(nil)),
+			}
+			wh.ServeHTTP(respRecorder, req)
+			Expect(respRecorder.Result()).To(HaveHTTPStatus(http.StatusBadRequest))
 		})
 
 		It("should return error when dest/src objects are of same type", func() {
@@ -482,4 +505,20 @@ func convertV3ToHub(_ context.Context, src *jobsv3.ExternalJob, dst *jobsv2.Exte
 
 func convertHubToV3(_ context.Context, src *jobsv2.ExternalJob, dst *jobsv3.ExternalJob) error {
 	return dst.ConvertFrom(src)
+}
+
+type nopCloser struct {
+	io.Reader
+}
+
+func (nopCloser) Close() error { return nil }
+
+// infiniteReader endlessly repeats a single byte.
+type infiniteReader byte
+
+func (r infiniteReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = byte(r)
+	}
+	return len(p), nil
 }

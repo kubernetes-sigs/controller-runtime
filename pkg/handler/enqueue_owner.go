@@ -46,7 +46,7 @@ type OwnerOption func(e enqueueRequestForOwnerInterface)
 // - a source.Kind Source with Type of Pod.
 //
 // - a handler.enqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and OnlyControllerOwner set to true.
-func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, ownerType client.Object, opts ...OwnerOption) EventHandler {
+func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapperWithContext, ownerType client.Object, opts ...OwnerOption) EventHandler {
 	return TypedEnqueueRequestForOwner[client.Object](scheme, mapper, ownerType, opts...)
 }
 
@@ -60,7 +60,7 @@ func EnqueueRequestForOwner(scheme *runtime.Scheme, mapper meta.RESTMapper, owne
 // - a handler.typedEnqueueRequestForOwner EventHandler with an OwnerType of ReplicaSet and OnlyControllerOwner set to true.
 //
 // TypedEnqueueRequestForOwner is experimental and subject to future change.
-func TypedEnqueueRequestForOwner[object client.Object](scheme *runtime.Scheme, mapper meta.RESTMapper, ownerType client.Object, opts ...OwnerOption) TypedEventHandler[object, reconcile.Request] {
+func TypedEnqueueRequestForOwner[object client.Object](scheme *runtime.Scheme, mapper meta.RESTMapperWithContext, ownerType client.Object, opts ...OwnerOption) TypedEventHandler[object, reconcile.Request] {
 	e := &enqueueRequestForOwner[object]{
 		ownerType: ownerType,
 		mapper:    mapper,
@@ -96,7 +96,7 @@ type enqueueRequestForOwner[object client.Object] struct {
 	groupKind schema.GroupKind
 
 	// mapper maps GroupVersionKinds to Resources
-	mapper meta.RESTMapper
+	mapper meta.RESTMapperWithContext
 }
 
 func (e *enqueueRequestForOwner[object]) setIsController(isController bool) {
@@ -106,7 +106,7 @@ func (e *enqueueRequestForOwner[object]) setIsController(isController bool) {
 // Create implements EventHandler.
 func (e *enqueueRequestForOwner[object]) Create(ctx context.Context, evt event.TypedCreateEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.Object, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.Object, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -115,8 +115,8 @@ func (e *enqueueRequestForOwner[object]) Create(ctx context.Context, evt event.T
 // Update implements EventHandler.
 func (e *enqueueRequestForOwner[object]) Update(ctx context.Context, evt event.TypedUpdateEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.ObjectOld, reqs)
-	e.getOwnerReconcileRequest(evt.ObjectNew, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.ObjectOld, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.ObjectNew, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -125,7 +125,7 @@ func (e *enqueueRequestForOwner[object]) Update(ctx context.Context, evt event.T
 // Delete implements EventHandler.
 func (e *enqueueRequestForOwner[object]) Delete(ctx context.Context, evt event.TypedDeleteEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.Object, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.Object, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -134,7 +134,7 @@ func (e *enqueueRequestForOwner[object]) Delete(ctx context.Context, evt event.T
 // Generic implements EventHandler.
 func (e *enqueueRequestForOwner[object]) Generic(ctx context.Context, evt event.TypedGenericEvent[object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	reqs := map[reconcile.Request]empty{}
-	e.getOwnerReconcileRequest(evt.Object, reqs)
+	e.getOwnerReconcileRequest(ctx, evt.Object, reqs)
 	for req := range reqs {
 		q.Add(req)
 	}
@@ -162,7 +162,7 @@ func (e *enqueueRequestForOwner[object]) parseOwnerTypeGroupKind(scheme *runtime
 
 // getOwnerReconcileRequest looks at object and builds a map of reconcile.Request to reconcile
 // owners of object that match e.OwnerType.
-func (e *enqueueRequestForOwner[object]) getOwnerReconcileRequest(obj metav1.Object, result map[reconcile.Request]empty) {
+func (e *enqueueRequestForOwner[object]) getOwnerReconcileRequest(ctx context.Context, obj metav1.Object, result map[reconcile.Request]empty) {
 	// Iterate through the OwnerReferences looking for a match on Group and Kind against what was requested
 	// by the user
 	for _, ref := range e.getOwnersReferences(obj) {
@@ -185,7 +185,7 @@ func (e *enqueueRequestForOwner[object]) getOwnerReconcileRequest(obj metav1.Obj
 			}
 
 			// if owner is not namespaced then we should not set the namespace
-			mapping, err := e.mapper.RESTMapping(e.groupKind, refGV.Version)
+			mapping, err := e.mapper.RESTMappingWithContext(ctx, e.groupKind, refGV.Version)
 			if err != nil {
 				log.Error(err, "Could not retrieve rest mapping", "kind", e.groupKind)
 				return

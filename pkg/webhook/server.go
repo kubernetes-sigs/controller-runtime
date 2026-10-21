@@ -230,9 +230,8 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		cfg.GetCertificate = certWatcher.GetCertificate
 
 		go func() {
-			if err := certWatcher.Start(ctx); err != nil {
-				log.Error(err, "certificate watcher error")
-			}
+			// WaitForStart returns this error to the caller.
+			_ = certWatcher.Start(ctx)
 		}()
 	}
 

@@ -217,7 +217,7 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 func (s *defaultServer) Start(ctx context.Context) error {
 	log.Info("Starting metrics server")
 
-	listener, err := s.createListener(ctx, log)
+	listener, err := s.createListener(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: failed to create listener: %w", err)
 	}
@@ -289,7 +289,7 @@ func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
 	return handlerOpts
 }
 
-func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (net.Listener, error) {
+func (s *defaultServer) createListener(ctx context.Context) (net.Listener, error) {
 	if !s.options.SecureServing {
 		return s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 	}
@@ -322,9 +322,8 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 			cfg.GetCertificate = certWatcher.GetCertificate
 
 			go func() {
-				if err := certWatcher.Start(ctx); err != nil {
-					log.Error(err, "certificate watcher error")
-				}
+				// WaitForStart returns this error to the caller.
+				_ = certWatcher.Start(ctx)
 			}()
 		}
 	}

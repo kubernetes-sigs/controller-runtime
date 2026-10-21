@@ -39,12 +39,17 @@ func Example() {
 		panic(err)
 	}
 
-	// Start goroutine with certwatcher running against supplied cert
+	// Start goroutine with certwatcher running against supplied cert.
+	// Wait until the watches are registered so a startup failure stops the process
+	// before the server accepts traffic.
 	go func() {
 		if err := watcher.Start(ctx); err != nil {
 			panic(err)
 		}
 	}()
+	if err := watcher.WaitForStart(ctx); err != nil {
+		panic(err)
+	}
 
 	// Setup TLS listener using GetCertficate for fetching the cert when changes
 	listener, err := tls.Listen("tcp", "localhost:9443", &tls.Config{

@@ -302,6 +302,7 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 		op(cfg)
 	}
 
+	var certWatcher *certwatcher.CertWatcher
 	if cfg.GetCertificate == nil {
 		certPath := filepath.Join(s.options.CertDir, s.options.CertName)
 		keyPath := filepath.Join(s.options.CertDir, s.options.KeyName)
@@ -313,7 +314,8 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 		if certExists && keyExists {
 			// Create the certificate watcher and
 			// set the config's GetCertificate on the TLSConfig
-			certWatcher, err := certwatcher.New(certPath, keyPath)
+			var err error
+			certWatcher, err = certwatcher.New(certPath, keyPath)
 			if err != nil {
 				return nil, err
 			}
@@ -342,6 +344,12 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 			return nil, fmt.Errorf("failed to create self-signed key pair for metrics server: %w", err)
 		}
 		cfg.Certificates = []tls.Certificate{keyPair}
+	}
+
+	if certWatcher != nil {
+		if err := certWatcher.WaitForStart(ctx); err != nil {
+			return nil, fmt.Errorf("failed to start certificate watcher: %w", err)
+		}
 	}
 
 	l, err := s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)

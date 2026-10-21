@@ -83,13 +83,31 @@ var _ = Describe("CertWatcher", func() {
 					defer close(doneCh)
 					Expect(watcher.WithWatchInterval(interval).Start(ctx)).To(Succeed())
 				}()
-				// wait till we read first cert
-				Eventually(func() error {
-					err := watcher.ReadCertificate()
-					return err
-				}).Should(Succeed())
+				Expect(watcher.WaitForStart(ctx)).To(Succeed())
 				return doneCh
 			}
+		})
+
+		It("should surface a start failure through WaitForStart", func() {
+			// Remove the files so fsnotify cannot register watches. A short deadline
+			// ends the 10s registration poll without waiting it out.
+			Expect(os.Remove(certPath)).To(Succeed())
+			Expect(os.Remove(keyPath)).To(Succeed())
+
+			failedCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond) //nolint:forbidigo
+			defer cancel()
+
+			doneCh := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(doneCh)
+				Expect(watcher.Start(failedCtx)).To(MatchError(ContainSubstring("failed to add watches")))
+			}()
+
+			waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second) //nolint:forbidigo // bounds the wait if Start never signals
+			defer waitCancel()
+			Expect(watcher.WaitForStart(waitCtx)).To(MatchError(ContainSubstring("failed to add watches")))
+			Eventually(doneCh, "4s").Should(BeClosed())
 		})
 
 		It("should not require LeaderElection", func() {

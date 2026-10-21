@@ -215,13 +215,15 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		op(cfg)
 	}
 
+	var certWatcher *certwatcher.CertWatcher
 	if cfg.GetCertificate == nil {
 		certPath := filepath.Join(s.Options.CertDir, s.Options.CertName)
 		keyPath := filepath.Join(s.Options.CertDir, s.Options.KeyName)
 
 		// Create the certificate watcher and
 		// set the config's GetCertificate on the TLSConfig
-		certWatcher, err := certwatcher.New(certPath, keyPath)
+		var err error
+		certWatcher, err = certwatcher.New(certPath, keyPath)
 		if err != nil {
 			return err
 		}
@@ -249,6 +251,12 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 		cfg.ClientCAs = certPool
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+
+	if certWatcher != nil {
+		if err := certWatcher.WaitForStart(ctx); err != nil {
+			return fmt.Errorf("failed to start certificate watcher: %w", err)
+		}
 	}
 
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Options.Host, strconv.Itoa(s.Options.Port)), cfg)

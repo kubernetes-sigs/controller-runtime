@@ -43,24 +43,24 @@ type capture struct {
 // newWrappedClient returns a client that injects FieldOwner(defaultOwner) as a
 // default and DryRunAll as a forced option, plus the capture it records into.
 func newWrappedClient() (client.Client, *capture) {
-	cap := &capture{}
+	rec := &capture{}
 	fakeClient := fake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, _ client.Object, opts ...client.CreateOption) error {
 			o := &client.CreateOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		Update: func(_ context.Context, _ client.WithWatch, _ client.Object, opts ...client.UpdateOption) error {
 			o := &client.UpdateOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		Patch: func(_ context.Context, _ client.WithWatch, _ client.Object, _ client.Patch, opts ...client.PatchOption) error {
 			o := &client.PatchOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		Apply: func(_ context.Context, _ client.WithWatch, _ runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
@@ -68,37 +68,37 @@ func newWrappedClient() (client.Client, *capture) {
 			for _, opt := range opts {
 				opt.ApplyToApply(o)
 			}
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		Delete: func(_ context.Context, _ client.WithWatch, _ client.Object, opts ...client.DeleteOption) error {
 			o := &client.DeleteOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{dryRun: o.DryRun}
+			*rec = capture{dryRun: o.DryRun}
 			return nil
 		},
 		DeleteAllOf: func(_ context.Context, _ client.WithWatch, _ client.Object, opts ...client.DeleteAllOfOption) error {
 			o := &client.DeleteAllOfOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{dryRun: o.DeleteOptions.DryRun}
+			*rec = capture{dryRun: o.DeleteOptions.DryRun}
 			return nil
 		},
 		SubResourceCreate: func(_ context.Context, _ client.Client, _ string, _ client.Object, _ client.Object, opts ...client.SubResourceCreateOption) error {
 			o := &client.SubResourceCreateOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		SubResourceUpdate: func(_ context.Context, _ client.Client, _ string, _ client.Object, opts ...client.SubResourceUpdateOption) error {
 			o := &client.SubResourceUpdateOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		SubResourcePatch: func(_ context.Context, _ client.Client, _ string, _ client.Object, _ client.Patch, opts ...client.SubResourcePatchOption) error {
 			o := &client.SubResourcePatchOptions{}
 			o.ApplyOptions(opts)
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 		SubResourceApply: func(_ context.Context, _ client.Client, _ string, _ runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
@@ -106,7 +106,7 @@ func newWrappedClient() (client.Client, *capture) {
 			for _, opt := range opts {
 				opt.ApplyToSubResourceApply(o)
 			}
-			*cap = capture{o.FieldManager, o.DryRun}
+			*rec = capture{o.FieldManager, o.DryRun}
 			return nil
 		},
 	}).Build()
@@ -114,7 +114,7 @@ func newWrappedClient() (client.Client, *capture) {
 	// NewDryRunClient wraps WithFieldOwner: the field owner is a default the
 	// caller can override, the dry run is forced and must always win.
 	wrapped := client.NewDryRunClient(client.WithFieldOwner(fakeClient, defaultOwner))
-	return wrapped, cap
+	return wrapped, rec
 }
 
 // TestInjectedOptions verifies for every write verb that the injected default
@@ -183,7 +183,9 @@ func TestInjectedOptions(t *testing.T) {
 		{"DeleteAllOf", false, func(ctx context.Context, c client.Client, _ string, dr []string) error {
 			var opts []client.DeleteAllOfOption
 			if dr != nil {
-				opts = append(opts, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{DryRun: dr}})
+				o := &client.DeleteAllOfOptions{}
+				o.DryRun = dr
+				opts = append(opts, o)
 			}
 			return c.DeleteAllOf(ctx, obj, opts...)
 		}},
@@ -193,7 +195,9 @@ func TestInjectedOptions(t *testing.T) {
 				opts = append(opts, client.FieldOwner(owner))
 			}
 			if dr != nil {
-				opts = append(opts, &client.SubResourceCreateOptions{CreateOptions: client.CreateOptions{DryRun: dr}})
+				o := &client.SubResourceCreateOptions{}
+				o.DryRun = dr
+				opts = append(opts, o)
 			}
 			return c.SubResource("status").Create(ctx, obj, obj, opts...)
 		}},
@@ -203,7 +207,9 @@ func TestInjectedOptions(t *testing.T) {
 				opts = append(opts, client.FieldOwner(owner))
 			}
 			if dr != nil {
-				opts = append(opts, &client.SubResourceUpdateOptions{UpdateOptions: client.UpdateOptions{DryRun: dr}})
+				o := &client.SubResourceUpdateOptions{}
+				o.DryRun = dr
+				opts = append(opts, o)
 			}
 			return c.SubResource("status").Update(ctx, obj, opts...)
 		}},
@@ -213,7 +219,9 @@ func TestInjectedOptions(t *testing.T) {
 				opts = append(opts, client.FieldOwner(owner))
 			}
 			if dr != nil {
-				opts = append(opts, &client.SubResourcePatchOptions{PatchOptions: client.PatchOptions{DryRun: dr}})
+				o := &client.SubResourcePatchOptions{}
+				o.DryRun = dr
+				opts = append(opts, o)
 			}
 			return c.SubResource("status").Patch(ctx, obj, client.Merge, opts...)
 		}},
@@ -223,7 +231,9 @@ func TestInjectedOptions(t *testing.T) {
 				opts = append(opts, client.FieldOwner(owner))
 			}
 			if dr != nil {
-				opts = append(opts, &client.SubResourceApplyOptions{ApplyOptions: client.ApplyOptions{DryRun: dr}})
+				o := &client.SubResourceApplyOptions{}
+				o.DryRun = dr
+				opts = append(opts, o)
 			}
 			return c.SubResource("status").Apply(ctx, ac, opts...)
 		}},
@@ -232,40 +242,40 @@ func TestInjectedOptions(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("default applied, forced wins", func(t *testing.T) {
-				c, cap := newWrappedClient()
+				c, rec := newWrappedClient()
 				if err := tc.invoke(t.Context(), c, "", nil); err != nil {
 					t.Fatalf("%s: %v", tc.name, err)
 				}
-				if tc.hasFieldOwner && cap.fieldManager != defaultOwner {
-					t.Errorf("fieldManager = %q, want default %q", cap.fieldManager, defaultOwner)
+				if tc.hasFieldOwner && rec.fieldManager != defaultOwner {
+					t.Errorf("fieldManager = %q, want default %q", rec.fieldManager, defaultOwner)
 				}
-				if !slices.Equal(cap.dryRun, forcedDryRun) {
-					t.Errorf("dryRun = %v, want forced %v", cap.dryRun, forcedDryRun)
+				if !slices.Equal(rec.dryRun, forcedDryRun) {
+					t.Errorf("dryRun = %v, want forced %v", rec.dryRun, forcedDryRun)
 				}
 			})
 
 			if tc.hasFieldOwner {
 				t.Run("caller overrides default", func(t *testing.T) {
-					c, cap := newWrappedClient()
+					c, rec := newWrappedClient()
 					if err := tc.invoke(t.Context(), c, "caller-owner", nil); err != nil {
 						t.Fatalf("%s: %v", tc.name, err)
 					}
-					if cap.fieldManager != "caller-owner" {
-						t.Errorf("fieldManager = %q, want caller %q", cap.fieldManager, "caller-owner")
+					if rec.fieldManager != "caller-owner" {
+						t.Errorf("fieldManager = %q, want caller %q", rec.fieldManager, "caller-owner")
 					}
-					if !slices.Equal(cap.dryRun, forcedDryRun) {
-						t.Errorf("dryRun = %v, want forced %v", cap.dryRun, forcedDryRun)
+					if !slices.Equal(rec.dryRun, forcedDryRun) {
+						t.Errorf("dryRun = %v, want forced %v", rec.dryRun, forcedDryRun)
 					}
 				})
 			}
 
 			t.Run("forced wins over caller dry run", func(t *testing.T) {
-				c, cap := newWrappedClient()
+				c, rec := newWrappedClient()
 				if err := tc.invoke(t.Context(), c, "", []string{"NotAll"}); err != nil {
 					t.Fatalf("%s: %v", tc.name, err)
 				}
-				if !slices.Equal(cap.dryRun, forcedDryRun) {
-					t.Errorf("dryRun = %v, want forced %v to win over caller", cap.dryRun, forcedDryRun)
+				if !slices.Equal(rec.dryRun, forcedDryRun) {
+					t.Errorf("dryRun = %v, want forced %v to win over caller", rec.dryRun, forcedDryRun)
 				}
 			})
 		})

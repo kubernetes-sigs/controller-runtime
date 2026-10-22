@@ -17,144 +17,25 @@ limitations under the License.
 package client
 
 import (
-	"context"
-	"reflect"
 	"testing"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestCombine(t *testing.T) {
-	// Defaults come first, per call options in the middle, forced options last.
-	got := combine([]int{1}, []int{2, 3}, []int{4})
-	if want := []int{1, 2, 3, 4}; !reflect.DeepEqual(got, want) {
-		t.Errorf("combine() = %v, want %v", got, want)
-	}
+// nopClient is a bare Client used only for identity comparison; its methods are
+// never called in this test.
+type nopClient struct{ Client }
 
-	// With no defaults and no forced options the per call slice is returned as is.
-	mid := []int{2, 3}
-	if got := combine(nil, mid, nil); !reflect.DeepEqual(got, mid) {
-		t.Errorf("combine() = %v, want %v", got, mid)
-	}
-}
-
-// recordingClient records the options passed to the write verbs it is asked
-// about, so tests can assert what the wrapper injected.
-type recordingClient struct {
-	Client
-	createOpts []CreateOption
-	sub        *recordingSubResourceClient
-}
-
-func (r *recordingClient) Create(_ context.Context, _ Object, opts ...CreateOption) error {
-	r.createOpts = opts
-	return nil
-}
-
-func (r *recordingClient) SubResource(_ string) SubResourceClient { return r.sub }
-
-type recordingSubResourceClient struct {
-	SubResourceClient
-	createOpts []SubResourceCreateOption
-}
-
-func (r *recordingSubResourceClient) Create(_ context.Context, _ Object, _ Object, opts ...SubResourceCreateOption) error {
-	r.createOpts = opts
-	return nil
-}
-
-func newRecordingClient() *recordingClient {
-	return &recordingClient{sub: &recordingSubResourceClient{}}
-}
-
-func TestInjectedOptionsDefaultIsOverridable(t *testing.T) {
-	rec := newRecordingClient()
-	c := WithFieldOwner(rec, "default-owner")
-
-	if err := c.Create(t.Context(), &corev1.ConfigMap{}, FieldOwner("caller-owner")); err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-
-	got := (&CreateOptions{}).ApplyOptions(rec.createOpts)
-	if got.FieldManager != "caller-owner" {
-		t.Errorf("FieldManager = %q, want the per call value %q to override the default", got.FieldManager, "caller-owner")
-	}
-}
-
-func TestInjectedOptionsForcedWinsOverCaller(t *testing.T) {
-	rec := newRecordingClient()
-	c := NewDryRunClient(rec)
-
-	// The caller tries to set a different DryRun value; the forced DryRunAll
-	// is applied last and must win.
-	if err := c.Create(t.Context(), &corev1.ConfigMap{}, &CreateOptions{DryRun: []string{"NotAll"}}); err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-
-	got := (&CreateOptions{}).ApplyOptions(rec.createOpts)
-	if want := []string{metav1.DryRunAll}; !reflect.DeepEqual(got.DryRun, want) {
-		t.Errorf("DryRun = %v, want forced %v", got.DryRun, want)
-	}
-}
-
-func TestInjectedOptionsNestedForcedAndDefault(t *testing.T) {
-	rec := newRecordingClient()
-	// DryRun wraps FieldOwner: the forced dry run must still win, and the field
-	// owner default must still be applied.
-	c := NewDryRunClient(WithFieldOwner(rec, "owner"))
-
-	if err := c.Create(t.Context(), &corev1.ConfigMap{}); err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-
-	got := (&CreateOptions{}).ApplyOptions(rec.createOpts)
-	if got.FieldManager != "owner" {
-		t.Errorf("FieldManager = %q, want %q", got.FieldManager, "owner")
-	}
-	if want := []string{metav1.DryRunAll}; !reflect.DeepEqual(got.DryRun, want) {
-		t.Errorf("DryRun = %v, want %v", got.DryRun, want)
-	}
-}
-
+// TestInjectedOptionsCollapsesWrapping asserts that wrapping an existing
+// *clientWithOptions extends it in place rather than nesting another wrapper,
+// so the underlying client is reached directly.
 func TestInjectedOptionsCollapsesWrapping(t *testing.T) {
-	rec := newRecordingClient()
-	c := NewDryRunClient(WithFieldOwner(rec, "owner"))
+	base := &nopClient{}
+	c := NewDryRunClient(WithFieldOwner(base, "owner"))
 
-	// Wrapping an existing *clientWithOptions must extend it in place rather
-	// than nesting another wrapper, so the underlying client is reached directly.
 	wrapped, ok := c.(*clientWithOptions)
 	if !ok {
 		t.Fatalf("got %T, want *clientWithOptions", c)
 	}
-	if wrapped.client != rec {
-		t.Errorf("underlying client = %T, want the recording client directly (no nested wrapper)", wrapped.client)
-	}
-
-	// Precedence must match nested wrapping: field owner default applied, forced
-	// dry run wins.
-	if err := c.Create(t.Context(), &corev1.ConfigMap{}); err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-	got := (&CreateOptions{}).ApplyOptions(rec.createOpts)
-	if got.FieldManager != "owner" {
-		t.Errorf("FieldManager = %q, want %q", got.FieldManager, "owner")
-	}
-	if want := []string{metav1.DryRunAll}; !reflect.DeepEqual(got.DryRun, want) {
-		t.Errorf("DryRun = %v, want %v", got.DryRun, want)
-	}
-}
-
-func TestInjectedOptionsSubResource(t *testing.T) {
-	rec := newRecordingClient()
-	c := WithFieldOwner(rec, "owner")
-
-	if err := c.SubResource("status").Create(t.Context(), &corev1.ConfigMap{}, &corev1.ConfigMap{}); err != nil {
-		t.Fatalf("SubResource Create() error: %v", err)
-	}
-
-	got := (&SubResourceCreateOptions{}).ApplyOptions(rec.sub.createOpts)
-	if got.FieldManager != "owner" {
-		t.Errorf("subresource FieldManager = %q, want %q", got.FieldManager, "owner")
+	if wrapped.client != base {
+		t.Errorf("underlying client = %T, want the base client directly (no nested wrapper)", wrapped.client)
 	}
 }

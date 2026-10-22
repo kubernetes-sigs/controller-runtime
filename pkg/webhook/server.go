@@ -39,9 +39,6 @@ import (
 // DefaultPort is the default port that the webhook server serves.
 var DefaultPort = 9443
 
-// errCertWatcher is used as the cancel cause of the server's context when the certificate watcher fails.
-var errCertWatcher = errors.New("certificate watcher failed")
-
 // Server is an admission webhook server that can serve traffic and
 // generates related k8s resources for deploying.
 //
@@ -211,7 +208,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	log.Info("Starting webhook server")
 
-	// The context is cancelled with errCertWatcher as cause if the certificate
+	// The context is cancelled with certwatcher.ErrFailed as cause if the certificate
 	// watcher fails, which shuts down the server.
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -239,7 +236,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		go func() {
 			if err := certWatcher.Start(ctx); err != nil {
 				log.Error(err, "certificate watcher error")
-				cancel(fmt.Errorf("%w: %w", errCertWatcher, err))
+				cancel(fmt.Errorf("%w: %w", certwatcher.ErrFailed, err))
 			}
 		}()
 	}
@@ -292,7 +289,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
-	if err := context.Cause(ctx); errors.Is(err, errCertWatcher) {
+	if err := context.Cause(ctx); errors.Is(err, certwatcher.ErrFailed) {
 		return err
 	}
 	return nil

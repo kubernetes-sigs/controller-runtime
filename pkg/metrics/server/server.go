@@ -45,9 +45,6 @@ const (
 // DefaultBindAddress is the default bind address for the metrics server.
 var DefaultBindAddress = ":8080"
 
-// errCertWatcher is used as the cancel cause of the server's context when the certificate watcher fails.
-var errCertWatcher = errors.New("certificate watcher failed")
-
 // Server is a server that serves metrics.
 type Server interface {
 	// AddExtraHandler adds extra handler served on path to the http server that serves metrics.
@@ -221,7 +218,7 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 func (s *defaultServer) Start(ctx context.Context) error {
 	log.Info("Starting metrics server")
 
-	// The context is cancelled with errCertWatcher as cause if the certificate
+	// The context is cancelled with certwatcher.ErrFailed as cause if the certificate
 	// watcher fails, which shuts down the server.
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -284,7 +281,7 @@ func (s *defaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
-	if err := context.Cause(ctx); errors.Is(err, errCertWatcher) {
+	if err := context.Cause(ctx); errors.Is(err, certwatcher.ErrFailed) {
 		return err
 	}
 	return nil
@@ -334,7 +331,7 @@ func (s *defaultServer) createListener(ctx context.Context, cancel context.Cance
 			go func() {
 				if err := certWatcher.Start(ctx); err != nil {
 					log.Error(err, "certificate watcher error")
-					cancel(fmt.Errorf("%w: %w", errCertWatcher, err))
+					cancel(fmt.Errorf("%w: %w", certwatcher.ErrFailed, err))
 				}
 			}()
 		}

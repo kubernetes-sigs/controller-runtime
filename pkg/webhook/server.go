@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -37,6 +38,9 @@ import (
 
 // DefaultPort is the default port that the webhook server serves.
 var DefaultPort = 9443
+
+// errCertWatcher is used as the cancel cause of the server's context when the certificate watcher fails.
+var errCertWatcher = errors.New("certificate watcher failed")
 
 // Server is an admission webhook server that can serve traffic and
 // generates related k8s resources for deploying.
@@ -207,6 +211,11 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	log.Info("Starting webhook server")
 
+	// The context is cancelled with errCertWatcher as cause if the certificate
+	// watcher fails, which shuts down the server.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
 	cfg := &tls.Config{
 		NextProtos: []string{"h2"},
 	}
@@ -215,23 +224,23 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		op(cfg)
 	}
 
-	var certWatcher *certwatcher.CertWatcher
 	if cfg.GetCertificate == nil {
 		certPath := filepath.Join(s.Options.CertDir, s.Options.CertName)
 		keyPath := filepath.Join(s.Options.CertDir, s.Options.KeyName)
 
 		// Create the certificate watcher and
 		// set the config's GetCertificate on the TLSConfig
-		var err error
-		certWatcher, err = certwatcher.New(certPath, keyPath)
+		certWatcher, err := certwatcher.New(certPath, keyPath)
 		if err != nil {
 			return err
 		}
 		cfg.GetCertificate = certWatcher.GetCertificate
 
 		go func() {
-			// WaitForStart returns this error to the caller.
-			_ = certWatcher.Start(ctx)
+			if err := certWatcher.Start(ctx); err != nil {
+				log.Error(err, "certificate watcher error")
+				cancel(fmt.Errorf("%w: %w", errCertWatcher, err))
+			}
 		}()
 	}
 
@@ -250,12 +259,6 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 		cfg.ClientCAs = certPool
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-
-	if certWatcher != nil {
-		if err := certWatcher.WaitForStart(ctx); err != nil {
-			return fmt.Errorf("failed to start certificate watcher: %w", err)
-		}
 	}
 
 	listener, err := tls.Listen("tcp", net.JoinHostPort(s.Options.Host, strconv.Itoa(s.Options.Port)), cfg)
@@ -289,6 +292,9 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
+	if err := context.Cause(ctx); errors.Is(err, errCertWatcher) {
+		return err
+	}
 	return nil
 }
 

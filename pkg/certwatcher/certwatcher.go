@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -58,10 +57,6 @@ type CertWatcher struct {
 
 	// callback is a function to be invoked when the certificate changes.
 	callback func(tls.Certificate)
-
-	// startedErr may contain an error if one was encountered during startup. If it is closed and does not
-	// contain an error, startup finished.
-	startedErr chan error
 }
 
 // New returns a new CertWatcher watching the given certificate and key.
@@ -69,11 +64,10 @@ func New(certPath, keyPath string) (*CertWatcher, error) {
 	var err error
 
 	cw := &CertWatcher{
-		certPath:   certPath,
-		keyPath:    keyPath,
-		interval:   defaultWatchInterval,
-		log:        log.WithValues("cert", certPath, "key", keyPath),
-		startedErr: make(chan error, 1),
+		certPath: certPath,
+		keyPath:  keyPath,
+		interval: defaultWatchInterval,
+		log:      log.WithValues("cert", certPath, "key", keyPath),
 	}
 
 	// Initial read of certificate and key.
@@ -130,14 +124,9 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 			}
 			return true, nil
 		}); err != nil {
-			err = fmt.Errorf("failed to add watches: %w", kerrors.NewAggregate([]error{err, watchErr}))
-			cw.startedErr <- err
-			return err
+			return fmt.Errorf("failed to add watches: %w", kerrors.NewAggregate([]error{err, watchErr}))
 		}
 	}
-
-	// Watches are registered. Close with no value so WaitForStart returns nil.
-	close(cw.startedErr)
 
 	go cw.Watch()
 
@@ -154,19 +143,6 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 				cw.log.Error(err, "failed read certificate")
 			}
 		}
-	}
-}
-
-// WaitForStart waits until Start has registered certificate watches or failed while doing so.
-func (cw *CertWatcher) WaitForStart(ctx context.Context) error {
-	select {
-	case err := <-cw.startedErr:
-		return err
-	case <-ctx.Done():
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return nil
-		}
-		return fmt.Errorf("timed out waiting for certificate watcher to start: %w", ctx.Err())
 	}
 }
 

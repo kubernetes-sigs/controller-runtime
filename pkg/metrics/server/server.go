@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -43,6 +44,9 @@ const (
 
 // DefaultBindAddress is the default bind address for the metrics server.
 var DefaultBindAddress = ":8080"
+
+// errCertWatcher is used as the cancel cause of the server's context when the certificate watcher fails.
+var errCertWatcher = errors.New("certificate watcher failed")
 
 // Server is a server that serves metrics.
 type Server interface {
@@ -217,7 +221,12 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 func (s *defaultServer) Start(ctx context.Context) error {
 	log.Info("Starting metrics server")
 
-	listener, err := s.createListener(ctx)
+	// The context is cancelled with errCertWatcher as cause if the certificate
+	// watcher fails, which shuts down the server.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	listener, err := s.createListener(ctx, cancel, log)
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: failed to create listener: %w", err)
 	}
@@ -275,6 +284,9 @@ func (s *defaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
+	if err := context.Cause(ctx); errors.Is(err, errCertWatcher) {
+		return err
+	}
 	return nil
 }
 
@@ -289,7 +301,7 @@ func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
 	return handlerOpts
 }
 
-func (s *defaultServer) createListener(ctx context.Context) (net.Listener, error) {
+func (s *defaultServer) createListener(ctx context.Context, cancel context.CancelCauseFunc, log logr.Logger) (net.Listener, error) {
 	if !s.options.SecureServing {
 		return s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 	}
@@ -302,7 +314,6 @@ func (s *defaultServer) createListener(ctx context.Context) (net.Listener, error
 		op(cfg)
 	}
 
-	var certWatcher *certwatcher.CertWatcher
 	if cfg.GetCertificate == nil {
 		certPath := filepath.Join(s.options.CertDir, s.options.CertName)
 		keyPath := filepath.Join(s.options.CertDir, s.options.KeyName)
@@ -314,16 +325,17 @@ func (s *defaultServer) createListener(ctx context.Context) (net.Listener, error
 		if certExists && keyExists {
 			// Create the certificate watcher and
 			// set the config's GetCertificate on the TLSConfig
-			var err error
-			certWatcher, err = certwatcher.New(certPath, keyPath)
+			certWatcher, err := certwatcher.New(certPath, keyPath)
 			if err != nil {
 				return nil, err
 			}
 			cfg.GetCertificate = certWatcher.GetCertificate
 
 			go func() {
-				// WaitForStart returns this error to the caller.
-				_ = certWatcher.Start(ctx)
+				if err := certWatcher.Start(ctx); err != nil {
+					log.Error(err, "certificate watcher error")
+					cancel(fmt.Errorf("%w: %w", errCertWatcher, err))
+				}
 			}()
 		}
 	}
@@ -343,12 +355,6 @@ func (s *defaultServer) createListener(ctx context.Context) (net.Listener, error
 			return nil, fmt.Errorf("failed to create self-signed key pair for metrics server: %w", err)
 		}
 		cfg.Certificates = []tls.Certificate{keyPair}
-	}
-
-	if certWatcher != nil {
-		if err := certWatcher.WaitForStart(ctx); err != nil {
-			return nil, fmt.Errorf("failed to start certificate watcher: %w", err)
-		}
 	}
 
 	l, err := s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)

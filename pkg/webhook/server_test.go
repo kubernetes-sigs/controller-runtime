@@ -23,13 +23,19 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"golang.org/x/sys/unix"
 	"k8s.io/client-go/rest"
+	certutil "k8s.io/client-go/util/cert"
 
+	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
@@ -252,6 +258,37 @@ var _ = Describe("Webhook Server", func() {
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())
 	})
+
+	// Registration retries for 10s, so this outlives that poll.
+	It("returns certwatcher.ErrFailed when certificate watches cannot be registered", SpecTimeout(20*time.Second), func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
+		defer cancel()
+
+		dir := GinkgoT().TempDir()
+		certPEM, keyPEM, err := certutil.GenerateSelfSignedCertKey("localhost", nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		// FIFOs let New read the certificate bytes, then the paths are removed
+		// before fsnotify can watch them.
+		Expect(unix.Mkfifo(filepath.Join(dir, "tls.crt"), 0o600)).To(Succeed())
+		Expect(unix.Mkfifo(filepath.Join(dir, "tls.key"), 0o600)).To(Succeed())
+
+		srv := webhook.NewServer(webhook.Options{
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: dir,
+		})
+
+		errCh := make(chan error, 1)
+		go func() {
+			defer GinkgoRecover()
+			errCh <- srv.Start(ctx)
+		}()
+
+		writeFIFO(filepath.Join(dir, "tls.crt"), certPEM)
+		writeFIFO(filepath.Join(dir, "tls.key"), keyPEM)
+
+		Eventually(errCh, 15*time.Second).Should(Receive(MatchError(certwatcher.ErrFailed)))
+	})
 })
 
 type testHandler struct {
@@ -261,4 +298,34 @@ func (t *testHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if _, err := resp.Write([]byte("gadzooks!")); err != nil {
 		panic("unable to write http response!")
 	}
+}
+
+// writeFIFO blocks until a reader opens path, removes the path, then writes data
+// to the already-open descriptor.
+func writeFIFO(fifoPath string, data []byte) {
+	opened := make(chan *os.File, 1)
+	openErr := make(chan error, 1)
+	go func() {
+		f, err := os.OpenFile(fifoPath, os.O_WRONLY, 0)
+		if err != nil {
+			openErr <- err
+			return
+		}
+		opened <- f
+	}()
+
+	var f *os.File
+	select {
+	case f = <-opened:
+	case err := <-openErr:
+		Expect(err).NotTo(HaveOccurred())
+	case <-time.After(5 * time.Second):
+		Fail(fmt.Sprintf("timed out waiting for a reader on %s", fifoPath))
+	}
+
+	// Remove the path so adding the fsnotify watch fails.
+	Expect(os.Remove(fifoPath)).To(Succeed())
+	_, err := f.Write(data)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(f.Close()).To(Succeed())
 }

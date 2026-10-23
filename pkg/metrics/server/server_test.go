@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,6 +30,7 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/fifo"
 )
 
 func TestServer(t *testing.T) {
@@ -129,40 +129,9 @@ var _ = Describe("metrics server certificate watcher", func() {
 			errCh <- srv.Start(ctx)
 		}()
 
-		writeFIFO(filepath.Join(dir, "tls.crt"), certPEM)
-		writeFIFO(filepath.Join(dir, "tls.key"), keyPEM)
+		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.crt"), certPEM)).To(Succeed())
+		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.key"), keyPEM)).To(Succeed())
 
 		Eventually(errCh, 15*time.Second).Should(Receive(MatchError(certwatcher.ErrFailed)))
 	})
 })
-
-// writeFIFO blocks until a reader opens path, removes the path, then writes data
-// to the already-open descriptor.
-func writeFIFO(path string, data []byte) {
-	opened := make(chan *os.File, 1)
-	openErr := make(chan error, 1)
-	go func() {
-		// blocks until first file read in `Start`
-		f, err := os.OpenFile(path, os.O_WRONLY, 0)
-		if err != nil {
-			openErr <- err
-			return
-		}
-		opened <- f
-	}()
-
-	var f *os.File
-	select {
-	case f = <-opened:
-	case err := <-openErr:
-		Expect(err).NotTo(HaveOccurred())
-	case <-time.After(5 * time.Second):
-		Fail(fmt.Sprintf("timed out waiting for a reader on %s", path))
-	}
-
-	// remove path here so fsnotify fails
-	Expect(os.Remove(path)).To(Succeed())
-	_, err := f.Write(data)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(f.Close()).To(Succeed())
-}

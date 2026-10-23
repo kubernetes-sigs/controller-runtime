@@ -22,7 +22,19 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+// Create creates a FIFO at each of paths.
+func Create(paths ...string) error {
+	for _, path := range paths {
+		if err := unix.Mkfifo(path, 0o600); err != nil {
+			return fmt.Errorf("failed to create FIFO %s: %w", path, err)
+		}
+	}
+	return nil
+}
 
 // WriteAndRemove opens the FIFO at path for writing, removes path, then writes
 // data to the already-open descriptor and closes it. A reader that opened path

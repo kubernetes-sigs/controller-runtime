@@ -30,7 +30,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"golang.org/x/sys/unix"
 	"k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
 
@@ -269,8 +268,7 @@ var _ = Describe("Webhook Server", func() {
 		Expect(err).NotTo(HaveOccurred())
 		// FIFOs let New read the certificate bytes, then the paths are removed
 		// before fsnotify can watch them.
-		Expect(unix.Mkfifo(filepath.Join(dir, "tls.crt"), 0o600)).To(Succeed())
-		Expect(unix.Mkfifo(filepath.Join(dir, "tls.key"), 0o600)).To(Succeed())
+		Expect(fifo.Create(filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key"))).To(Succeed())
 
 		srv := webhook.NewServer(webhook.Options{
 			Host:    servingOpts.LocalServingHost,

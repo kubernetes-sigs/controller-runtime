@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/sys/unix"
 	certutil "k8s.io/client-go/util/cert"
 
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
@@ -113,8 +112,7 @@ var _ = Describe("metrics server certificate watcher", func() {
 		Expect(err).NotTo(HaveOccurred())
 		// FIFOs let New read the certificate bytes, then the paths are removed
 		// before fsnotify can watch them.
-		Expect(unix.Mkfifo(filepath.Join(dir, "tls.crt"), 0o600)).To(Succeed())
-		Expect(unix.Mkfifo(filepath.Join(dir, "tls.key"), 0o600)).To(Succeed())
+		Expect(fifo.Create(filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key"))).To(Succeed())
 
 		srv, err := NewServer(Options{
 			SecureServing: true,

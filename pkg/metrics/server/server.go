@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -217,7 +218,12 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 func (s *defaultServer) Start(ctx context.Context) error {
 	log.Info("Starting metrics server")
 
-	listener, err := s.createListener(ctx, log)
+	// The context is cancelled with certwatcher.ErrFailed as cause if the certificate
+	// watcher fails, which shuts down the server.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	listener, err := s.createListener(ctx, cancel, log)
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: failed to create listener: %w", err)
 	}
@@ -275,6 +281,9 @@ func (s *defaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
+	if err := context.Cause(ctx); errors.Is(err, certwatcher.ErrFailed) {
+		return err
+	}
 	return nil
 }
 
@@ -289,7 +298,7 @@ func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
 	return handlerOpts
 }
 
-func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (net.Listener, error) {
+func (s *defaultServer) createListener(ctx context.Context, cancel context.CancelCauseFunc, log logr.Logger) (net.Listener, error) {
 	if !s.options.SecureServing {
 		return s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 	}
@@ -322,6 +331,7 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 			go func() {
 				if err := certWatcher.Start(ctx); err != nil {
 					log.Error(err, "certificate watcher error")
+					cancel(fmt.Errorf("%w: %w", certwatcher.ErrFailed, err))
 				}
 			}()
 		}

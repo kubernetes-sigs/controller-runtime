@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -207,6 +208,11 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	log.Info("Starting webhook server")
 
+	// The context is cancelled with certwatcher.ErrFailed as cause if the certificate
+	// watcher fails, which shuts down the server.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
 	cfg := &tls.Config{
 		NextProtos: []string{"h2"},
 	}
@@ -230,6 +236,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		go func() {
 			if err := certWatcher.Start(ctx); err != nil {
 				log.Error(err, "certificate watcher error")
+				cancel(fmt.Errorf("%w: %w", certwatcher.ErrFailed, err))
 			}
 		}()
 	}
@@ -282,6 +289,9 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
+	if err := context.Cause(ctx); errors.Is(err, certwatcher.ErrFailed) {
+		return err
+	}
 	return nil
 }
 

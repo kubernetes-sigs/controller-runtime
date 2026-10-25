@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -208,11 +207,6 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	log.Info("Starting webhook server")
 
-	// The context is cancelled with certwatcher.ErrFailed as cause if the certificate
-	// watcher fails, which shuts down the server.
-	ctx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
-
 	cfg := &tls.Config{
 		NextProtos: []string{"h2"},
 	}
@@ -221,6 +215,8 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		op(cfg)
 	}
 
+	// certWatcherErr receives an error if the certificate watcher fails, which shuts down the server.
+	var certWatcherErr chan error
 	if cfg.GetCertificate == nil {
 		certPath := filepath.Join(s.Options.CertDir, s.Options.CertName)
 		keyPath := filepath.Join(s.Options.CertDir, s.Options.KeyName)
@@ -233,10 +229,14 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		}
 		cfg.GetCertificate = certWatcher.GetCertificate
 
+		certWatcherErr = make(chan error, 1)
 		go func() {
 			if err := certWatcher.Start(ctx); err != nil {
 				log.Error(err, "certificate watcher error")
-				cancel(fmt.Errorf("%w: %w", certwatcher.ErrFailed, err))
+				// Errors after ctx is done are part of a normal shutdown.
+				if ctx.Err() == nil {
+					certWatcherErr <- err
+				}
 			}
 		}()
 	}
@@ -267,9 +267,13 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	srv := httpserver.New(ctx, s.webhookMux)
 
+	var watcherErr error
 	idleConnsClosed := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		select {
+		case <-ctx.Done():
+		case watcherErr = <-certWatcherErr:
+		}
 		log.Info("Shutting down webhook server with timeout of 1 minute")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -289,8 +293,8 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
-	if err := context.Cause(ctx); errors.Is(err, certwatcher.ErrFailed) {
-		return err
+	if watcherErr != nil {
+		return fmt.Errorf("certificate watcher failed: %w", watcherErr)
 	}
 	return nil
 }

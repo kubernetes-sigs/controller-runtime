@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -36,11 +35,6 @@ import (
 )
 
 var log = logf.RuntimeLog.WithName("certwatcher")
-
-// ErrFailed is the cancel cause for a server context when the certificate watcher
-// stops because it could not watch the certificate files. Servers use it to
-// distinguish that failure from a normal shutdown.
-var ErrFailed = errors.New("certificate watcher failed")
 
 const defaultWatchInterval = 10 * time.Second
 

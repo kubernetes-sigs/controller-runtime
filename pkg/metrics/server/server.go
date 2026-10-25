@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -218,12 +217,10 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 func (s *defaultServer) Start(ctx context.Context) error {
 	log.Info("Starting metrics server")
 
-	// The context is cancelled with certwatcher.ErrFailed as cause if the certificate
-	// watcher fails, which shuts down the server.
-	ctx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
+	// certWatcherErr receives an error if the certificate watcher fails
+	certWatcherErr := make(chan error, 1)
 
-	listener, err := s.createListener(ctx, cancel, log)
+	listener, err := s.createListener(ctx, certWatcherErr, log)
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: failed to create listener: %w", err)
 	}
@@ -262,9 +259,13 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 	srv := httpserver.New(ctx, mux)
 
+	var watcherErr error
 	idleConnsClosed := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		select {
+		case <-ctx.Done():
+		case watcherErr = <-certWatcherErr:
+		}
 		log.Info("Shutting down metrics server with timeout of 1 minute")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -281,8 +282,8 @@ func (s *defaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
-	if err := context.Cause(ctx); errors.Is(err, certwatcher.ErrFailed) {
-		return err
+	if watcherErr != nil {
+		return fmt.Errorf("certificate watcher failed: %w", watcherErr)
 	}
 	return nil
 }
@@ -298,7 +299,7 @@ func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
 	return handlerOpts
 }
 
-func (s *defaultServer) createListener(ctx context.Context, cancel context.CancelCauseFunc, log logr.Logger) (net.Listener, error) {
+func (s *defaultServer) createListener(ctx context.Context, certWatcherErr chan<- error, log logr.Logger) (net.Listener, error) {
 	if !s.options.SecureServing {
 		return s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 	}
@@ -331,7 +332,10 @@ func (s *defaultServer) createListener(ctx context.Context, cancel context.Cance
 			go func() {
 				if err := certWatcher.Start(ctx); err != nil {
 					log.Error(err, "certificate watcher error")
-					cancel(fmt.Errorf("%w: %w", certwatcher.ErrFailed, err))
+					// Errors after ctx is done are part of a normal shutdown.
+					if ctx.Err() == nil {
+						certWatcherErr <- err
+					}
 				}
 			}()
 		}

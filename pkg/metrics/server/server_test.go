@@ -28,7 +28,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	certutil "k8s.io/client-go/util/cert"
 
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/internal/testing/fifo"
 )
 
@@ -103,7 +102,7 @@ var _ = Describe("metrics server certificate watcher", func() {
 	})
 
 	// Registration retries for 10s, so this outlives that poll.
-	It("returns certwatcher.ErrFailed when certificate watches cannot be registered", SpecTimeout(20*time.Second), func(specCtx SpecContext) {
+	It("returns an error when certificate watches cannot be registered", SpecTimeout(20*time.Second), func(specCtx SpecContext) {
 		ctx, cancel := context.WithCancel(specCtx)
 		defer cancel()
 
@@ -130,6 +129,6 @@ var _ = Describe("metrics server certificate watcher", func() {
 		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.crt"), certPEM)).To(Succeed())
 		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.key"), keyPEM)).To(Succeed())
 
-		Eventually(errCh, 15*time.Second).Should(Receive(MatchError(certwatcher.ErrFailed)))
+		Eventually(errCh, 15*time.Second).Should(Receive(MatchError(ContainSubstring("certificate watcher failed"))))
 	})
 })

@@ -116,7 +116,7 @@ type Options struct {
 	//
 	// If set, the RESTMapper returned by this function is used to create the RESTMapper
 	// used by the Client and Cache.
-	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
+	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error)
 
 	// Cache is the cache.Options that will be used to create the default Cache.
 	// By default, the cache will watch and list requested objects in all namespaces.

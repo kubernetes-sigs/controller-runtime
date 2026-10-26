@@ -86,7 +86,7 @@ type fakeClient struct {
 	schemeLock sync.RWMutex
 	scheme     *runtime.Scheme
 
-	restMapper            meta.RESTMapper
+	restMapper            meta.RESTMapperWithContext
 	withStatusSubresource sets.Set[schema.GroupVersionKind]
 
 	// indexes maps each GroupVersionKind (GVK) to the indexes registered for that GVK.
@@ -122,7 +122,7 @@ func NewClientBuilder() *ClientBuilder {
 // ClientBuilder builds a fake client.
 type ClientBuilder struct {
 	scheme                *runtime.Scheme
-	restMapper            meta.RESTMapper
+	restMapper            meta.RESTMapperWithContext
 	initObject            []client.Object
 	initLists             []client.ObjectList
 	initRuntimeObjects    []runtime.Object
@@ -150,7 +150,7 @@ func (f *ClientBuilder) WithScheme(scheme *runtime.Scheme) *ClientBuilder {
 // The restMapper is directly set as mapper in the Client. This can be used for example
 // with a meta.DefaultRESTMapper to provide a static rest mapping.
 // If not set, defaults to an empty meta.DefaultRESTMapper.
-func (f *ClientBuilder) WithRESTMapper(restMapper meta.RESTMapper) *ClientBuilder {
+func (f *ClientBuilder) WithRESTMapper(restMapper meta.RESTMapperWithContext) *ClientBuilder {
 	f.restMapper = restMapper
 	return f
 }
@@ -611,7 +611,7 @@ func (c *fakeClient) Scheme() *runtime.Scheme {
 	return c.scheme
 }
 
-func (c *fakeClient) RESTMapper() meta.RESTMapper {
+func (c *fakeClient) RESTMapper() meta.RESTMapperWithContext {
 	return c.restMapper
 }
 
@@ -621,8 +621,8 @@ func (c *fakeClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersio
 }
 
 // IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
-func (c *fakeClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return apiutil.IsObjectNamespaced(obj, c.scheme, c.restMapper)
+func (c *fakeClient) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return apiutil.IsObjectNamespaced(ctx, obj, c.scheme, c.restMapper)
 }
 
 func (c *fakeClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {

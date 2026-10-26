@@ -24,13 +24,17 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"path/filepath"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
+	certutil "k8s.io/client-go/util/cert"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/internal/testing/fifo"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -251,6 +255,36 @@ var _ = Describe("Webhook Server", func() {
 
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())
+	})
+
+	// Registration retries for 10s, so this outlives that poll.
+	It("returns an error when certificate watches cannot be registered", SpecTimeout(20*time.Second), func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
+		defer cancel()
+
+		dir := GinkgoT().TempDir()
+		certPEM, keyPEM, err := certutil.GenerateSelfSignedCertKey("localhost", nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		// FIFOs let New read the certificate bytes, then the paths are removed
+		// before fsnotify can watch them.
+		Expect(fifo.Create(filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key"))).To(Succeed())
+
+		srv := webhook.NewServer(webhook.Options{
+			Host:    servingOpts.LocalServingHost,
+			Port:    servingOpts.LocalServingPort,
+			CertDir: dir,
+		})
+
+		errCh := make(chan error, 1)
+		go func() {
+			defer GinkgoRecover()
+			errCh <- srv.Start(ctx)
+		}()
+
+		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.crt"), certPEM)).To(Succeed())
+		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.key"), keyPEM)).To(Succeed())
+
+		Eventually(errCh, 15*time.Second).Should(Receive(MatchError(ContainSubstring("certificate watcher failed"))))
 	})
 })
 

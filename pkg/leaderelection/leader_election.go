@@ -22,9 +22,9 @@ import (
 	"os"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	coordinationv1client "k8s.io/client-go/kubernetes/typed/coordination/v1"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
@@ -40,7 +40,7 @@ type Options struct {
 	LeaderElection bool
 
 	// LeaderElectionResourceLock determines which resource lock to use for leader election,
-	// defaults to "leases".
+	// defaults to "leases". All other resource types will fail.
 	LeaderElectionResourceLock string
 
 	// LeaderElectionNamespace determines the namespace in which the leader
@@ -67,12 +67,13 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 	if !options.LeaderElection {
 		return nil, nil
 	}
-	// Default resource lock to "leases". The previous default (from v0.7.0 to v0.11.x) was configmapsleases, which was
-	// used to migrate from configmaps to leases. Since the default was "configmapsleases" for over a year, spanning
-	// five minor releases, any actively maintained operators are very likely to have a released version that uses
-	// "configmapsleases". Therefore defaulting to "leases" should be safe.
+
 	if options.LeaderElectionResourceLock == "" {
 		options.LeaderElectionResourceLock = resourcelock.LeasesResourceLock
+	}
+
+	if options.LeaderElectionResourceLock != resourcelock.LeasesResourceLock {
+		return nil, fmt.Errorf("unsupported leader election resource lock '%s'; use 'leases'", options.LeaderElectionResourceLock)
 	}
 
 	// LeaderElectionID must be provided to prevent clashes
@@ -107,30 +108,25 @@ func NewResourceLock(config *rest.Config, recorderProvider recorder.Provider, op
 		config.Timeout = timeout
 	}
 
-	// Construct clients for leader election
-	corev1Client, err := corev1client.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
 	coordinationClient, err := coordinationv1client.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
 
-	return resourcelock.NewWithLabels(options.LeaderElectionResourceLock,
-		options.LeaderElectionNamespace,
-		options.LeaderElectionID,
-		corev1Client,
-		coordinationClient,
-		resourcelock.ResourceLockConfig{
+	return &resourcelock.LeaseLock{
+		LeaseMeta: metav1.ObjectMeta{
+			Name:      options.LeaderElectionID,
+			Namespace: options.LeaderElectionNamespace,
+		},
+		Client: coordinationClient,
+		LockConfig: resourcelock.ResourceLockConfig{
 			Identity: id,
 			// TODO(clebs): Replace with the new events API after leader election is updated upstream.
 			// REF: https://github.com/kubernetes/kubernetes/issues/82846
 			EventRecorder: recorderProvider.GetEventRecorderFor(id), //nolint:staticcheck
 		},
-		options.LeaderLabels,
-	)
+		Labels: options.LeaderLabels,
+	}, nil
 }
 
 func getInClusterNamespace() (string, error) {

@@ -119,6 +119,16 @@ var _ = Describe("manger.Manager", func() {
 			Expect(err.Error()).To(ContainSubstring("expected error"))
 		})
 
+		It("should return an error it can't use configmap as leader election lease resource", func() {
+			m, err := New(cfg, Options{
+				LeaderElection:             true,
+				LeaderElectionResourceLock: "configmaps",
+			})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported leader election resource lock 'configmaps'; use 'leases'"))
+		})
+
 		It("should lazily initialize a webhook server if needed", func() {
 			By("creating a manager with options")
 			m, err := New(cfg, Options{WebhookServer: webhook.NewServer(webhook.Options{Port: 9440, Host: "foo.com"})})

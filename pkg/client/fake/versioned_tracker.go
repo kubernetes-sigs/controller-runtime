@@ -328,7 +328,7 @@ func (t versionedTracker) updateObject(
 		return nil, false, fmt.Errorf("error: Unable to edit %s: metadata.deletionTimestamp field is immutable", accessor.GetName())
 	}
 
-	if !accessor.GetDeletionTimestamp().IsZero() && len(accessor.GetFinalizers()) == 0 {
+	if !accessor.GetDeletionTimestamp().IsZero() && !remainsOnDelete(obj) {
 		return nil, false, t.Delete(gvr, accessor.GetNamespace(), accessor.GetName(), metav1.DeleteOptions{DryRun: dryRun})
 	}
 

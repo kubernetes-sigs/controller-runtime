@@ -2264,6 +2264,37 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				Expect(err).To(HaveOccurred())
 			})
 
+			It("should delete an object of a kind that is not in the scheme and remains in storage", func(ctx SpecContext) {
+				s := runtime.NewScheme()
+				Expect(kscheme.AddToScheme(s)).To(Succeed())
+				cl, err := client.New(cfg, client.Options{Scheme: s})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("initially creating a ChaosPod with a finalizer")
+				chaosPodGVK := schema.GroupVersionKind{Group: "chaosapps.metamagical.io", Version: "v1", Kind: "ChaosPod"}
+				u := &unstructured.Unstructured{}
+				u.SetGroupVersionKind(chaosPodGVK)
+				u.SetNamespace(ns)
+				u.SetName(fmt.Sprintf("chaospod-%d", count))
+				u.SetFinalizers([]string{"example.com/hold"})
+				Expect(cl.Create(ctx, u)).To(Succeed())
+				DeferCleanup(func(ctx context.Context) {
+					patch := client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"finalizers":null}}`))
+					Expect(client.IgnoreNotFound(cl.Patch(ctx, u, patch))).To(Succeed())
+				})
+
+				By("deleting the ChaosPod")
+				metaObj := &metav1.PartialObjectMetadata{}
+				metaObj.SetGroupVersionKind(chaosPodGVK)
+				metaObj.SetNamespace(ns)
+				metaObj.SetName(u.GetName())
+				Expect(cl.Delete(ctx, metaObj)).To(Succeed())
+
+				By("validating the ChaosPod is terminating")
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(u), u)).To(Succeed())
+				Expect(u.GetDeletionTimestamp()).NotTo(BeNil())
+			})
+
 			It("should fail if the object does not exist", func(ctx SpecContext) {
 				cl, err := client.New(cfg, client.Options{})
 				Expect(err).NotTo(HaveOccurred())

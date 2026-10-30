@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/apply"
 )
@@ -73,7 +72,7 @@ func (c *typedClient) Update(ctx context.Context, obj Object, opts ...UpdateOpti
 }
 
 // Delete implements client.Client.
-func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
+func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) (runtime.Object, error) {
 	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return nil, err
@@ -82,26 +81,17 @@ func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOpti
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
 
-	// directly deserializing into unstructured fails in the decoder
-	runtimeObj, err := o.Delete().
+	result := o.Delete().
 		NamespaceIfScoped(o.namespace, o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.name).
 		Body(deleteOpts.AsDeleteOptions()).
-		Do(ctx).
-		Get()
-	if err != nil {
-		return nil, err
+		Do(ctx)
+	response, err := result.Get()
+	if err != nil || !remainsAfterDelete(response) {
+		return response, err
 	}
-	data, err := json.Marshal(runtimeObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal delete response: %w", err)
-	}
-	response := &unstructured.Unstructured{}
-	if err := json.Unmarshal(data, &response.Object); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal delete response: %w", err)
-	}
-	return response, nil
+	return response, result.Into(obj)
 }
 
 // DeleteAllOf implements client.Client.

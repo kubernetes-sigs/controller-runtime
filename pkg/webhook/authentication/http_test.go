@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -208,6 +209,23 @@ var _ = Describe("Authentication Webhooks", func() {
 			webhook.ServeHTTP(respRecorder, req.WithContext(ctx))
 			Expect(respRecorder.Body.String()).To(Equal(expected))
 		})
+
+		It("should never run into endless recursion if the writer has broken", func() {
+			req := &http.Request{
+				Header: http.Header{"Content-Type": []string{"application/json"}},
+				Method: http.MethodPost,
+				Body:   nopCloser{Reader: bytes.NewBufferString(`{"spec":{"token":"foobar"}}`)},
+			}
+			webhook := &Webhook{
+				Handler: &fakeHandler{},
+			}
+
+			bw := &brokenWriter{ResponseWriter: respRecorder}
+			Eventually(func() int {
+				webhook.ServeHTTP(bw, req)
+				return respRecorder.Body.Len()
+			}, time.Second*3).Should(Equal(0))
+		})
 	})
 })
 
@@ -232,4 +250,12 @@ func (h *fakeHandler) Handle(ctx context.Context, req Request) Response {
 			Authenticated: true,
 		},
 	}
+}
+
+type brokenWriter struct {
+	http.ResponseWriter
+}
+
+func (bw *brokenWriter) Write(_ []byte) (int, error) {
+	return 0, fmt.Errorf("mock: write: broken pipe")
 }

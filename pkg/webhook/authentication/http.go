@@ -138,11 +138,21 @@ func (wh *Webhook) writeResponseTyped(w io.Writer, response Response, tokRevGVK 
 // writeTokenResponse writes ar to w.
 func (wh *Webhook) writeTokenResponse(w io.Writer, ar authenticationv1.TokenReview) {
 	if err := json.NewEncoder(w).Encode(ar); err != nil {
-		wh.getLogger(nil).Error(err, "unable to encode the response")
-		wh.writeResponse(w, Errored(err))
+		wh.getLogger(nil).Error(err, "unable to encode and write the response")
+		// Since the `ar authenticationv1.TokenReview` is a clear and legal object,
+		// it should not have problem to be marshalled into bytes.
+		// The error here is probably caused by the abnormal HTTP connection,
+		// e.g., broken pipe, so we can only write the error response once,
+		// to avoid endless circular calling.
+		if err := json.NewEncoder(w).Encode(Errored(err).TokenReview); err != nil {
+			wh.getLogger(nil).Error(err, "still unable to encode and write the error response")
+		}
+	} else {
+		if log := wh.getLogger(nil); log.V(5).Enabled() {
+			res := ar
+			log.V(5).Info("wrote response", "requestID", res.UID, "authenticated", res.Status.Authenticated)
+		}
 	}
-	res := ar
-	wh.getLogger(nil).V(5).Info("wrote response", "requestID", res.UID, "authenticated", res.Status.Authenticated)
 }
 
 // unversionedTokenReview is used to decode both v1 and v1beta1 TokenReview types.

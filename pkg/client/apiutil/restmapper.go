@@ -68,6 +68,9 @@ type mapper struct {
 
 // KindFor implements Mapper.KindFor.
 func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	if err := m.loadAllVersionsIfPartial(resource.Group, resource.Version); err != nil {
+		return schema.GroupVersionKind{}, err
+	}
 	res, err := m.getMapper().KindFor(resource)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
@@ -81,6 +84,9 @@ func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVers
 
 // KindsFor implements Mapper.KindsFor.
 func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	if err := m.loadAllVersionsIfPartial(resource.Group, resource.Version); err != nil {
+		return nil, err
+	}
 	res, err := m.getMapper().KindsFor(resource)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
@@ -94,6 +100,9 @@ func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupV
 
 // ResourceFor implements Mapper.ResourceFor.
 func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	if err := m.loadAllVersionsIfPartial(input.Group, input.Version); err != nil {
+		return schema.GroupVersionResource{}, err
+	}
 	res, err := m.getMapper().ResourceFor(input)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
@@ -107,6 +116,9 @@ func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVer
 
 // ResourcesFor implements Mapper.ResourcesFor.
 func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	if err := m.loadAllVersionsIfPartial(input.Group, input.Version); err != nil {
+		return nil, err
+	}
 	res, err := m.getMapper().ResourcesFor(input)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
@@ -120,6 +132,9 @@ func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.Group
 
 // RESTMapping implements Mapper.RESTMapping.
 func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+	if err := m.loadAllVersionsIfPartial(gk.Group, versions...); err != nil {
+		return nil, err
+	}
 	res, err := m.getMapper().RESTMapping(gk, versions...)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
@@ -133,6 +148,9 @@ func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RES
 
 // RESTMappings implements Mapper.RESTMappings.
 func (m *mapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
+	if err := m.loadAllVersionsIfPartial(gk.Group, versions...); err != nil {
+		return nil, err
+	}
 	res, err := m.getMapper().RESTMappings(gk, versions...)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
@@ -153,6 +171,23 @@ func (m *mapper) getMapper() meta.RESTMapper {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.mapper
+}
+
+// loadAllVersionsIfPartial loads every version of a group when the request does not name a version
+// but only some of the group's versions are cached, so the answer is not limited to those versions.
+func (m *mapper) loadAllVersionsIfPartial(groupName string, versions ...string) error {
+	if len(versions) > 1 || (len(versions) == 1 && versions[0] != "") {
+		return nil
+	}
+
+	m.mu.RLock()
+	partial := m.isGroupPartiallyCachedLocked(groupName)
+	m.mu.RUnlock()
+	if !partial {
+		return nil
+	}
+
+	return m.addKnownGroupAndReload(groupName)
 }
 
 // addKnownGroupAndReload reloads the mapper with updated information about missing API group.
@@ -349,6 +384,27 @@ func (m *mapper) isGroupVersionCachedLocked(gv schema.GroupVersion) bool {
 	if cachedGroup, ok := m.knownGroups[gv.Group]; ok {
 		_, cached := cachedGroup.VersionedResources[gv.Version]
 		return cached
+	}
+
+	return false
+}
+
+// isGroupPartiallyCachedLocked checks if the known groups cache is missing versions that the api groups cache
+// lists for a group.
+func (m *mapper) isGroupPartiallyCachedLocked(groupName string) bool {
+	knownGroup, ok := m.knownGroups[groupName]
+	if !ok {
+		return false
+	}
+	apiGroup, ok := m.apiGroups[groupName]
+	if !ok {
+		return false
+	}
+
+	for _, version := range apiGroup.Versions {
+		if _, cached := knownGroup.VersionedResources[version.Version]; !cached {
+			return true
+		}
 	}
 
 	return false

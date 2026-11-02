@@ -152,12 +152,12 @@ func (wh *Webhook) writeAdmissionResponse(w io.Writer, ar v1.AdmissionReview) {
 		// e.g., broken pipe, so we can only write the error response once,
 		// to avoid endless circular calling.
 		serverError := Errored(http.StatusInternalServerError, err)
-		if err = json.NewEncoder(w).Encode(v1.AdmissionReview{Response: &serverError.AdmissionResponse}); err != nil {
+		if err := json.NewEncoder(w).Encode(v1.AdmissionReview{Response: &serverError.AdmissionResponse}); err != nil {
 			wh.getLogger(nil).Error(err, "still unable to encode and write the InternalServerError response")
 		}
 	} else {
-		res := ar.Response
 		if log := wh.getLogger(nil); log.V(5).Enabled() {
+			res := ar.Response
 			if res.Result != nil {
 				log = log.WithValues("code", res.Result.Code, "reason", res.Result.Reason, "message", res.Result.Message)
 			}

@@ -654,6 +654,59 @@ var _ = Describe("Eventhandler", func() {
 				instance.Create(ctx, evt, q)
 				Expect(q.Len()).To(Equal(0))
 			})
+
+			It("should skip the invalid OwnerReference and still enqueue Requests for the valid ones.", func(ctx SpecContext) {
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1/fail",
+					},
+					{
+						Name:       "foo2-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+				}
+				instance.Create(ctx, evt, q)
+				Expect(q.Len()).To(Equal(1))
+
+				i, _ := q.Get()
+				Expect(i).To(Equal(reconcile.Request{
+					Namespace: pod.GetNamespace(), Name: "foo2-parent"}))
+			})
+		})
+
+		Context("with an OwnerReference for which no REST mapping can be found", func() {
+			It("should skip it and still enqueue Requests for the valid ones.", func(ctx SpecContext) {
+				instance := handler.EnqueueRequestForOwner(scheme.Scheme, mapper, &appsv1.ReplicaSet{})
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						// Group and Kind match, but the version does not exist, so RESTMapping fails.
+						Name:       "foo1-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v99",
+					},
+					{
+						Name:       "foo2-parent",
+						Kind:       "ReplicaSet",
+						APIVersion: "apps/v1",
+					},
+				}
+				evt := event.CreateEvent{
+					Object: pod,
+				}
+				instance.Create(ctx, evt, q)
+				Expect(q.Len()).To(Equal(1))
+
+				i, _ := q.Get()
+				Expect(i).To(Equal(reconcile.Request{
+					Namespace: pod.GetNamespace(), Name: "foo2-parent"}))
+			})
 		})
 	})
 

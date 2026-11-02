@@ -171,7 +171,8 @@ func (e *enqueueRequestForOwner[object]) getOwnerReconcileRequest(obj metav1.Obj
 		if err != nil {
 			log.Error(err, "Could not parse OwnerReference APIVersion",
 				"api version", ref.APIVersion)
-			return
+			// Only skip the current entry so other OwnerReferences are still processed.
+			continue
 		}
 
 		// Compare the OwnerReference Group and Kind against the OwnerType Group and Kind specified by the user.
@@ -188,7 +189,8 @@ func (e *enqueueRequestForOwner[object]) getOwnerReconcileRequest(obj metav1.Obj
 			mapping, err := e.mapper.RESTMapping(e.groupKind, refGV.Version)
 			if err != nil {
 				log.Error(err, "Could not retrieve rest mapping", "kind", e.groupKind)
-				return
+				// Only skip the current entry so other OwnerReferences are still processed.
+				continue
 			}
 			if mapping.Scope.Name() != meta.RESTScopeNameRoot {
 				request.Namespace = obj.GetNamespace()

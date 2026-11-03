@@ -930,6 +930,38 @@ func runTests(admissionReviewVersion string) {
 		ExpectWithOffset(1, err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("only one of Validator or CustomValidator can be set"))
 	})
+	It("should error if a defaulting webhook is already registered at the same path", func() {
+		m, err := manager.New(cfg, manager.Options{})
+		Expect(err).NotTo(HaveOccurred())
+
+		addToScheme(m.GetScheme())
+
+		Expect(WebhookManagedBy(m, &TestDefaulterObject{}).
+			WithDefaulter(&testDefaulter{}).
+			Complete()).To(Succeed())
+
+		err = WebhookManagedBy(m, &TestDefaulterObject{}).
+			WithDefaulter(&testDefaulter{}).
+			Complete()
+		Expect(err).To(MatchError("failed to register mutating webhook for GVK foo.test.org/v1, Kind=TestDefaulterObject " +
+			"there is already a handler registered at path /mutate-foo-test-org-v1-testdefaulterobject"))
+	})
+	It("should error if a validating webhook is already registered at the same path", func() {
+		m, err := manager.New(cfg, manager.Options{})
+		Expect(err).NotTo(HaveOccurred())
+
+		addToScheme(m.GetScheme())
+
+		Expect(WebhookManagedBy(m, &TestValidatorObject{}).
+			WithValidator(&testValidator{}).
+			Complete()).To(Succeed())
+
+		err = WebhookManagedBy(m, &TestValidatorObject{}).
+			WithValidator(&testValidator{}).
+			Complete()
+		Expect(err).To(MatchError("failed to register validating webhook for GVK foo.test.org/v1, Kind=TestValidatorObject " +
+			"there is already a handler registered at path /validate-foo-test-org-v1-testvalidatorobject"))
+	})
 }
 
 // TestDefaulter.

@@ -19,6 +19,7 @@ package builder
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -215,14 +216,12 @@ func (blder *WebhookBuilder[T]) registerDefaultingWebhook() error {
 			path = generatedCustomPath
 		}
 
-		// Checking if the path is already registered.
-		// If so, just skip it.
-		if !blder.isAlreadyHandled(path) {
-			log.Info("Registering a mutating webhook",
-				"GVK", blder.gvk,
-				"path", path)
-			blder.mgr.GetWebhookServer().Register(path, mwh)
+		if blder.isAlreadyHandled(path) {
+			return fmt.Errorf("failed to register mutating webhook for GVK %s there is already a handler registered at path %s", blder.gvk, path)
 		}
+
+		log.Info("Registering a mutating webhook", "GVK", blder.gvk, "path", path)
+		blder.mgr.GetWebhookServer().Register(path, mwh)
 	}
 
 	return nil
@@ -262,14 +261,12 @@ func (blder *WebhookBuilder[T]) registerValidatingWebhook() error {
 			path = generatedCustomPath
 		}
 
-		// Checking if the path is already registered.
-		// If so, just skip it.
-		if !blder.isAlreadyHandled(path) {
-			log.Info("Registering a validating webhook",
-				"GVK", blder.gvk,
-				"path", path)
-			blder.mgr.GetWebhookServer().Register(path, vwh)
+		if blder.isAlreadyHandled(path) {
+			return fmt.Errorf("failed to register validating webhook for GVK %s there is already a handler registered at path %s", blder.gvk, path)
 		}
+
+		log.Info("Registering a validating webhook", "GVK", blder.gvk, "path", path)
+		blder.mgr.GetWebhookServer().Register(path, vwh)
 	}
 
 	return nil

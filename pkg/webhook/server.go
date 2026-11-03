@@ -294,7 +294,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	<-idleConnsClosed
 	if watcherErr != nil {
-		return fmt.Errorf("certificate watcher failed: %w", watcherErr)
+		return fmt.Errorf("webhook server shut down: certificate watcher failed: %w", watcherErr)
 	}
 	return nil
 }

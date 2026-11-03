@@ -283,7 +283,7 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 	<-idleConnsClosed
 	if watcherErr != nil {
-		return fmt.Errorf("certificate watcher failed: %w", watcherErr)
+		return fmt.Errorf("metrics server shut down: certificate watcher failed: %w", watcherErr)
 	}
 	return nil
 }

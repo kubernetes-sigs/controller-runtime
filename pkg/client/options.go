@@ -726,6 +726,9 @@ func (m MatchingLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 
 // HasLabels filters the list/delete operation checking if the set of labels exists
 // without checking their values.
+// If one of the labels is invalid ApplyToList falls back to labels.Nothing as
+// it's safer to fall back to match nothing than falling back to
+// match everything with an empty selector.
 type HasLabels []string
 
 // ApplyToList applies this configuration to the given list options.
@@ -733,13 +736,16 @@ func (m HasLabels) ApplyToList(opts *ListOptions) {
 	if opts.LabelSelector == nil {
 		opts.LabelSelector = labels.NewSelector()
 	}
-	// TODO: ignore invalid labels will result in an empty selector.
-	// This is inconsistent to the that of MatchingLabels.
 	for _, label := range m {
 		r, err := labels.NewRequirement(label, selection.Exists, nil)
-		if err == nil {
-			opts.LabelSelector = opts.LabelSelector.Add(*r)
+		if err != nil {
+			// As this func does not return an error this is our best option.
+			// It is safer to fallback to match nothing than falling back to
+			// match everything with an empty selector.
+			opts.LabelSelector = labels.Nothing()
+			return
 		}
+		opts.LabelSelector = opts.LabelSelector.Add(*r)
 	}
 }
 

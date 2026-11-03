@@ -498,4 +498,13 @@ var _ = Describe("HasLabels", func() {
 		hasLabel.ApplyToList(listOpts)
 		Expect(listOpts.LabelSelector.String()).To(Equal("k=v,labelApe"))
 	})
+
+	It("Should match nothing if a label is invalid", func() {
+		listOpts := &client.ListOptions{}
+
+		hasLabels := client.HasLabels([]string{"labelApe", "invalid label!", "labelFox"})
+		hasLabels.ApplyToList(listOpts)
+		Expect(listOpts.LabelSelector).To(Equal(labels.Nothing()))
+		Expect(listOpts.LabelSelector.Matches(labels.Set{"labelApe": "", "labelFox": ""})).To(BeFalse())
+	})
 })

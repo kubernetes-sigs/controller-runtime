@@ -202,10 +202,13 @@ func (s *Store) Add(ctx context.Context, item Item, contents io.Reader) (resErr 
 	}
 	log.V(1).Info("unpacked archive")
 
-	log.V(1).Info("switching version-platform directory to read-only")
-	if err := itemPath.Chmod("", 0555); err != nil {
+	// Keep the directory itself writable (0755) so that users can delete it
+	// (e.g. rm -rf, git worktree remove) without chmod. The files inside stay
+	// read-only/executable, which protects the binaries from modification.
+	log.V(1).Info("ensuring version-platform directory is user-writable")
+	if err := itemPath.Chmod("", 0755); err != nil {
 		// don't bail, this isn't fatal
-		log.Error(err, "unable to make version-platform directory read-only")
+		log.Error(err, "unable to set version-platform directory permissions")
 	}
 	return nil
 }

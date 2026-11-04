@@ -181,6 +181,9 @@ func (h CheckHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 }
 
 // Checker knows how to perform a health check.
+// While the error text is not surfaced on the aggregated endpoint,
+// it is surfaced on the check-specific endpoint.
+// Accordingly the error should not leak security-relevant information.
 type Checker func(req *http.Request) error
 
 // Ping returns true automatically when checked.

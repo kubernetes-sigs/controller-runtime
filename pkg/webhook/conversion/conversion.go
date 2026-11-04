@@ -130,7 +130,7 @@ func (wh *webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (wh *webhook) handleConvertRequest(ctx context.Context, req *apix.ConversionRequest) (_ *apix.ConversionResponse, retErr error) {
 	defer func() {
 		if r := recover(); r != nil {
-			conversionmetrics.WebhookPanics.WithLabelValues().Inc()
+			conversionmetrics.WebhookPanics.Inc()
 
 			for _, fn := range utilruntime.PanicHandlers {
 				fn(ctx, r)

@@ -22,8 +22,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	machinerytypes "k8s.io/apimachinery/pkg/types"
+
+	authenticationmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/authentication/metrics"
 )
 
 var _ = Describe("Authentication Webhooks", func() {
@@ -97,5 +100,48 @@ var _ = Describe("Authentication Webhooks", func() {
 		Expect(resp.Status).NotTo(BeNil())
 		Expect(resp.Status.Authenticated).To(BeTrue())
 		Expect(resp.Status.Error).To(Equal("Ground Control to Major Tom"))
+	})
+
+	Describe("panic recovery", func() {
+		panicWebhook := func(recoverPanic *bool) *Webhook {
+			return &Webhook{
+				Handler: &fakeHandler{
+					fn: func(ctx context.Context, req Request) Response {
+						panic("fake panic test")
+					},
+				},
+				RecoverPanic: recoverPanic,
+			}
+		}
+
+		It("should recover panic if RecoverPanic is unset (default)", func(ctx SpecContext) {
+			before := testutil.ToFloat64(authenticationmetrics.WebhookPanics)
+
+			resp := panicWebhook(nil).Handle(ctx, Request{UID: "test-uid"})
+			Expect(resp.Status.Authenticated).To(BeFalse())
+			Expect(resp.Status.Error).To(Equal("panic: fake panic test [recovered]"))
+			Expect(resp.UID).To(Equal(machinerytypes.UID("test-uid")))
+			Expect(testutil.ToFloat64(authenticationmetrics.WebhookPanics)).To(Equal(before + 1))
+		})
+
+		It("should recover panic if RecoverPanic is true", func(ctx SpecContext) {
+			before := testutil.ToFloat64(authenticationmetrics.WebhookPanics)
+
+			resp := panicWebhook(new(true)).Handle(ctx, Request{UID: "test-uid"})
+			Expect(resp.Status.Authenticated).To(BeFalse())
+			Expect(resp.Status.Error).To(Equal("panic: fake panic test [recovered]"))
+			Expect(resp.UID).To(Equal(machinerytypes.UID("test-uid")))
+			Expect(testutil.ToFloat64(authenticationmetrics.WebhookPanics)).To(Equal(before + 1))
+		})
+
+		It("should not recover panic if RecoverPanic is false", func(ctx SpecContext) {
+			before := testutil.ToFloat64(authenticationmetrics.WebhookPanics)
+
+			Expect(func() {
+				panicWebhook(new(false)).Handle(ctx, Request{})
+			}).To(PanicWith("fake panic test"))
+
+			Expect(testutil.ToFloat64(authenticationmetrics.WebhookPanics)).To(Equal(before + 1))
+		})
 	})
 })

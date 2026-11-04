@@ -374,13 +374,9 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 		}
 	}
 
-	// This chan indicates that stop is complete, in other words all runnables have returned or timeout on stop request
-	stopComplete := make(chan struct{})
-	defer close(stopComplete)
-	// This must be deferred after closing stopComplete, otherwise we deadlock.
 	defer func() {
 		// https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/gettyimages-459889618-1533579787.jpg
-		stopErr := cm.engageStopProcedure(stopComplete)
+		stopErr := cm.engageStopProcedure()
 		if stopErr != nil {
 			if err != nil {
 				// Utilerrors.Aggregate allows to use errors.Is for all contained errors
@@ -500,7 +496,7 @@ func (cm *controllerManager) Start(ctx context.Context) (err error) {
 
 // engageStopProcedure signals all runnables to stop, reads potential errors
 // from the errChan and waits for them to end. It must not be called more than once.
-func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) error {
+func (cm *controllerManager) engageStopProcedure() error {
 	if !atomic.CompareAndSwapInt64(cm.stopProcedureEngaged, 0, 1) {
 		return errors.New("stop procedure already engaged")
 	}
@@ -521,8 +517,18 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	// Start draining the errors before acquiring the lock to make sure we don't deadlock
 	// if something that has the lock is blocked on trying to write into the unbuffered
 	// channel after something else already wrote into it.
+	//
+	// The drain stops once all runnables have returned or timed out on the stop request.
+	// Wait for it to finish so that nothing is logged after Start returns.
+	stopComplete := make(chan struct{})
+	drainDone := make(chan struct{})
+	defer func() {
+		close(stopComplete)
+		<-drainDone
+	}()
 	var closeOnce sync.Once
 	go func() {
+		defer close(drainDone)
 		for {
 			// Closing in the for loop is required to avoid race conditions between
 			// the closure of all internal procedures and making sure to have a reader off the error channel.

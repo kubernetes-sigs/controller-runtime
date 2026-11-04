@@ -283,7 +283,7 @@ func createSuperPod(hostname string) *corev1.Pod {
 						Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")},
 					},
 					LivenessProbe: &corev1.Probe{
-						HTTPGet:             &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromInt(8080)},
+						HTTPGet:             &corev1.HTTPGetAction{Path: "/health", Port: intstr.FromInt32(8080)},
 						InitialDelaySeconds: 30,
 					},
 				},

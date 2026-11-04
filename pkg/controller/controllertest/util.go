@@ -21,6 +21,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/sharding"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -216,6 +217,11 @@ func (f *FakeInformer) SetWatchErrorHandlerWithContext(cache.WatchErrorHandlerWi
 
 // SetTransform does nothing.  TODO(community): Implement this.
 func (f *FakeInformer) SetTransform(t cache.TransformFunc) error {
+	return nil
+}
+
+// SetShardSelector does nothing.  TODO(community): Implement this.
+func (f *FakeInformer) SetShardSelector(selector sharding.Selector) error {
 	return nil
 }
 

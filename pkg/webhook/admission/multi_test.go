@@ -18,6 +18,7 @@ package admission
 
 import (
 	"context"
+	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -100,7 +101,7 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 						},
 					},
 					Allowed:   true,
-					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+					PatchType: new(admissionv1.PatchTypeJSONPatch),
 				}
 			},
 		}
@@ -115,7 +116,7 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 						},
 					},
 					Allowed:   true,
-					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+					PatchType: new(admissionv1.PatchTypeJSONPatch),
 				}
 			},
 		}
@@ -132,7 +133,7 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 					},
 					Allowed:   true,
 					Warnings:  []string{"annotation-warning"},
-					PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+					PatchType: new(admissionv1.PatchTypeJSONPatch),
 				}
 			},
 		}
@@ -173,5 +174,59 @@ var _ = Describe("Multi-Handler Admission Webhooks", func() {
 			Expect(resp.Warnings).To(HaveLen(1))
 		})
 
+		It("should use Patch if Patches is not set", func(ctx SpecContext) {
+			rawPatcher := &fakeHandler{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
+						Allowed:   true,
+						Patch:     []byte(`[{"op":"add","path":"/metadata/annotation/raw","value":"raw-value"}]`),
+						PatchType: new(admissionv1.PatchTypeJSONPatch),
+					}
+				},
+			}
+			handler := MultiMutatingHandler(patcher2, rawPatcher)
+
+			resp := handler.Handle(ctx, Request{})
+			Expect(resp.Allowed).To(BeTrue())
+			Expect(resp.Patch).To(Equal([]byte(
+				`[{"op":"add","path":"/metadata/annotation/hello","value":"world"},` +
+					`{"op":"add","path":"/metadata/annotation/raw","value":"raw-value"}]`)))
+		})
+
+		It("should prefer Patches over Patch if both are set", func(ctx SpecContext) {
+			bothPatcher := &fakeHandler{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
+						Patches: []jsonpatch.JsonPatchOperation{
+							{Operation: "add", Path: "/metadata/annotation/hello", Value: "world"},
+						},
+						Allowed: true,
+						Patch:   []byte(`[{"op":"add","path":"/metadata/annotation/ignored","value":"ignored"}]`),
+					}
+				},
+			}
+			handler := MultiMutatingHandler(bothPatcher)
+
+			resp := handler.Handle(ctx, Request{})
+			Expect(resp.Allowed).To(BeTrue())
+			Expect(resp.Patch).To(Equal([]byte(
+				`[{"op":"add","path":"/metadata/annotation/hello","value":"world"}]`)))
+		})
+
+		It("should return an error if Patch is not valid JSON patch", func(ctx SpecContext) {
+			badPatcher := &fakeHandler{
+				fn: func(ctx context.Context, req Request) Response {
+					return Response{
+						Allowed: true,
+						Patch:   []byte(`not-json`),
+					}
+				},
+			}
+			resp := MultiMutatingHandler(badPatcher).Handle(ctx, Request{})
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Code).To(Equal(int32(http.StatusInternalServerError)))
+			Expect(resp.Result.Message).To(Equal(
+				"error when unmarshaling the patch returned by the handler: invalid character 'o' in literal null (expecting 'u')"))
+		})
 	})
 })

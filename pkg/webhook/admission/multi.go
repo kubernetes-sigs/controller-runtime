@@ -42,7 +42,18 @@ func (hs multiMutating) Handle(ctx context.Context, req Request) Response {
 				fmt.Errorf("unexpected patch type returned by the handler: %v, only allow: %v",
 					resp.PatchType, admissionv1.PatchTypeJSONPatch))
 		}
-		patches = append(patches, resp.Patches...)
+		// Same semantics as Response.Complete: Patches take precedence over Patch.
+		switch {
+		case len(resp.Patches) > 0:
+			patches = append(patches, resp.Patches...)
+		case len(resp.Patch) > 0:
+			var rawPatches []jsonpatch.JsonPatchOperation
+			if err := json.Unmarshal(resp.Patch, &rawPatches); err != nil {
+				return Errored(http.StatusInternalServerError,
+					fmt.Errorf("error when unmarshaling the patch returned by the handler: %w", err))
+			}
+			patches = append(patches, rawPatches...)
+		}
 		warnings = append(warnings, resp.Warnings...)
 	}
 	var err error
@@ -57,7 +68,7 @@ func (hs multiMutating) Handle(ctx context.Context, req Request) Response {
 		},
 		Patch:     marshaledPatch,
 		Warnings:  warnings,
-		PatchType: func() *admissionv1.PatchType { pt := admissionv1.PatchTypeJSONPatch; return &pt }(),
+		PatchType: new(admissionv1.PatchTypeJSONPatch),
 	}
 }
 

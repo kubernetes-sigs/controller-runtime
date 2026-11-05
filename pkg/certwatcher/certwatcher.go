@@ -162,7 +162,7 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 				if closeErr := cw.watcher.Close(); closeErr != nil {
 					cw.log.Error(closeErr, "Failed to close watcher")
 				}
-				return fmt.Errorf("Failed to read certificate and current one has expired: %w", err)
+				return fmt.Errorf("failed to read certificate and current one has expired: %w", err)
 			}
 		}
 	}

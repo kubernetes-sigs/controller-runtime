@@ -89,8 +89,7 @@ func (r *Response) Complete(req Request) error {
 	if err != nil {
 		return err
 	}
-	patchType := admissionv1.PatchTypeJSONPatch
-	r.PatchType = &patchType
+	r.PatchType = new(admissionv1.PatchTypeJSONPatch)
 
 	return nil
 }

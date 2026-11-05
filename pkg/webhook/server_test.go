@@ -14,24 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package webhook_test
+package webhook
 
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"path"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	fakecertwatcher "sigs.k8s.io/controller-runtime/pkg/internal/testing/certwatcher"
 )
 
 var _ = Describe("Webhook Server", func() {
@@ -39,7 +41,7 @@ var _ = Describe("Webhook Server", func() {
 		ctxCancel          context.CancelFunc
 		testHostPort       string
 		client             *http.Client
-		server             webhook.Server
+		server             Server
 		servingOpts        envtest.WebhookInstallOptions
 		genericStartServer func(f func(ctx context.Context)) (done <-chan struct{})
 	)
@@ -64,7 +66,7 @@ var _ = Describe("Webhook Server", func() {
 			Transport: clientTransport,
 		}
 
-		server = webhook.NewServer(webhook.Options{
+		server = NewServer(Options{
 			Host:    servingOpts.LocalServingHost,
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
@@ -176,7 +178,7 @@ var _ = Describe("Webhook Server", func() {
 			// save cfg after changes to test against
 			finalCfg = cfg
 		}
-		server = webhook.NewServer(webhook.Options{
+		server = NewServer(Options{
 			Host:    servingOpts.LocalServingHost,
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
@@ -215,7 +217,7 @@ var _ = Describe("Webhook Server", func() {
 		finalGetCertificate := func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) { //nolint:unparam
 			return &finalCert, nil
 		}
-		server = &webhook.DefaultServer{Options: webhook.Options{
+		server = &DefaultServer{Options: Options{
 			Host:    servingOpts.LocalServingHost,
 			Port:    servingOpts.LocalServingPort,
 			CertDir: servingOpts.LocalServingCertDir,
@@ -251,6 +253,30 @@ var _ = Describe("Webhook Server", func() {
 
 		ctxCancel()
 		Eventually(doneCh, "4s").Should(BeClosed())
+	})
+
+	It("returns an error when the certificate watcher fails", func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
+		defer cancel()
+
+		watcherErr := errors.New("certificate watcher boom")
+		srv := &DefaultServer{
+			Options: Options{
+				Host: servingOpts.LocalServingHost,
+				Port: servingOpts.LocalServingPort,
+			},
+			newCertWatcher: func(string, string) (certWatcher, error) {
+				return &fakecertwatcher.Fake{StartErr: watcherErr}, nil
+			},
+		}
+
+		errCh := make(chan error, 1)
+		go func() {
+			defer GinkgoRecover()
+			errCh <- srv.Start(ctx)
+		}()
+
+		Eventually(errCh, 5*time.Second).Should(Receive(MatchError(watcherErr)))
 	})
 })
 

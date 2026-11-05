@@ -17,11 +17,18 @@ limitations under the License.
 package server
 
 import (
+	"context"
+	"crypto/tls"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	certutil "k8s.io/client-go/util/cert"
 )
 
 func TestServer(t *testing.T) {
@@ -64,3 +71,74 @@ var _ = Describe("handlerOpts", func() {
 		}),
 	)
 })
+
+var _ = Describe("metrics server certificate watcher", func() {
+	It("returns nil when the server context is cancelled", func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
+		defer cancel()
+
+		dir := GinkgoT().TempDir()
+		certPEM, keyPEM, err := certutil.GenerateSelfSignedCertKey("localhost", nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(os.WriteFile(filepath.Join(dir, "tls.crt"), certPEM, 0o600)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "tls.key"), keyPEM, 0o600)).To(Succeed())
+
+		srv, err := NewServer(Options{
+			SecureServing: true,
+			BindAddress:   "127.0.0.1:0",
+			CertDir:       dir,
+		}, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		errCh := make(chan error, 1)
+		go func() {
+			defer GinkgoRecover()
+			errCh <- srv.Start(ctx)
+		}()
+
+		Eventually(srv.(*defaultServer).GetBindAddr, 5*time.Second).ShouldNot(BeEmpty())
+		cancel()
+		Eventually(errCh, 5*time.Second).Should(Receive(BeNil()))
+	})
+
+	It("returns an error when the certificate watcher fails", func(specCtx SpecContext) {
+		ctx, cancel := context.WithCancel(specCtx)
+		defer cancel()
+
+		// The cert watcher is only used when both files exist.
+		dir := GinkgoT().TempDir()
+		Expect(os.WriteFile(filepath.Join(dir, "tls.crt"), nil, 0o600)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "tls.key"), nil, 0o600)).To(Succeed())
+
+		srv, err := NewServer(Options{
+			SecureServing: true,
+			BindAddress:   "127.0.0.1:0",
+			CertDir:       dir,
+		}, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		watcherErr := errors.New("certificate watcher boom")
+		srv.(*defaultServer).newCertWatcher = func(string, string) (certWatcher, error) {
+			return &fakeCertWatcher{startErr: watcherErr}, nil
+		}
+
+		errCh := make(chan error, 1)
+		go func() {
+			defer GinkgoRecover()
+			errCh <- srv.Start(ctx)
+		}()
+
+		Eventually(errCh, 5*time.Second).Should(Receive(MatchError(watcherErr)))
+	})
+})
+
+type fakeCertWatcher struct {
+	startErr error
+}
+
+func (f *fakeCertWatcher) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return &tls.Certificate{}, nil
+}
+
+func (f *fakeCertWatcher) Start(context.Context) error {
+	return f.startErr
+}

@@ -136,6 +136,20 @@ type DefaultServer struct {
 	mu sync.Mutex
 
 	webhookMux *http.ServeMux
+
+	// newCertWatcher creates the certificate watcher. It can be replaced in tests.
+	newCertWatcher func(certPath, keyPath string) (certWatcher, error)
+}
+
+// certWatcher is the subset of *certwatcher.CertWatcher used by the server.
+type certWatcher interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	Start(ctx context.Context) error
+}
+
+// newCertWatcher creates a certWatcher backed by certwatcher.New.
+func newCertWatcher(certPath, keyPath string) (certWatcher, error) {
+	return certwatcher.New(certPath, keyPath)
 }
 
 // setDefaults does defaulting for the Server.
@@ -166,6 +180,10 @@ func (s *DefaultServer) setDefaults() {
 	s.Options.setDefaults()
 
 	s.webhookMux = s.Options.WebhookMux
+
+	if s.newCertWatcher == nil {
+		s.newCertWatcher = newCertWatcher
+	}
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface, which indicates
@@ -215,21 +233,28 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 		op(cfg)
 	}
 
+	// certWatcherErr receives an error if the certificate watcher fails, which shuts down the server.
+	var certWatcherErr chan error
 	if cfg.GetCertificate == nil {
 		certPath := filepath.Join(s.Options.CertDir, s.Options.CertName)
 		keyPath := filepath.Join(s.Options.CertDir, s.Options.KeyName)
 
 		// Create the certificate watcher and
 		// set the config's GetCertificate on the TLSConfig
-		certWatcher, err := certwatcher.New(certPath, keyPath)
+		certWatcher, err := s.newCertWatcher(certPath, keyPath)
 		if err != nil {
 			return err
 		}
 		cfg.GetCertificate = certWatcher.GetCertificate
 
+		certWatcherErr = make(chan error, 1)
 		go func() {
 			if err := certWatcher.Start(ctx); err != nil {
 				log.Error(err, "certificate watcher error")
+				// Errors after ctx is done are part of a normal shutdown.
+				if ctx.Err() == nil {
+					certWatcherErr <- err
+				}
 			}
 		}()
 	}
@@ -260,9 +285,13 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 	srv := httpserver.New(ctx, s.webhookMux)
 
+	var watcherErr error
 	idleConnsClosed := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		select {
+		case <-ctx.Done():
+		case watcherErr = <-certWatcherErr:
+		}
 		log.Info("Shutting down webhook server with timeout of 1 minute")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -282,6 +311,9 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
+	if watcherErr != nil {
+		return fmt.Errorf("webhook server shut down: certificate watcher failed: %w", watcherErr)
+	}
 	return nil
 }
 

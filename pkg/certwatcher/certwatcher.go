@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"sync"
@@ -38,6 +39,10 @@ var log = logf.RuntimeLog.WithName("certwatcher")
 
 const defaultWatchInterval = 10 * time.Second
 
+// maxConsecutiveReadFailures is how many periodic reads in a row must fail,
+// with the current certificate expired, before Start returns an error.
+const maxConsecutiveReadFailures = 3
+
 // CertWatcher watches certificate and key files for changes.
 // It always returns the cached version,
 // but periodically reads and parses certificate and key for changes
@@ -54,6 +59,9 @@ type CertWatcher struct {
 	keyPath  string
 
 	cachedKeyPEMBlock []byte
+
+	// currentCertNotAfter is when currentCert expires.
+	currentCertNotAfter time.Time
 
 	// callback is a function to be invoked when the certificate changes.
 	callback func(tls.Certificate)
@@ -108,6 +116,8 @@ func (cw *CertWatcher) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate,
 }
 
 // Start starts the watch on the certificate and key files.
+// It returns an error if the watches cannot be added, or if the current
+// certificate has expired and three periodic re-reads of the files in a row fail.
 func (cw *CertWatcher) Start(ctx context.Context) error {
 	files := sets.New(cw.certPath, cw.keyPath)
 
@@ -134,16 +144,38 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 	defer ticker.Stop()
 
 	cw.log.Info("Starting certificate poll+watcher", "interval", cw.interval)
+	readFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return cw.watcher.Close()
 		case <-ticker.C:
-			if err := cw.ReadCertificate(); err != nil {
-				cw.log.Error(err, "failed read certificate")
+			err := cw.ReadCertificate()
+			if err == nil {
+				readFailures = 0
+				continue
+			}
+
+			readFailures++
+			cw.log.Error(err, "Failed read certificate", "consecutiveFailures", readFailures)
+			if readFailures >= maxConsecutiveReadFailures && cw.currentCertExpired() {
+				if closeErr := cw.watcher.Close(); closeErr != nil {
+					cw.log.Error(closeErr, "Failed to close watcher")
+				}
+				return fmt.Errorf("failed to read certificate and current one has expired: %w", err)
 			}
 		}
 	}
+}
+
+// currentCertExpired reports whether the cached certificate has expired.
+func (cw *CertWatcher) currentCertExpired() bool {
+	cw.RLock()
+	defer cw.RUnlock()
+	if cw.currentCert == nil {
+		return false
+	}
+	return time.Now().After(cw.currentCertNotAfter)
 }
 
 // Watch reads events from the watcher's channel and reacts to changes.
@@ -170,7 +202,7 @@ func (cw *CertWatcher) Watch() {
 
 // updateCachedCertificate checks if the new certificate differs from the cache,
 // updates it and returns the result if it was updated or not
-func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte) bool {
+func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte, notAfter time.Time) bool {
 	cw.Lock()
 	defer cw.Unlock()
 
@@ -182,6 +214,7 @@ func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBloc
 	}
 	cw.currentCert = cert
 	cw.cachedKeyPEMBlock = keyPEMBlock
+	cw.currentCertNotAfter = notAfter
 	return true
 }
 
@@ -207,11 +240,20 @@ func (cw *CertWatcher) ReadCertificate() error {
 		return err
 	}
 
-	if !cw.updateCachedCertificate(&cert, keyPEMBlock) {
+	leaf := cert.Leaf
+	if leaf == nil {
+		leaf, err = x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			metrics.ReadCertificateErrors.Inc()
+			return fmt.Errorf("failed to parse certificate: %w", err)
+		}
+	}
+
+	if !cw.updateCachedCertificate(&cert, keyPEMBlock, leaf.NotAfter) {
 		return nil
 	}
 
-	cw.log.Info("Updated current TLS certificate")
+	cw.log.Info("Updated current TLS certificate", "notAfter", leaf.NotAfter)
 
 	// If a callback is registered, invoke it with the new certificate.
 	cw.RLock()

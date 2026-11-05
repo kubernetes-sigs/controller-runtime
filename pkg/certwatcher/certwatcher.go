@@ -60,6 +60,9 @@ type CertWatcher struct {
 
 	cachedKeyPEMBlock []byte
 
+	// currentCertNotAfter is when currentCert expires.
+	currentCertNotAfter time.Time
+
 	// callback is a function to be invoked when the certificate changes.
 	callback func(tls.Certificate)
 }
@@ -154,12 +157,12 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 			}
 
 			readFailures++
-			cw.log.Error(err, "failed read certificate", "consecutiveFailures", readFailures)
+			cw.log.Error(err, "Failed read certificate", "consecutiveFailures", readFailures)
 			if readFailures >= maxConsecutiveReadFailures && cw.currentCertExpired() {
 				if closeErr := cw.watcher.Close(); closeErr != nil {
-					cw.log.Error(closeErr, "failed to close watcher")
+					cw.log.Error(closeErr, "Failed to close watcher")
 				}
-				return fmt.Errorf("failed to read certificates and current one has expired: %w", err)
+				return fmt.Errorf("Failed to read certificate and current one has expired: %w", err)
 			}
 		}
 	}
@@ -172,14 +175,7 @@ func (cw *CertWatcher) currentCertExpired() bool {
 	if cw.currentCert == nil {
 		return false
 	}
-	leaf := cw.currentCert.Leaf
-	if leaf == nil {
-		var err error
-		if leaf, err = x509.ParseCertificate(cw.currentCert.Certificate[0]); err != nil {
-			return false
-		}
-	}
-	return time.Now().After(leaf.NotAfter)
+	return time.Now().After(cw.currentCertNotAfter)
 }
 
 // Watch reads events from the watcher's channel and reacts to changes.
@@ -206,7 +202,7 @@ func (cw *CertWatcher) Watch() {
 
 // updateCachedCertificate checks if the new certificate differs from the cache,
 // updates it and returns the result if it was updated or not
-func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte) bool {
+func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte, notAfter time.Time) bool {
 	cw.Lock()
 	defer cw.Unlock()
 
@@ -218,6 +214,7 @@ func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBloc
 	}
 	cw.currentCert = cert
 	cw.cachedKeyPEMBlock = keyPEMBlock
+	cw.currentCertNotAfter = notAfter
 	return true
 }
 
@@ -243,11 +240,20 @@ func (cw *CertWatcher) ReadCertificate() error {
 		return err
 	}
 
-	if !cw.updateCachedCertificate(&cert, keyPEMBlock) {
+	leaf := cert.Leaf
+	if leaf == nil {
+		leaf, err = x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			metrics.ReadCertificateErrors.Inc()
+			return fmt.Errorf("failed to parse certificate: %w", err)
+		}
+	}
+
+	if !cw.updateCachedCertificate(&cert, keyPEMBlock, leaf.NotAfter) {
 		return nil
 	}
 
-	cw.log.Info("Updated current TLS certificate")
+	cw.log.Info("Updated current TLS certificate", "notAfter", leaf.NotAfter)
 
 	// If a callback is registered, invoke it with the new certificate.
 	cw.RLock()

@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"os"
 	"path/filepath"
@@ -28,8 +29,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	certutil "k8s.io/client-go/util/cert"
-
-	fakecertwatcher "sigs.k8s.io/controller-runtime/pkg/internal/testing/certwatcher"
 )
 
 func TestServer(t *testing.T) {
@@ -119,7 +118,7 @@ var _ = Describe("metrics server certificate watcher", func() {
 		Expect(err).NotTo(HaveOccurred())
 		watcherErr := errors.New("certificate watcher boom")
 		srv.(*defaultServer).newCertWatcher = func(string, string) (certWatcher, error) {
-			return &fakecertwatcher.Fake{StartErr: watcherErr}, nil
+			return &fakeCertWatcher{startErr: watcherErr}, nil
 		}
 
 		errCh := make(chan error, 1)
@@ -131,3 +130,15 @@ var _ = Describe("metrics server certificate watcher", func() {
 		Eventually(errCh, 5*time.Second).Should(Receive(MatchError(watcherErr)))
 	})
 })
+
+type fakeCertWatcher struct {
+	startErr error
+}
+
+func (f *fakeCertWatcher) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return &tls.Certificate{}, nil
+}
+
+func (f *fakeCertWatcher) Start(context.Context) error {
+	return f.startErr
+}

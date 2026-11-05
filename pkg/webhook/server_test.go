@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	fakecertwatcher "sigs.k8s.io/controller-runtime/pkg/internal/testing/certwatcher"
 )
 
 var _ = Describe("Webhook Server", func() {
@@ -266,7 +265,7 @@ var _ = Describe("Webhook Server", func() {
 				Port: servingOpts.LocalServingPort,
 			},
 			newCertWatcher: func(string, string) (certWatcher, error) {
-				return &fakecertwatcher.Fake{StartErr: watcherErr}, nil
+				return &fakeCertWatcher{startErr: watcherErr}, nil
 			},
 		}
 
@@ -287,4 +286,16 @@ func (t *testHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	if _, err := resp.Write([]byte("gadzooks!")); err != nil {
 		panic("unable to write http response!")
 	}
+}
+
+type fakeCertWatcher struct {
+	startErr error
+}
+
+func (f *fakeCertWatcher) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return &tls.Certificate{}, nil
+}
+
+func (f *fakeCertWatcher) Start(context.Context) error {
+	return f.startErr
 }

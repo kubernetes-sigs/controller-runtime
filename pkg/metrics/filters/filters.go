@@ -47,6 +47,9 @@ import (
 // with the following rule:
 // * nonResourceURLs: "/metrics", verbs: get
 //
+// This filter should only be used in combination with HTTPS to avoid sending bearer tokens via HTTP, i.e. if
+// used with the metrics server Options.SecureServing should be set to true.
+//
 // Note: Please note that configuring this metrics provider will introduce a dependency to "k8s.io/apiserver"
 // to your go module.
 func WithAuthenticationAndAuthorization(config *rest.Config, httpClient *http.Client) (metricsserver.Filter, error) {

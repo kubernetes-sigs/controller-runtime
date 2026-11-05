@@ -554,6 +554,26 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(resorces[0].Version).ToNot(gmg.BeEmpty())
 			})
 
+			t.Run("LazyRESTMapper should return all versions after a single version was fetched", func(t *testing.T) {
+				g := gmg.NewWithT(t)
+
+				httpClient, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				_, err = lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "autoscaling", Version: "v1", Resource: "horizontalpodautoscalers"})
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				kinds, err := lazyRestMapper.KindsFor(schema.GroupVersionResource{Group: "autoscaling", Resource: "horizontalpodautoscalers"})
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				g.Expect(kinds).To(gmg.ConsistOf(
+					schema.GroupVersionKind{Group: "autoscaling", Version: "v1", Kind: "HorizontalPodAutoscaler"},
+					schema.GroupVersionKind{Group: "autoscaling", Version: "v2", Kind: "HorizontalPodAutoscaler"},
+				))
+			})
+
 			t.Run("LazyRESTMapper can fetch CRDs if they were created at runtime", func(t *testing.T) {
 				g := gmg.NewWithT(t)
 

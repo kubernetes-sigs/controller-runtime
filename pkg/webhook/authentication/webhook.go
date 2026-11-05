@@ -19,14 +19,17 @@ package authentication
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 
 	"github.com/go-logr/logr"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	authenticationmetrics "sigs.k8s.io/controller-runtime/pkg/webhook/authentication/metrics"
 )
 
 var (
@@ -82,6 +85,10 @@ type Webhook struct {
 	// and potentially patches to apply to the handler.
 	Handler Handler
 
+	// RecoverPanic indicates whether the panic caused by webhook should be recovered.
+	// Defaults to true.
+	RecoverPanic *bool
+
 	// WithContextFunc will allow you to take the http.Request.Context() and
 	// add any additional information such as passing the request path or
 	// headers thus allowing you to read them from within the handler
@@ -91,8 +98,36 @@ type Webhook struct {
 	log          logr.Logger
 }
 
+// WithRecoverPanic takes a bool flag which indicates whether the panic caused by webhook should be recovered.
+// Defaults to true.
+func (wh *Webhook) WithRecoverPanic(recoverPanic bool) *Webhook {
+	wh.RecoverPanic = &recoverPanic
+	return wh
+}
+
 // Handle processes TokenReview.
-func (wh *Webhook) Handle(ctx context.Context, req Request) Response {
+func (wh *Webhook) Handle(ctx context.Context, req Request) (response Response) {
+	defer func() {
+		if r := recover(); r != nil {
+			authenticationmetrics.WebhookPanics.Inc()
+
+			if wh.RecoverPanic == nil || *wh.RecoverPanic {
+				for _, fn := range utilruntime.PanicHandlers {
+					fn(ctx, r)
+				}
+				response = Errored(fmt.Errorf("panic: %v [recovered]", r))
+				// Note: We explicitly have to set the response UID. Usually that is done via resp.Complete below,
+				// but if we encounter a panic in wh.Handler.Handle we are never going to reach resp.Complete.
+				response.UID = req.UID
+				return
+			}
+
+			log := logf.FromContext(ctx)
+			log.Info(fmt.Sprintf("Observed a panic in webhook: %v", r))
+			panic(r)
+		}
+	}()
+
 	resp := wh.Handler.Handle(ctx, req)
 	if err := resp.Complete(req); err != nil {
 		wh.getLogger(&req).Error(err, "unable to encode response")

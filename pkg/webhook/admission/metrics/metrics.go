@@ -24,10 +24,10 @@ import (
 var (
 	// WebhookPanics is a prometheus counter metrics which holds the total
 	// number of panics from webhooks.
-	WebhookPanics = prometheus.NewCounterVec(prometheus.CounterOpts{
+	WebhookPanics = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "controller_runtime_webhook_panics_total",
 		Help: "Total number of webhook panics",
-	}, []string{})
+	})
 )
 
 func init() {
@@ -35,5 +35,5 @@ func init() {
 		WebhookPanics,
 	)
 	// Init metric.
-	WebhookPanics.WithLabelValues().Add(0)
+	WebhookPanics.Add(0)
 }

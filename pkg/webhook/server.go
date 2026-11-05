@@ -136,6 +136,20 @@ type DefaultServer struct {
 	mu sync.Mutex
 
 	webhookMux *http.ServeMux
+
+	// newCertWatcher creates the certificate watcher. It can be replaced in tests.
+	newCertWatcher func(certPath, keyPath string) (certWatcher, error)
+}
+
+// certWatcher is the subset of *certwatcher.CertWatcher used by the server.
+type certWatcher interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	Start(ctx context.Context) error
+}
+
+// newCertWatcher creates a certWatcher backed by certwatcher.New.
+func newCertWatcher(certPath, keyPath string) (certWatcher, error) {
+	return certwatcher.New(certPath, keyPath)
 }
 
 // setDefaults does defaulting for the Server.
@@ -166,6 +180,10 @@ func (s *DefaultServer) setDefaults() {
 	s.Options.setDefaults()
 
 	s.webhookMux = s.Options.WebhookMux
+
+	if s.newCertWatcher == nil {
+		s.newCertWatcher = newCertWatcher
+	}
 }
 
 // NeedLeaderElection implements the LeaderElectionRunnable interface, which indicates
@@ -223,7 +241,7 @@ func (s *DefaultServer) Start(ctx context.Context) error {
 
 		// Create the certificate watcher and
 		// set the config's GetCertificate on the TLSConfig
-		certWatcher, err := certwatcher.New(certPath, keyPath)
+		certWatcher, err := s.newCertWatcher(certPath, keyPath)
 		if err != nil {
 			return err
 		}

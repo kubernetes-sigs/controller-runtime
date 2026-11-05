@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	certutil "k8s.io/client-go/util/cert"
 
-	"sigs.k8s.io/controller-runtime/pkg/internal/testing/fifo"
+	fakecertwatcher "sigs.k8s.io/controller-runtime/pkg/internal/testing/certwatcher"
 )
 
 func TestServer(t *testing.T) {
@@ -101,17 +102,14 @@ var _ = Describe("metrics server certificate watcher", func() {
 		Eventually(errCh, 5*time.Second).Should(Receive(BeNil()))
 	})
 
-	// Registration retries for 10s, so this outlives that poll.
-	It("returns an error when certificate watches cannot be registered", SpecTimeout(20*time.Second), func(specCtx SpecContext) {
+	It("returns an error when the certificate watcher fails", func(specCtx SpecContext) {
 		ctx, cancel := context.WithCancel(specCtx)
 		defer cancel()
 
+		// The cert watcher is only used when both files exist.
 		dir := GinkgoT().TempDir()
-		certPEM, keyPEM, err := certutil.GenerateSelfSignedCertKey("localhost", nil, nil)
-		Expect(err).NotTo(HaveOccurred())
-		// FIFOs let New read the certificate bytes, then the paths are removed
-		// before fsnotify can watch them.
-		Expect(fifo.Create(filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key"))).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "tls.crt"), nil, 0o600)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "tls.key"), nil, 0o600)).To(Succeed())
 
 		srv, err := NewServer(Options{
 			SecureServing: true,
@@ -119,6 +117,10 @@ var _ = Describe("metrics server certificate watcher", func() {
 			CertDir:       dir,
 		}, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
+		watcherErr := errors.New("certificate watcher boom")
+		srv.(*defaultServer).newCertWatcher = func(string, string) (certWatcher, error) {
+			return &fakecertwatcher.Fake{StartErr: watcherErr}, nil
+		}
 
 		errCh := make(chan error, 1)
 		go func() {
@@ -126,9 +128,6 @@ var _ = Describe("metrics server certificate watcher", func() {
 			errCh <- srv.Start(ctx)
 		}()
 
-		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.crt"), certPEM)).To(Succeed())
-		Expect(fifo.WriteAndRemove(filepath.Join(dir, "tls.key"), keyPEM)).To(Succeed())
-
-		Eventually(errCh, 15*time.Second).Should(Receive(MatchError(ContainSubstring("certificate watcher failed"))))
+		Eventually(errCh, 5*time.Second).Should(Receive(MatchError(watcherErr)))
 	})
 })

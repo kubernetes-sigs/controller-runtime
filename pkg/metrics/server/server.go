@@ -149,9 +149,21 @@ func NewServer(o Options, config *rest.Config, httpClient *http.Client) (Server,
 	}
 
 	return &defaultServer{
-		metricsFilter: metricsFilter,
-		options:       o,
+		metricsFilter:  metricsFilter,
+		options:        o,
+		newCertWatcher: newCertWatcher,
 	}, nil
+}
+
+// certWatcher is the subset of *certwatcher.CertWatcher used by the server.
+type certWatcher interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	Start(ctx context.Context) error
+}
+
+// newCertWatcher creates a certWatcher backed by certwatcher.New.
+func newCertWatcher(certPath, keyPath string) (certWatcher, error) {
+	return certwatcher.New(certPath, keyPath)
 }
 
 // defaultServer is the default implementation used for Server.
@@ -161,6 +173,9 @@ type defaultServer struct {
 	// metricsFilter is a filter which is added around
 	// the metrics and the extra handlers on the metrics server.
 	metricsFilter Filter
+
+	// newCertWatcher creates the certificate watcher. It can be replaced in tests.
+	newCertWatcher func(certPath, keyPath string) (certWatcher, error)
 
 	// mu protects access to the bindAddr field.
 	mu sync.RWMutex
@@ -323,7 +338,7 @@ func (s *defaultServer) createListener(ctx context.Context, certWatcherErr chan<
 		if certExists && keyExists {
 			// Create the certificate watcher and
 			// set the config's GetCertificate on the TLSConfig
-			certWatcher, err := certwatcher.New(certPath, keyPath)
+			certWatcher, err := s.newCertWatcher(certPath, keyPath)
 			if err != nil {
 				return nil, err
 			}

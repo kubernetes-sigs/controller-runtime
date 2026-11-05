@@ -94,6 +94,11 @@ func (uc *unstructuredClient) Update(ctx context.Context, obj Object, opts ...Up
 
 // Delete implements client.Client.
 func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
+	u, ok := obj.(runtime.Unstructured)
+	if !ok {
+		return nil, fmt.Errorf("unstructured client did not understand object: %T", obj)
+	}
+
 	o, err := uc.resources.getObjMeta(obj)
 	if err != nil {
 		return nil, err
@@ -102,14 +107,18 @@ func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...De
 	deleteOpts := DeleteOptions{}
 	deleteOpts.ApplyOptions(opts)
 
-	response := &unstructured.Unstructured{}
-	return response, o.Delete().
+	result := o.Delete().
 		NamespaceIfScoped(o.namespace, o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.name).
 		Body(deleteOpts.AsDeleteOptions()).
-		Do(ctx).
-		Into(response)
+		Do(ctx)
+	response := &unstructured.Unstructured{}
+	if err := result.Into(response); err != nil || !remainsAfterDelete(response) {
+		return response, err
+	}
+	u.SetUnstructuredContent(response.Object)
+	return response, nil
 }
 
 // DeleteAllOf implements client.Client.

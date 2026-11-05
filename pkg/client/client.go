@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -379,16 +380,52 @@ func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) e
 }
 
 // delete issues a delete call and returns the response or an error. The response
-// gets deserialized into an unstructured and is either a metav1.Status if the object
-// is gone from storage or the object if it remains, for example because of finalizers.
-func (c *client) delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
-	switch obj.(type) {
+// is either a metav1.Status if the object is gone from storage or the object, which
+// remains in storage for example because of finalizers, but is also returned by
+// some resources such as pods after they were removed. It is decoded into the type
+// of obj if obj is typed, and into an unstructured otherwise.
+func (c *client) delete(ctx context.Context, obj Object, opts ...DeleteOption) (runtime.Object, error) {
+	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
+	switch o := obj.(type) {
 	case runtime.Unstructured:
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
-	// The typed client can also delete PartialObjectMeta
+	case *metav1.PartialObjectMetadata:
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(o.GroupVersionKind())
+		u.SetNamespace(obj.GetNamespace())
+		u.SetName(obj.GetName())
+		response, err := c.unstructuredClient.Delete(ctx, u, opts...)
+		if err != nil || !remainsAfterDelete(response) {
+			return response, err
+		}
+		metadata := &metav1.PartialObjectMetadata{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, metadata); err != nil {
+			return nil, fmt.Errorf("delete succeeded, but failed to convert the response into %T: %w", obj, err)
+		}
+		*o = *metadata
+		return response, nil
 	default:
 		return c.typedClient.Delete(ctx, obj, opts...)
 	}
+}
+
+func remainsAfterDelete(response runtime.Object) bool {
+	if accessor, err := meta.Accessor(response); err == nil {
+		gracePeriod := accessor.GetDeletionGracePeriodSeconds()
+		if len(accessor.GetFinalizers()) > 0 || (gracePeriod != nil && *gracePeriod > 0) {
+			return true
+		}
+	}
+	switch response := response.(type) {
+	case *corev1.Namespace:
+		return len(response.Spec.Finalizers) > 0
+	case *unstructured.Unstructured:
+		if response.GroupVersionKind().GroupKind() == (schema.GroupKind{Kind: "Namespace"}) {
+			specFinalizers, _, _ := unstructured.NestedStringSlice(response.Object, "spec", "finalizers")
+			return len(specFinalizers) > 0
+		}
+	}
+	return false
 }
 
 // DeleteAllOf implements client.Client.

@@ -413,6 +413,10 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 		return err
 	}
 
+	return c.copyInto(o, gvk, obj)
+}
+
+func (c *fakeClient) copyInto(o runtime.Object, gvk schema.GroupVersionKind, obj client.Object) error {
 	ta, err := meta.TypeAccessor(o)
 	if err != nil {
 		return err
@@ -712,35 +716,61 @@ func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 	delOptions := client.DeleteOptions{}
 	delOptions.ApplyOptions(opts)
 
+	var remaining runtime.Object
 	if slices.Contains(delOptions.DryRun, metav1.DryRunAll) {
-		return nil
-	}
-
-	c.trackerWriteLock.Lock()
-	defer c.trackerWriteLock.Unlock()
-	// Check the ResourceVersion if that Precondition was specified.
-	if delOptions.Preconditions != nil && delOptions.Preconditions.ResourceVersion != nil {
-		name := accessor.GetName()
-		dbObj, err := c.tracker.Get(gvr, accessor.GetNamespace(), name)
+		existing, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
 		if err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		if !remainsOnDelete(existing) {
+			return nil
+		}
+		markTerminating(existing)
+		remaining = existing
+	} else {
+		c.trackerWriteLock.Lock()
+		defer c.trackerWriteLock.Unlock()
+		// Check the ResourceVersion if that Precondition was specified.
+		if delOptions.Preconditions != nil && delOptions.Preconditions.ResourceVersion != nil {
+			name := accessor.GetName()
+			dbObj, err := c.tracker.Get(gvr, accessor.GetNamespace(), name)
+			if err != nil {
+				return err
+			}
+			oldAccessor, err := meta.Accessor(dbObj)
+			if err != nil {
+				return err
+			}
+			actualRV := oldAccessor.GetResourceVersion()
+			expectRV := *delOptions.Preconditions.ResourceVersion
+			if actualRV != expectRV {
+				msg := fmt.Sprintf(
+					"the ResourceVersion in the precondition (%s) does not match the ResourceVersion in record (%s). "+
+						"The object might have been modified",
+					expectRV, actualRV)
+				return apierrors.NewConflict(gvr.GroupResource(), name, errors.New(msg))
+			}
+		}
+		remaining, err = c.deleteObjectLocked(gvr, accessor)
+		if err != nil || remaining == nil {
 			return err
 		}
-		oldAccessor, err := meta.Accessor(dbObj)
-		if err != nil {
-			return err
-		}
-		actualRV := oldAccessor.GetResourceVersion()
-		expectRV := *delOptions.Preconditions.ResourceVersion
-		if actualRV != expectRV {
-			msg := fmt.Sprintf(
-				"the ResourceVersion in the precondition (%s) does not match the ResourceVersion in record (%s). "+
-					"The object might have been modified",
-				expectRV, actualRV)
-			return apierrors.NewConflict(gvr.GroupResource(), name, errors.New(msg))
-		}
 	}
 
-	return c.deleteObjectLocked(gvr, accessor)
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
+	into := reflect.New(reflect.TypeOf(obj).Elem())
+	intoObj, ok := reflect.TypeAssert[client.Object](into)
+	if !ok {
+		return fmt.Errorf("%T does not implement client.Object", into.Interface())
+	}
+	if err := c.copyInto(remaining, gvk, intoObj); err != nil {
+		return err
+	}
+	reflect.ValueOf(obj).Elem().Set(into.Elem())
+	return nil
 }
 
 func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
@@ -785,8 +815,7 @@ func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ..
 		if err != nil {
 			return err
 		}
-		err = c.deleteObjectLocked(gvr, accessor)
-		if err != nil {
+		if _, err := c.deleteObjectLocked(gvr, accessor); err != nil {
 			return err
 		}
 	}
@@ -1221,23 +1250,59 @@ func (c *fakeClient) SubResource(subResource string) client.SubResourceClient {
 	return &fakeSubResourceClient{client: c, subResource: subResource}
 }
 
-func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accessor metav1.Object) error {
+func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accessor metav1.Object) (runtime.Object, error) {
 	old, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
-	if err == nil {
-		oldAccessor, err := meta.Accessor(old)
-		if err == nil {
-			if len(oldAccessor.GetFinalizers()) > 0 {
-				now := metav1.Now()
-				oldAccessor.SetDeletionTimestamp(&now)
-				// Call update directly with mutability parameter set to true to allow
-				// changes to deletionTimestamp
-				return c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{})
-			}
-		}
+	if err != nil || !remainsOnDelete(old) {
+		// TODO: implement propagation
+		return nil, c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 	}
+	if !markTerminating(old) {
+		return old, nil
+	}
+	// Call update directly with mutability parameter set to true to allow
+	// changes to deletionTimestamp
+	if err := c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{}); err != nil {
+		return nil, err
+	}
+	remaining, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if ns, isNamespace := remaining.(*corev1.Namespace); isNamespace && ns.Status.Phase != corev1.NamespaceTerminating {
+		ns.Status.Phase = corev1.NamespaceTerminating
+		if err := c.tracker.update(gvr, ns, accessor.GetNamespace(), true, false, metav1.UpdateOptions{}); err != nil {
+			return nil, err
+		}
+		return c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
+	}
+	return remaining, nil
+}
 
-	// TODO: implement propagation
-	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+func remainsOnDelete(obj runtime.Object) bool {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return false
+	}
+	ns, isNamespace := obj.(*corev1.Namespace)
+	return len(accessor.GetFinalizers()) > 0 || (isNamespace && len(ns.Spec.Finalizers) > 0)
+}
+
+func markTerminating(obj runtime.Object) bool {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return false
+	}
+	changed := false
+	if accessor.GetDeletionTimestamp() == nil {
+		now := metav1.Now()
+		accessor.SetDeletionTimestamp(&now)
+		changed = true
+	}
+	if ns, isNamespace := obj.(*corev1.Namespace); isNamespace && ns.Status.Phase != corev1.NamespaceTerminating {
+		ns.Status.Phase = corev1.NamespaceTerminating
+		changed = true
+	}
+	return changed
 }
 
 func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionResource, error) {
@@ -1287,11 +1352,12 @@ func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, 
 		if !isEviction {
 			return apierrors.NewBadRequest(fmt.Sprintf("got invalid type %T, expected Eviction", subResource))
 		}
-		if _, isPod := obj.(*corev1.Pod); !isPod {
+		pod, isPod := obj.(*corev1.Pod)
+		if !isPod {
 			return apierrors.NewNotFound(schema.GroupResource{}, "")
 		}
 
-		return sw.client.Delete(ctx, obj)
+		return sw.client.Delete(ctx, pod.DeepCopy())
 	case "token":
 		tokenRequest, isTokenRequest := subResource.(*authenticationv1.TokenRequest)
 		if !isTokenRequest {

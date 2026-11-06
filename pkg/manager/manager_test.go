@@ -69,7 +69,9 @@ var _ = Describe("manger.Manager", func() {
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
 			m, err := New(cfg, Options{
-				MapperProvider: func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected },
+				MapperProvider: func(c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
+					return nil, expected
+				},
 			})
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))

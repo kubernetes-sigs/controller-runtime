@@ -121,13 +121,13 @@ func (c *clientWithOptions) DeleteAllOf(ctx context.Context, obj Object, opts ..
 	return c.client.DeleteAllOf(ctx, obj, slices.Concat(c.defaults.deleteAllOf, opts, c.forced.deleteAllOf)...)
 }
 
-func (c *clientWithOptions) Scheme() *runtime.Scheme     { return c.client.Scheme() }
-func (c *clientWithOptions) RESTMapper() meta.RESTMapper { return c.client.RESTMapper() }
+func (c *clientWithOptions) Scheme() *runtime.Scheme                { return c.client.Scheme() }
+func (c *clientWithOptions) RESTMapper() meta.RESTMapperWithContext { return c.client.RESTMapper() }
 func (c *clientWithOptions) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
 	return c.client.GroupVersionKindFor(obj)
 }
-func (c *clientWithOptions) IsObjectNamespaced(obj runtime.Object) (bool, error) {
-	return c.client.IsObjectNamespaced(obj)
+func (c *clientWithOptions) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
+	return c.client.IsObjectNamespaced(ctx, obj)
 }
 
 func (c *clientWithOptions) Status() StatusWriter {

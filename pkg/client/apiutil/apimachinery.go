@@ -20,6 +20,7 @@ limitations under the License.
 package apiutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -60,22 +61,22 @@ func AddToProtobufScheme(addToScheme func(*runtime.Scheme) error) error {
 
 // IsObjectNamespaced returns true if the object is namespace scoped.
 // For unstructured objects the gvk is found from the object itself.
-func IsObjectNamespaced(obj runtime.Object, scheme *runtime.Scheme, restmapper meta.RESTMapper) (bool, error) {
+func IsObjectNamespaced(ctx context.Context, obj runtime.Object, scheme *runtime.Scheme, restmapper meta.RESTMapperWithContext) (bool, error) {
 	gvk, err := GVKForObject(obj, scheme)
 	if err != nil {
 		return false, err
 	}
 
-	return IsGVKNamespaced(gvk, restmapper)
+	return IsGVKNamespaced(ctx, gvk, restmapper)
 }
 
 // IsGVKNamespaced returns true if the object having the provided
 // GVK is namespace scoped.
-func IsGVKNamespaced(gvk schema.GroupVersionKind, restmapper meta.RESTMapper) (bool, error) {
+func IsGVKNamespaced(ctx context.Context, gvk schema.GroupVersionKind, restmapper meta.RESTMapperWithContext) (bool, error) {
 	// Fetch the RESTMapping using the complete GVK. If we exclude the Version, the Version set
 	// will be populated using the cached Group if available. This can lead to failures updating
 	// the cache with new Versions of CRDs registered at runtime.
-	restmapping, err := restmapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
+	restmapping, err := restmapper.RESTMappingWithContext(ctx, schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
 	if err != nil {
 		return false, fmt.Errorf("failed to get restmapping: %w", err)
 	}

@@ -155,7 +155,7 @@ func (wh *Webhook) WithRecoverPanic(recoverPanic bool) *Webhook {
 func (wh *Webhook) Handle(ctx context.Context, req Request) (response Response) {
 	defer func() {
 		if r := recover(); r != nil {
-			admissionmetrics.WebhookPanics.WithLabelValues().Inc()
+			admissionmetrics.WebhookPanics.Inc()
 
 			if wh.RecoverPanic == nil || *wh.RecoverPanic {
 				for _, fn := range utilruntime.PanicHandlers {

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"os"
 	"sync"
@@ -59,9 +58,6 @@ type CertWatcher struct {
 	keyPath  string
 
 	cachedKeyPEMBlock []byte
-
-	// currentCertNotAfter is when currentCert expires.
-	currentCertNotAfter time.Time
 
 	// callback is a function to be invoked when the certificate changes.
 	callback func(tls.Certificate)
@@ -175,7 +171,7 @@ func (cw *CertWatcher) currentCertExpired() bool {
 	if cw.currentCert == nil {
 		return false
 	}
-	return time.Now().After(cw.currentCertNotAfter)
+	return time.Now().After(cw.currentCert.Leaf.NotAfter)
 }
 
 // Watch reads events from the watcher's channel and reacts to changes.
@@ -202,7 +198,7 @@ func (cw *CertWatcher) Watch() {
 
 // updateCachedCertificate checks if the new certificate differs from the cache,
 // updates it and returns the result if it was updated or not
-func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte, notAfter time.Time) bool {
+func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBlock []byte) bool {
 	cw.Lock()
 	defer cw.Unlock()
 
@@ -214,7 +210,6 @@ func (cw *CertWatcher) updateCachedCertificate(cert *tls.Certificate, keyPEMBloc
 	}
 	cw.currentCert = cert
 	cw.cachedKeyPEMBlock = keyPEMBlock
-	cw.currentCertNotAfter = notAfter
 	return true
 }
 
@@ -240,20 +235,11 @@ func (cw *CertWatcher) ReadCertificate() error {
 		return err
 	}
 
-	leaf := cert.Leaf
-	if leaf == nil {
-		leaf, err = x509.ParseCertificate(cert.Certificate[0])
-		if err != nil {
-			metrics.ReadCertificateErrors.Inc()
-			return fmt.Errorf("failed to parse certificate: %w", err)
-		}
-	}
-
-	if !cw.updateCachedCertificate(&cert, keyPEMBlock, leaf.NotAfter) {
+	if !cw.updateCachedCertificate(&cert, keyPEMBlock) {
 		return nil
 	}
 
-	cw.log.Info("Updated current TLS certificate", "notAfter", leaf.NotAfter)
+	cw.log.Info("Updated current TLS certificate", "notAfter", cert.Leaf.NotAfter)
 
 	// If a callback is registered, invoke it with the new certificate.
 	cw.RLock()

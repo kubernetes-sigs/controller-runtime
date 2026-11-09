@@ -276,7 +276,7 @@ func writeCertsWithExpiry(certPath, keyPath, ip string, notAfter time.Time) erro
 		keyUsage |= x509.KeyUsageKeyEncipherment
 	}
 
-	notBefore := time.Now().Add(-1 * time.Hour)
+	notBefore := time.Now()
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)

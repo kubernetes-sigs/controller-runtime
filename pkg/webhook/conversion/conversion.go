@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"net/http"
 
-	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,7 +89,7 @@ func (wh *webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
-	convertReview := &apix.ConversionReview{}
+	convertReview := &apiextensionsv1.ConversionReview{}
 	if err := json.NewDecoder(r.Body).Decode(convertReview); err != nil {
 		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			log.Error(err, "unable to read conversion request; limit reached", "limit", maxRequestSize)
@@ -127,7 +127,7 @@ func (wh *webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // handles a version conversion request.
-func (wh *webhook) handleConvertRequest(ctx context.Context, req *apix.ConversionRequest) (_ *apix.ConversionResponse, retErr error) {
+func (wh *webhook) handleConvertRequest(ctx context.Context, req *apiextensionsv1.ConversionRequest) (_ *apiextensionsv1.ConversionResponse, retErr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			conversionmetrics.WebhookPanics.Inc()
@@ -159,7 +159,7 @@ func (wh *webhook) handleConvertRequest(ctx context.Context, req *apix.Conversio
 		}
 		objects = append(objects, runtime.RawExtension{Object: dst})
 	}
-	return &apix.ConversionResponse{
+	return &apiextensionsv1.ConversionResponse{
 		UID:              req.UID,
 		ConvertedObjects: objects,
 		Result: metav1.Status{
@@ -388,8 +388,8 @@ func isConvertible(obj runtime.Object) bool {
 }
 
 // helper to construct error response.
-func errored(err error) *apix.ConversionResponse {
-	return &apix.ConversionResponse{
+func errored(err error) *apiextensionsv1.ConversionResponse {
+	return &apiextensionsv1.ConversionResponse{
 		Result: metav1.Status{
 			Status:  metav1.StatusFailure,
 			Message: err.Error(),

@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
-	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-api/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -82,12 +82,12 @@ func ConversionTest(withHubSpokeConverter bool) {
 			wh = conversion.NewWebhookHandler(scheme, registry)
 		})
 
-		doRequest := func(convReq *apix.ConversionReview) *apix.ConversionReview {
+		doRequest := func(convReq *apiextensionsv1.ConversionReview) *apiextensionsv1.ConversionReview {
 			var payload bytes.Buffer
 
 			Expect(json.NewEncoder(&payload).Encode(convReq)).Should(Succeed())
 
-			convReview := &apix.ConversionReview{}
+			convReview := &apiextensionsv1.ConversionReview{}
 			req := &http.Request{
 				Header: http.Header{"Content-Type": []string{"application/json"}},
 				Body:   io.NopCloser(bytes.NewReader(payload.Bytes())),
@@ -147,9 +147,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 				},
 			}
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					DesiredAPIVersion: "jobs.testprojects.kb.io/v2",
 					Objects: []runtime.RawExtension{
 						{
@@ -186,9 +186,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 				},
 			}
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					DesiredAPIVersion: "jobs.testprojects.kb.io/v1",
 					Objects: []runtime.RawExtension{
 						{
@@ -225,9 +225,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 				},
 			}
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					DesiredAPIVersion: "jobs.testprojects.kb.io/v3",
 					Objects: []runtime.RawExtension{
 						{
@@ -249,9 +249,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 		It("should return error when dest/src objects belong to different API groups", func() {
 			v1Obj := makeV1Obj()
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					// request conversion for different group
 					DesiredAPIVersion: "jobss.example.org/v2",
 					Objects: []runtime.RawExtension{
@@ -292,9 +292,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 
 			v1Obj := makeV1Obj()
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					DesiredAPIVersion: "jobs.testprojects.kb.io/v1",
 					Objects: []runtime.RawExtension{
 						{
@@ -322,9 +322,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 				},
 			}
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					DesiredAPIVersion: "apps/v1",
 					Objects: []runtime.RawExtension{
 						{
@@ -344,9 +344,9 @@ func ConversionTest(withHubSpokeConverter bool) {
 			v1Obj := makeV1Obj()
 			v1Obj.Spec.PanicInConversion = true
 
-			convReq := &apix.ConversionReview{
+			convReq := &apiextensionsv1.ConversionReview{
 				TypeMeta: metav1.TypeMeta{},
-				Request: &apix.ConversionRequest{
+				Request: &apiextensionsv1.ConversionRequest{
 					DesiredAPIVersion: "jobs.testprojects.kb.io/v3",
 					Objects: []runtime.RawExtension{
 						{

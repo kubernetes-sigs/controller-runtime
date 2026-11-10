@@ -39,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	clientfeatures "k8s.io/client-go/features"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	kcache "k8s.io/client-go/tools/cache"
@@ -2565,6 +2566,102 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 	})
 }
 
+var _ = Describe("Cache with DropManagedFields", func() {
+	var (
+		pod client.Object
+	)
+
+	BeforeEach(func(ctx SpecContext) {
+		setClientFeatureDuringTest(clientfeatures.ManagedFieldsOptOutClient, true)
+
+		cl, err := client.New(cfg, client.Options{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ensureNamespace(ctx, testNamespaceOne, cl)).To(Succeed())
+		pod = createPod(ctx, "test-pod-drop-managed-fields", testNamespaceOne, corev1.RestartPolicyNever)
+		DeferCleanup(func(ctx SpecContext) { deletePod(ctx, pod) })
+
+		// Ensure the server returns managedFields for the pod.
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(pod), pod)).To(Succeed())
+		Expect(pod.GetManagedFields()).NotTo(BeEmpty())
+	})
+
+	// getManagedFieldsWithConfig gets the pod via a cache created with the given rest.Config
+	// as structured, unstructured and metadata object and returns the managedFields of each.
+	getManagedFieldsWithConfig := func(ctx SpecContext, restConfig *rest.Config, opts cache.Options) (structuredMF, unstructuredMF, metadataMF []metav1.ManagedFieldsEntry) {
+		c, err := cache.New(restConfig, opts)
+		Expect(err).NotTo(HaveOccurred())
+		cacheCtx, cancel := context.WithCancel(context.Background()) //nolint:forbidigo
+		DeferCleanup(cancel)
+		go func() {
+			defer GinkgoRecover()
+			Expect(c.Start(cacheCtx)).To(Succeed())
+		}()
+		Expect(c.WaitForCacheSync(ctx)).To(BeTrue())
+		key := client.ObjectKeyFromObject(pod)
+
+		structuredPod := &corev1.Pod{}
+		Expect(c.Get(ctx, key, structuredPod)).To(Succeed())
+
+		unstructuredPod := &unstructured.Unstructured{}
+		unstructuredPod.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Pod"))
+		Expect(c.Get(ctx, key, unstructuredPod)).To(Succeed())
+
+		metadataPod := &metav1.PartialObjectMetadata{}
+		metadataPod.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Pod"))
+		Expect(c.Get(ctx, key, metadataPod)).To(Succeed())
+
+		return structuredPod.GetManagedFields(), unstructuredPod.GetManagedFields(), metadataPod.GetManagedFields()
+	}
+
+	It("should keep managedFields if DropManagedFields is not set", func(ctx SpecContext) {
+		structuredMF, unstructuredMF, metadataMF := getManagedFieldsWithConfig(ctx, cfg, cache.Options{})
+		Expect(structuredMF).NotTo(BeEmpty())
+		Expect(unstructuredMF).NotTo(BeEmpty())
+		Expect(metadataMF).NotTo(BeEmpty())
+	})
+
+	It("should drop managedFields with DefaultDropManagedFields", func(ctx SpecContext) {
+		structuredMF, unstructuredMF, metadataMF := getManagedFieldsWithConfig(ctx, cfg, cache.Options{
+			DefaultDropManagedFields: new(true),
+		})
+		Expect(structuredMF).To(BeEmpty())
+		Expect(unstructuredMF).To(BeEmpty())
+		Expect(metadataMF).To(BeEmpty())
+	})
+
+	It("should drop managedFields with ByObject.DropManagedFields", func(ctx SpecContext) {
+		structuredMF, unstructuredMF, metadataMF := getManagedFieldsWithConfig(ctx, cfg, cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Pod{}: {DropManagedFields: new(true)},
+			},
+		})
+		Expect(structuredMF).To(BeEmpty())
+		Expect(unstructuredMF).To(BeEmpty())
+		Expect(metadataMF).To(BeEmpty())
+	})
+
+	It("should use DropManagedFields of the rest.Config if DropManagedFields is not set", func(ctx SpecContext) {
+		restConfig := rest.CopyConfig(cfg)
+		restConfig.DropManagedFields = true
+		structuredMF, unstructuredMF, metadataMF := getManagedFieldsWithConfig(ctx, restConfig, cache.Options{})
+		Expect(structuredMF).To(BeEmpty())
+		Expect(unstructuredMF).To(BeEmpty())
+		Expect(metadataMF).To(BeEmpty())
+	})
+
+	It("should override DropManagedFields of the rest.Config if DropManagedFields is set", func(ctx SpecContext) {
+		restConfig := rest.CopyConfig(cfg)
+		restConfig.DropManagedFields = true
+		structuredMF, unstructuredMF, metadataMF := getManagedFieldsWithConfig(ctx, restConfig, cache.Options{
+			DefaultDropManagedFields: new(false),
+		})
+		Expect(structuredMF).NotTo(BeEmpty())
+		Expect(unstructuredMF).NotTo(BeEmpty())
+		Expect(metadataMF).NotTo(BeEmpty())
+		Expect(restConfig.DropManagedFields).To(BeTrue())
+	})
+})
+
 var _ = Describe("TransformStripManagedFields", func() {
 	It("should strip managed fields from an object", func() {
 		obj := &corev1.Pod{
@@ -2734,5 +2831,20 @@ func TestIndexFieldDoesNotBlock(t *testing.T) {
 
 		cancel()
 		<-cacheDone
+	})
+}
+
+// setClientFeatureDuringTest sets a client-go feature gate for the duration of the current spec.
+// We can't use k8s.io/client-go/features/testing as it requires a testing.TB.
+func setClientFeatureDuringTest(feature clientfeatures.Feature, value bool) {
+	gates, ok := clientfeatures.FeatureGates().(interface {
+		clientfeatures.Gates
+		SetForTesting(clientfeatures.Feature, bool) error
+	})
+	Expect(ok).To(BeTrue())
+	original := gates.Enabled(feature)
+	Expect(gates.SetForTesting(feature, value)).To(Succeed())
+	DeferCleanup(func() {
+		Expect(gates.SetForTesting(feature, original)).To(Succeed())
 	})
 }

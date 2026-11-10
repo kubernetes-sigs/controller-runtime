@@ -164,6 +164,21 @@ type Options struct {
 	// to reduce the caches memory usage.
 	DefaultTransform toolscache.TransformFunc
 
+	// DefaultDropManagedFields sets rest.Config.DropManagedFields for the informers of all
+	// object types unless there is already one set in ByObject or DefaultNamespaces.
+	//
+	// It asks the server to omit metadata.managedFields from responses, and strips it from
+	// decoded objects when the server returns it anyway. This can significantly reduce the
+	// memory usage of the cache, as managedFields can be large.
+	//
+	// Don't enable it if you read managedFields from cached objects, e.g. when using the
+	// Extract functions of apply configurations. It has no effect unless the client-go
+	// ManagedFieldsOptOutClient feature gate is enabled, e.g. by setting the
+	// environment variable KUBE_FEATURE_ManagedFieldsOptOutClient=true.
+	//
+	// If unset, the value of the rest.Config passed to the cache is used.
+	DefaultDropManagedFields *bool
+
 	// DefaultWatchErrorHandler will be used to set the WatchErrorHandler which is called
 	// whenever ListAndWatch drops the connection with an error.
 	//
@@ -238,6 +253,20 @@ type ByObject struct {
 	// and for updated objects.
 	Transform toolscache.TransformFunc
 
+	// DropManagedFields sets rest.Config.DropManagedFields for the informers of this type.
+	// It asks the server to omit metadata.managedFields from responses, and strips it from
+	// decoded objects when the server returns it anyway. This can significantly reduce the
+	// memory usage of the cache, as managedFields can be large.
+	//
+	// Don't enable it if you read managedFields from cached objects, e.g. when using the
+	// Extract functions of apply configurations. It has no effect unless the client-go
+	// ManagedFieldsOptOutClient feature gate is enabled, e.g. by setting the
+	// environment variable KUBE_FEATURE_ManagedFieldsOptOutClient=true.
+	//
+	// A nil value allows to default this. If it is nil after defaulting, the value of
+	// the rest.Config passed to the cache is used.
+	DropManagedFields *bool
+
 	// UnsafeDisableDeepCopy indicates not to deep copy objects during get or
 	// list objects per GVK at the specified object.
 	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
@@ -310,6 +339,20 @@ type Config struct {
 	// Set to an empty func to prevent this:
 	// func(in interface{}) (interface{}, error) { return in, nil }
 	Transform toolscache.TransformFunc
+
+	// DropManagedFields sets rest.Config.DropManagedFields for the informers using this Config.
+	// It asks the server to omit metadata.managedFields from responses, and strips it from
+	// decoded objects when the server returns it anyway. This can significantly reduce the
+	// memory usage of the cache, as managedFields can be large.
+	//
+	// Don't enable it if you read managedFields from cached objects, e.g. when using the
+	// Extract functions of apply configurations. It has no effect unless the client-go
+	// ManagedFieldsOptOutClient feature gate is enabled, e.g. by setting the
+	// environment variable KUBE_FEATURE_ManagedFieldsOptOutClient=true.
+	//
+	// A nil value allows to default this. If it is nil after defaulting, the value of
+	// the rest.Config passed to the cache is used.
+	DropManagedFields *bool
 
 	// UnsafeDisableDeepCopy specifies if List and Get requests against the
 	// cache should not DeepCopy. A nil value allows to default this.
@@ -427,6 +470,7 @@ func optionDefaultsToConfig(opts *Options) Config {
 		LabelSelector:         opts.DefaultLabelSelector,
 		FieldSelector:         opts.DefaultFieldSelector,
 		Transform:             opts.DefaultTransform,
+		DropManagedFields:     opts.DefaultDropManagedFields,
 		UnsafeDisableDeepCopy: opts.DefaultUnsafeDisableDeepCopy,
 		EnableWatchBookmarks:  opts.DefaultEnableWatchBookmarks,
 		SyncPeriod:            opts.SyncPeriod,
@@ -438,6 +482,7 @@ func byObjectToConfig(byObject ByObject) Config {
 		LabelSelector:         byObject.Label,
 		FieldSelector:         byObject.Field,
 		Transform:             byObject.Transform,
+		DropManagedFields:     byObject.DropManagedFields,
 		UnsafeDisableDeepCopy: byObject.UnsafeDisableDeepCopy,
 		EnableWatchBookmarks:  byObject.EnableWatchBookmarks,
 		SyncPeriod:            byObject.SyncPeriod,
@@ -461,6 +506,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 					Field: config.FieldSelector,
 				},
 				Transform:             config.Transform,
+				DropManagedFields:     config.DropManagedFields,
 				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
 				EnableWatchBookmarks:  ptr.Deref(config.EnableWatchBookmarks, true),
@@ -550,6 +596,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 			byObject.Label = defaultedConfig.LabelSelector
 			byObject.Field = defaultedConfig.FieldSelector
 			byObject.Transform = defaultedConfig.Transform
+			byObject.DropManagedFields = defaultedConfig.DropManagedFields
 			byObject.UnsafeDisableDeepCopy = defaultedConfig.UnsafeDisableDeepCopy
 			byObject.EnableWatchBookmarks = defaultedConfig.EnableWatchBookmarks
 			byObject.SyncPeriod = defaultedConfig.SyncPeriod
@@ -586,6 +633,9 @@ func defaultConfig(toDefault, defaultFrom Config) Config {
 	}
 	if toDefault.Transform == nil {
 		toDefault.Transform = defaultFrom.Transform
+	}
+	if toDefault.DropManagedFields == nil {
+		toDefault.DropManagedFields = defaultFrom.DropManagedFields
 	}
 	if toDefault.UnsafeDisableDeepCopy == nil {
 		toDefault.UnsafeDisableDeepCopy = defaultFrom.UnsafeDisableDeepCopy

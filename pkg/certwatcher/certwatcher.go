@@ -38,6 +38,10 @@ var log = logf.RuntimeLog.WithName("certwatcher")
 
 const defaultWatchInterval = 10 * time.Second
 
+// maxConsecutiveReadFailures is how many periodic reads in a row must fail,
+// with the current certificate expired, before Start returns an error.
+const maxConsecutiveReadFailures = 3
+
 // CertWatcher watches certificate and key files for changes.
 // It always returns the cached version,
 // but periodically reads and parses certificate and key for changes
@@ -108,6 +112,8 @@ func (cw *CertWatcher) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate,
 }
 
 // Start starts the watch on the certificate and key files.
+// It returns an error if the watches cannot be added, or if the current
+// certificate has expired and three periodic re-reads of the files in a row fail.
 func (cw *CertWatcher) Start(ctx context.Context) error {
 	files := sets.New(cw.certPath, cw.keyPath)
 
@@ -134,16 +140,38 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 	defer ticker.Stop()
 
 	cw.log.Info("Starting certificate poll+watcher", "interval", cw.interval)
+	readFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return cw.watcher.Close()
 		case <-ticker.C:
-			if err := cw.ReadCertificate(); err != nil {
-				cw.log.Error(err, "failed read certificate")
+			err := cw.ReadCertificate()
+			if err == nil {
+				readFailures = 0
+				continue
+			}
+
+			readFailures++
+			cw.log.Error(err, "Failed read certificate", "consecutiveFailures", readFailures)
+			if readFailures >= maxConsecutiveReadFailures && cw.currentCertExpired() {
+				if closeErr := cw.watcher.Close(); closeErr != nil {
+					cw.log.Error(closeErr, "Failed to close watcher")
+				}
+				return fmt.Errorf("failed to read certificate and current one has expired: %w", err)
 			}
 		}
 	}
+}
+
+// currentCertExpired reports whether the cached certificate has expired.
+func (cw *CertWatcher) currentCertExpired() bool {
+	cw.RLock()
+	defer cw.RUnlock()
+	if cw.currentCert == nil {
+		return false
+	}
+	return time.Now().After(cw.currentCert.Leaf.NotAfter)
 }
 
 // Watch reads events from the watcher's channel and reacts to changes.
@@ -211,7 +239,7 @@ func (cw *CertWatcher) ReadCertificate() error {
 		return nil
 	}
 
-	cw.log.Info("Updated current TLS certificate")
+	cw.log.Info("Updated current TLS certificate", "notAfter", cert.Leaf.NotAfter)
 
 	// If a callback is registered, invoke it with the new certificate.
 	cw.RLock()

@@ -190,6 +190,39 @@ var _ = Describe("CertWatcher", func() {
 			Expect(called.Load()).To(BeNumerically(">=", 1))
 		})
 
+		It("should keep running when reading fails but the current certificate is still valid", func() {
+			doneCh := startWatcher(100 * time.Millisecond)
+			waitForPoll(testutil.ToFloat64(metrics.ReadCertificateTotal) + 1)
+
+			Expect(os.Remove(keyPath)).To(Succeed())
+			Consistently(doneCh, "1s").ShouldNot(BeClosed())
+
+			ctxCancel()
+			Eventually(doneCh, "4s").Should(BeClosed())
+		})
+
+		It("should return an error after three failed reads in a row once the current certificate has expired", func() {
+			// X509KeyPair does not check expiry, so an already-expired certificate loads fine.
+			Expect(writeCertsWithExpiry(certPath, keyPath, "127.0.0.1", time.Now().Add(-1*time.Minute))).To(Succeed())
+			Expect(watcher.ReadCertificate()).To(Succeed())
+
+			errCh := make(chan error, 1)
+			go func() {
+				defer GinkgoRecover()
+				errCh <- watcher.WithWatchInterval(500 * time.Millisecond).Start(context.Background()) //nolint:forbidigo // Start must return on its own
+			}()
+			waitForPoll(testutil.ToFloat64(metrics.ReadCertificateTotal) + 1)
+
+			errorsBefore := testutil.ToFloat64(metrics.ReadCertificateErrors)
+			Expect(os.Remove(keyPath)).To(Succeed())
+
+			// The first failed reads are tolerated.
+			Consistently(errCh, "700ms").ShouldNot(Receive())
+
+			Eventually(errCh, "5s").Should(Receive(MatchError(ContainSubstring("current one has expired"))))
+			Expect(testutil.ToFloat64(metrics.ReadCertificateErrors)).To(BeNumerically(">=", errorsBefore+3))
+		})
+
 		Context("prometheus metric read_certificate_total", func() {
 			var readCertificateTotalBefore float64
 			var readCertificateErrorsBefore float64
@@ -217,7 +250,20 @@ var _ = Describe("CertWatcher", func() {
 	})
 })
 
+// waitForPoll waits until the watcher has polled the certificate, which
+// happens only after its file watches are registered.
+func waitForPoll(minReads float64) {
+	GinkgoHelper()
+	Eventually(func() float64 {
+		return testutil.ToFloat64(metrics.ReadCertificateTotal)
+	}, "15s").Should(BeNumerically(">=", minReads))
+}
+
 func writeCerts(certPath, keyPath, ip string) error {
+	return writeCertsWithExpiry(certPath, keyPath, ip, time.Now().Add(1*time.Hour))
+}
+
+func writeCertsWithExpiry(certPath, keyPath, ip string, notAfter time.Time) error {
 	var priv any
 	var err error
 	priv, err = rsa.GenerateKey(rand.Reader, 2048)
@@ -231,7 +277,6 @@ func writeCerts(certPath, keyPath, ip string) error {
 	}
 
 	notBefore := time.Now()
-	notAfter := notBefore.Add(1 * time.Hour)
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)

@@ -29,6 +29,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
@@ -88,6 +89,14 @@ func TestConsistentFakeClient(t *testing.T) {
 		patch := client.MergeFrom(d.DeepCopyObject().(client.Object))
 		d.SetLabels(map[string]string{"patched": "true"})
 		g.Expect(c.Patch(ctx, d, patch)).To(Succeed())
+		return resourceVersion(g, d.GetResourceVersion())
+	}
+	patchOverridingRawDryRun := func(ctx context.Context, c client.Client, g *WithT) int64 {
+		d := deployment()
+		patch := client.MergeFrom(d.DeepCopyObject().(client.Object))
+		d.SetLabels(map[string]string{"patched": "true"})
+		opts := &client.PatchOptions{DryRun: []string{}, Raw: &metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}}}
+		g.Expect(c.Patch(ctx, d, patch, opts)).To(Succeed())
 		return resourceVersion(g, d.GetResourceVersion())
 	}
 	apply := func(ctx context.Context, c client.Client, g *WithT) int64 {
@@ -220,6 +229,18 @@ func TestConsistentFakeClient(t *testing.T) {
 			name:            "List after Patch",
 			maybeInitObject: deployment,
 			write:           patch,
+			read:            list,
+		},
+		{
+			name:            "Get after Patch overriding raw dry-run",
+			maybeInitObject: deployment,
+			write:           patchOverridingRawDryRun,
+			read:            get,
+		},
+		{
+			name:            "List after Patch overriding raw dry-run",
+			maybeInitObject: deployment,
+			write:           patchOverridingRawDryRun,
 			read:            list,
 		},
 		{

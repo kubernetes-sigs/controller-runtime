@@ -35,11 +35,11 @@ import (
 // metadataClient is a client that reads & writes metadata-only requests to/from the API server.
 type metadataClient struct {
 	client     metadata.Interface
-	restMapper meta.RESTMapper
+	restMapper meta.RESTMapperWithContext
 }
 
-func (mc *metadataClient) getResourceInterface(gvk schema.GroupVersionKind, ns string) (metadata.ResourceInterface, error) {
-	mapping, err := mc.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+func (mc *metadataClient) getResourceInterface(ctx context.Context, gvk schema.GroupVersionKind, ns string) (metadata.ResourceInterface, error) {
+	mapping, err := mc.restMapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (mc *metadataClient) DeleteAllOf(ctx context.Context, obj Object, opts ...D
 	deleteAllOfOpts := DeleteAllOfOptions{}
 	deleteAllOfOpts.ApplyOptions(opts)
 
-	resInt, err := mc.getResourceInterface(metadata.GroupVersionKind(), deleteAllOfOpts.ListOptions.Namespace)
+	resInt, err := mc.getResourceInterface(ctx, metadata.GroupVersionKind(), deleteAllOfOpts.ListOptions.Namespace)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (mc *metadataClient) Patch(ctx context.Context, obj Object, patch Patch, op
 	}
 
 	gvk := metadata.GroupVersionKind()
-	resInt, err := mc.getResourceInterface(gvk, metadata.Namespace)
+	resInt, err := mc.getResourceInterface(ctx, gvk, metadata.Namespace)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (mc *metadataClient) Get(ctx context.Context, key ObjectKey, obj Object, op
 	getOpts := GetOptions{}
 	getOpts.ApplyOptions(opts)
 
-	resInt, err := mc.getResourceInterface(gvk, key.Namespace)
+	resInt, err := mc.getResourceInterface(ctx, gvk, key.Namespace)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (mc *metadataClient) List(ctx context.Context, obj ObjectList, opts ...List
 	listOpts := ListOptions{}
 	listOpts.ApplyOptions(opts)
 
-	resInt, err := mc.getResourceInterface(gvk, listOpts.Namespace)
+	resInt, err := mc.getResourceInterface(ctx, gvk, listOpts.Namespace)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (mc *metadataClient) PatchSubResource(ctx context.Context, obj Object, subR
 	}
 
 	gvk := metadata.GroupVersionKind()
-	resInt, err := mc.getResourceInterface(gvk, metadata.Namespace)
+	resInt, err := mc.getResourceInterface(ctx, gvk, metadata.Namespace)
 	if err != nil {
 		return err
 	}

@@ -437,6 +437,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		gracefulShutdownTimeout:       *options.GracefulShutdownTimeout,
 		internalProceduresStop:        make(chan struct{}),
 		leaderElectionStopped:         make(chan struct{}),
+		leaderElectionLost:            make(chan struct{}),
 		leaderElectionReleaseOnCancel: options.LeaderElectionReleaseOnCancel,
 	}, nil
 }

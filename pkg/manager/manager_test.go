@@ -45,6 +45,7 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -260,7 +261,56 @@ var _ = Describe("manger.Manager", func() {
 				cm.leaderElectionCancel()
 				<-mgrDone
 
-				Expect(cm.gracefulShutdownTimeout.Nanoseconds()).To(Equal(int64(0)))
+				Expect(cm.leaderElectionLost).To(BeClosed())
+			})
+
+			It("should skip a graceful shutdown that is already in progress when stopping to lead", func(specCtx SpecContext) {
+				m, err := New(cfg, Options{
+					LeaderElection:          true,
+					LeaderElectionNamespace: "default",
+					LeaderElectionID:        "test-leader-election-id-3-inprogress",
+					GracefulShutdownTimeout: ptr.To(time.Minute),
+					HealthProbeBindAddress:  "0",
+					Metrics:                 metricsserver.Options{BindAddress: "0"},
+					PprofBindAddress:        "0",
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				runnableStarted := make(chan struct{})
+				releaseRunnable := make(chan struct{})
+				defer close(releaseRunnable)
+				Expect(m.Add(RunnableFunc(func(ctx context.Context) error {
+					close(runnableStarted)
+					<-ctx.Done()
+					// Block the graceful shutdown until the test is done.
+					<-releaseRunnable
+					return nil
+				}))).To(Succeed())
+
+				ctx, cancel := context.WithCancel(specCtx)
+				defer cancel()
+				mgrDone := make(chan error, 1)
+				go func() {
+					defer GinkgoRecover()
+					mgrDone <- m.Start(ctx)
+				}()
+				cm := m.(*controllerManager)
+				<-cm.elected
+				<-runnableStarted
+
+				// Start the graceful shutdown. It can't complete as the runnable is blocking.
+				cancel()
+				Eventually(func() int64 {
+					return atomic.LoadInt64(cm.stopProcedureEngaged)
+				}).Should(Equal(int64(1)))
+				Consistently(mgrDone, 500*time.Millisecond).ShouldNot(Receive())
+
+				// Losing the lease while the graceful shutdown is in progress must abort it.
+				cm.leaderElectionCancel()
+				var startErr error
+				Eventually(mgrDone, 10*time.Second).Should(Receive(&startErr))
+				Expect(startErr).ToNot(HaveOccurred())
+				Expect(cm.leaderElectionLost).To(BeClosed())
 			})
 
 			It("should prevent leader election when shutting down a non-elected manager", func(specCtx SpecContext) {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,8 +28,10 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
@@ -248,6 +251,50 @@ var _ = Describe("ConsistentClient", func() {
 					return writeResult{
 						name:    cm.GetName(),
 						deleted: true,
+					}, nil
+				}),
+
+				Entry("dry-run create", NodeTimeout(30*time.Second), func(ctx context.Context, cl client.Client, cm client.Object) (writeResult, error) {
+					if err := cl.Create(ctx, newConfigMap(cm.GetNamespace()), client.DryRunAll); err != nil {
+						return writeResult{}, err
+					}
+					return writeResult{
+						name:            cm.GetName(),
+						resourceVersion: cm.GetResourceVersion(),
+					}, nil
+				}),
+
+				Entry("dry-run apply", NodeTimeout(30*time.Second), func(ctx context.Context, cl client.Client, cm client.Object) (writeResult, error) {
+					ac, _ := repr.applyConfig(cm.GetNamespace(), newConfigMap(cm.GetNamespace()).GetName(), map[string]string{"key": "applied"})
+					if err := cl.Apply(ctx, ac, client.FieldOwner("consistency-test"), client.DryRunAll); err != nil {
+						return writeResult{}, err
+					}
+					return writeResult{
+						name:            cm.GetName(),
+						resourceVersion: cm.GetResourceVersion(),
+					}, nil
+				}),
+
+				Entry("dry-run patch with raw options", NodeTimeout(30*time.Second), func(ctx context.Context, cl client.Client, cm client.Object) (writeResult, error) {
+					obj := newConfigMap(cm.GetNamespace())
+					data := fmt.Sprintf(`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"namespace":%q,"name":%q}}`, obj.GetNamespace(), obj.GetName())
+					opts := &client.PatchOptions{Raw: &metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}, FieldManager: "consistency-test"}}
+					if err := cl.Patch(ctx, obj, client.RawPatch(types.ApplyPatchType, []byte(data)), opts); err != nil {
+						return writeResult{}, err
+					}
+					return writeResult{
+						name:            cm.GetName(),
+						resourceVersion: cm.GetResourceVersion(),
+					}, nil
+				}),
+
+				Entry("dry-run delete", NodeTimeout(30*time.Second), func(ctx context.Context, cl client.Client, cm client.Object) (writeResult, error) {
+					if err := cl.Delete(ctx, cm, client.DryRunAll); err != nil {
+						return writeResult{}, err
+					}
+					return writeResult{
+						name:            cm.GetName(),
+						resourceVersion: cm.GetResourceVersion(),
 					}, nil
 				}),
 			)

@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1315,6 +1316,46 @@ var _ = Describe("manger.Manager", func() {
 				err = m.Start(ctx)
 				Expect(err).To(HaveOccurred())
 				Expect(errors.Is(err, context.DeadlineExceeded)).NotTo(BeTrue())
+			})
+
+			It("should not log after Start returns", func(specCtx SpecContext) {
+				var startReturned, loggedAfterReturn atomic.Bool
+				logDone := make(chan struct{})
+				logger := funcr.NewJSON(func(object string) {
+					if !strings.Contains(object, "error received after stop sequence was engaged") {
+						return
+					}
+					// Slow down the log call so that a log call that is not
+					// waited for ends after Start has returned.
+					time.Sleep(500 * time.Millisecond)
+					loggedAfterReturn.Store(startReturned.Load())
+					close(logDone)
+				}, funcr.Options{})
+
+				m, err := New(cfg, Options{
+					Logger:                  logger,
+					LeaderElection:          true,
+					LeaderElectionID:        "controller-runtime",
+					LeaderElectionNamespace: "default",
+					newResourceLock:         fakeleaderelection.NewResourceLock,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				m.(*controllerManager).onStoppedLeading = func() {}
+
+				ctx, cancel := context.WithCancel(specCtx)
+				managerStopDone := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(ctx)).To(Succeed())
+					startReturned.Store(true)
+					close(managerStopDone)
+				}()
+				<-m.Elected()
+				cancel()
+
+				<-managerStopDone
+				Eventually(logDone).Should(BeClosed())
+				Expect(loggedAfterReturn.Load()).To(BeFalse())
 			})
 		})
 

@@ -65,7 +65,7 @@ func init() {
 type consistentClientUpstream interface {
 	Client
 
-	delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error)
+	delete(ctx context.Context, obj Object, opts ...DeleteOption) (runtime.Object, error)
 }
 
 var _ Client = (*consistentClient)(nil)
@@ -438,9 +438,15 @@ func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...Delet
 	}
 
 	// Prefer waiting for the RV rather than an actual event since that is likely to be more resilient.
-	// This can only work if the response contains the RV which in turn only happens if the request did
-	// not delete the object from storage, for example because it had a finalizer.
-	if rvRaw := response.GetResourceVersion(); rvRaw != "" {
+	// This can only work if the response contains the RV, which it does if the object remains in storage,
+	// for example because it has a finalizer, and for some resources such as pods even if it was removed.
+	var rvRaw string
+	if accessor, err := meta.Accessor(response); err == nil {
+		rvRaw = accessor.GetResourceVersion()
+	} else if accessor, err := meta.ListAccessor(response); err == nil {
+		rvRaw = accessor.GetResourceVersion()
+	}
+	if rvRaw != "" {
 		rv, err := strconv.ParseInt(rvRaw, 10, 64)
 		if err != nil {
 			return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)

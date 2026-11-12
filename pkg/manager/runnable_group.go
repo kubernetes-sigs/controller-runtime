@@ -20,10 +20,8 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/go-logr/logr"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -92,13 +90,7 @@ func (r *runnables) Add(fn Runnable) error {
 		return r.HTTPServers.Add(fn, nil)
 	case hasCache:
 		return r.Caches.Add(fn, func(ctx context.Context) bool {
-			start := time.Now()
-			ok := runnable.GetCache().WaitForCacheSync(ctx)
-			metrics.RecordCacheSyncDuration(time.Since(start))
-			if !ok && ctx.Err() == context.DeadlineExceeded {
-				metrics.RecordCacheSyncTimeout()
-			}
-			return ok
+			return runnable.GetCache().WaitForCacheSync(ctx)
 		})
 	case webhook.Server:
 		return r.Webhooks.Add(fn, nil)

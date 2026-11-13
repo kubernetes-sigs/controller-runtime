@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -380,11 +381,18 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 						return
 					}
 					didStartSyncingSource.Store(true)
+					start := time.Now()
 					if err := syncingSource.WaitForSync(sourceStartCtx); err != nil {
+						metrics.RecordCacheSyncDuration(time.Since(start))
+						if sourceStartCtx.Err() == context.DeadlineExceeded {
+							metrics.RecordCacheSyncTimeout()
+						}
 						err := fmt.Errorf("failed to wait for %s caches to sync %v: %w", c.Name, syncingSource, err)
 						log.Error(err, "Could not wait for Cache to sync")
 						sourceStartErrChan <- err
+						return
 					}
+					metrics.RecordCacheSyncDuration(time.Since(start))
 				}()
 
 				select {

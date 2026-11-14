@@ -272,44 +272,35 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 
 func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
 	o := (&CreateOptions{}).ApplyOptions(opts)
-	return c.writeAndRecordRV(ctx, obj, skipConsistency(o.DisableReadYourWritesConsistency, o.DryRun), func() error {
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Create(ctx, obj, opts...)
 	})
 }
 
 func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
 	o := (&UpdateOptions{}).ApplyOptions(opts)
-	return c.writeAndRecordRV(ctx, obj, skipConsistency(o.DisableReadYourWritesConsistency, o.DryRun), func() error {
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Update(ctx, obj, opts...)
 	})
 }
 
 func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
 	o := (&PatchOptions{}).ApplyOptions(opts)
-	return c.writeAndRecordRV(ctx, obj, skipPatchConsistency(o), func() error {
+	// Raw.DryRun is used when DryRun is unset, see AsPatchOptions.
+	dryRun := o.DryRun
+	if dryRun == nil && o.Raw != nil {
+		dryRun = o.Raw.DryRun
+	}
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(dryRun) > 0, func() error {
 		return c.upstream.Patch(ctx, obj, patch, opts...)
 	})
 }
 
 func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error {
 	o := (&ApplyOptions{}).ApplyOptions(opts)
-	return c.writeAndRecordRV(ctx, obj, skipConsistency(o.DisableReadYourWritesConsistency, o.DryRun), func() error {
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Apply(ctx, obj, opts...)
 	})
-}
-
-// skipConsistency returns true if a write should not be tracked because the caller disabled it
-// or because it is a dry-run, which persists nothing and thus has nothing for reads to wait for.
-func skipConsistency(disabled bool, dryRun []string) bool {
-	return disabled || len(dryRun) > 0
-}
-
-func skipPatchConsistency(o *PatchOptions) bool {
-	dryRun := o.DryRun
-	if dryRun == nil && o.Raw != nil {
-		dryRun = o.Raw.DryRun
-	}
-	return skipConsistency(o.DisableReadYourWritesConsistency, dryRun)
 }
 
 func writeTargetFor(obj any, scheme *runtime.Scheme) (gvkAndRepresentation, types.NamespacedName, Object, func() (string, error), error) {
@@ -421,7 +412,7 @@ func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, erro
 }
 
 func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
-	if o := (&DeleteOptions{}).ApplyOptions(opts); skipConsistency(o.DisableReadYourWritesConsistency, o.DryRun) {
+	if o := (&DeleteOptions{}).ApplyOptions(opts); o.DisableReadYourWritesConsistency || len(o.DryRun) > 0 {
 		return c.upstream.Delete(ctx, obj, opts...)
 	}
 
@@ -540,21 +531,26 @@ func (c *consistentSubResourceClient) Create(ctx context.Context, obj, subResour
 
 func (c *consistentSubResourceClient) Update(ctx context.Context, obj Object, opts ...SubResourceUpdateOption) error {
 	o := (&SubResourceUpdateOptions{}).ApplyOptions(opts)
-	return c.writeAndRecordRV(ctx, obj, skipConsistency(o.DisableReadYourWritesConsistency, o.DryRun), func() error {
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Update(ctx, obj, opts...)
 	})
 }
 
 func (c *consistentSubResourceClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...SubResourcePatchOption) error {
 	o := (&SubResourcePatchOptions{}).ApplyOptions(opts)
-	return c.writeAndRecordRV(ctx, obj, skipPatchConsistency(&o.PatchOptions), func() error {
+	// Raw.DryRun is used when DryRun is unset, see AsPatchOptions.
+	dryRun := o.DryRun
+	if dryRun == nil && o.Raw != nil {
+		dryRun = o.Raw.DryRun
+	}
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(dryRun) > 0, func() error {
 		return c.upstream.Patch(ctx, obj, patch, opts...)
 	})
 }
 
 func (c *consistentSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...SubResourceApplyOption) error {
 	o := (&SubResourceApplyOptions{}).ApplyOpts(opts)
-	return c.writeAndRecordRV(ctx, obj, skipConsistency(o.DisableReadYourWritesConsistency, o.DryRun), func() error {
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Apply(ctx, obj, opts...)
 	})
 }

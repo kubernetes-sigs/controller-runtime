@@ -420,6 +420,10 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the reconcileHandler.
 func (c *Controller[request]) processNextWorkItem(ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+
 	obj, priority, shutdown := c.Queue.GetWithPriority()
 	if shutdown {
 		// Stop working
@@ -433,6 +437,10 @@ func (c *Controller[request]) processNextWorkItem(ctx context.Context) bool {
 	// put back on the workqueue and attempted again after a back-off
 	// period.
 	defer c.Queue.Done(obj)
+
+	if ctx.Err() != nil {
+		return false
+	}
 
 	ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(1)
 	defer ctrlmetrics.ActiveWorkers.WithLabelValues(c.Name).Add(-1)

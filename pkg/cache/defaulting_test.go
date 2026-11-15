@@ -253,6 +253,30 @@ func TestDefaultOpts(t *testing.T) {
 			},
 		},
 		{
+			name: "ByObject.DropManagedFields gets defaulted from DefaultDropManagedFields",
+			in: Options{
+				ByObject:                 map[client.Object]ByObject{pod: {}},
+				DefaultDropManagedFields: new(true),
+			},
+
+			verification: func(o Options) string {
+				expected := new(true)
+				return cmp.Diff(expected, o.ByObject[pod].DropManagedFields)
+			},
+		},
+		{
+			name: "ByObject.DropManagedFields doesn't get defaulted when set",
+			in: Options{
+				ByObject:                 map[client.Object]ByObject{pod: {DropManagedFields: new(false)}},
+				DefaultDropManagedFields: new(true),
+			},
+
+			verification: func(o Options) string {
+				expected := new(false)
+				return cmp.Diff(expected, o.ByObject[pod].DropManagedFields)
+			},
+		},
+		{
 			name: "ByObject.SyncPeriod gets defaulted from SyncPeriod",
 			in: Options{
 				ByObject:   map[client.Object]ByObject{pod: {}},

@@ -70,6 +70,7 @@ type InformersOpts struct {
 	NewInformer           func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
 	Selector              Selector
 	Transform             cache.TransformFunc
+	DropManagedFields     *bool
 	UnsafeDisableDeepCopy bool
 	EnableWatchBookmarks  bool
 	WatchErrorHandler     cache.WatchErrorHandlerWithContext
@@ -98,6 +99,7 @@ func NewInformers(config *rest.Config, options *InformersOpts) *Informers {
 		namespace:             options.Namespace,
 		selector:              options.Selector,
 		transform:             options.Transform,
+		dropManagedFields:     options.DropManagedFields,
 		unsafeDisableDeepCopy: options.UnsafeDisableDeepCopy,
 		enableWatchBookmarks:  options.EnableWatchBookmarks,
 		newInformer:           newInformer,
@@ -195,6 +197,10 @@ type Informers struct {
 	transform             cache.TransformFunc
 	unsafeDisableDeepCopy bool
 	enableWatchBookmarks  bool
+
+	// dropManagedFields overrides DropManagedFields of the rest.Config used by the ListWatches.
+	// If nil, the value of the rest.Config is used.
+	dropManagedFields *bool
 
 	// NewInformer allows overriding of the shared index informer constructor for testing.
 	newInformer func(cache.ListerWatcher, runtime.Object, time.Duration, cache.Indexers) cache.SharedIndexInformer
@@ -445,6 +451,12 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 		namespace = restrictNamespaceBySelector(ip.namespace, ip.selector)
 	}
 
+	// Copy the config to not modify the (shared) config of the caller.
+	cfg := rest.CopyConfig(ip.config)
+	if ip.dropManagedFields != nil {
+		cfg.DropManagedFields = *ip.dropManagedFields
+	}
+
 	switch obj.(type) {
 	//
 	// Unstructured
@@ -452,7 +464,6 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	case runtime.Unstructured:
 		// If the rest configuration has a negotiated serializer passed in,
 		// we should remove it and use the one that the dynamic client sets for us.
-		cfg := rest.CopyConfig(ip.config)
 		cfg.NegotiatedSerializer = nil
 		dynamicClient, err := dynamic.NewForConfigAndClient(cfg, ip.httpClient)
 		if err != nil {
@@ -483,7 +494,6 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	case *metav1.PartialObjectMetadata, *metav1.PartialObjectMetadataList:
 		// Always clear the negotiated serializer and use the one
 		// set from the metadata client.
-		cfg := rest.CopyConfig(ip.config)
 		cfg.NegotiatedSerializer = nil
 
 		// Grab the metadata metadataClient.
@@ -531,7 +541,7 @@ func (ip *Informers) makeListWatcher(gvk schema.GroupVersionKind, obj runtime.Ob
 	// Structured.
 	//
 	default:
-		client, err := apiutil.RESTClientForGVK(gvk, false, false, ip.config, ip.codecs, ip.httpClient)
+		client, err := apiutil.RESTClientForGVK(gvk, false, false, cfg, ip.codecs, ip.httpClient)
 		if err != nil {
 			return nil, err
 		}

@@ -149,9 +149,21 @@ func NewServer(o Options, config *rest.Config, httpClient *http.Client) (Server,
 	}
 
 	return &defaultServer{
-		metricsFilter: metricsFilter,
-		options:       o,
+		metricsFilter:  metricsFilter,
+		options:        o,
+		newCertWatcher: newCertWatcher,
 	}, nil
+}
+
+// certWatcher is the subset of *certwatcher.CertWatcher used by the server.
+type certWatcher interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	Start(ctx context.Context) error
+}
+
+// newCertWatcher creates a certWatcher backed by certwatcher.New.
+func newCertWatcher(certPath, keyPath string) (certWatcher, error) {
+	return certwatcher.New(certPath, keyPath)
 }
 
 // defaultServer is the default implementation used for Server.
@@ -161,6 +173,9 @@ type defaultServer struct {
 	// metricsFilter is a filter which is added around
 	// the metrics and the extra handlers on the metrics server.
 	metricsFilter Filter
+
+	// newCertWatcher creates the certificate watcher. It can be replaced in tests.
+	newCertWatcher func(certPath, keyPath string) (certWatcher, error)
 
 	// mu protects access to the bindAddr field.
 	mu sync.RWMutex
@@ -217,7 +232,10 @@ func (s *defaultServer) AddExtraHandler(path string, handler http.Handler) error
 func (s *defaultServer) Start(ctx context.Context) error {
 	log.Info("Starting metrics server")
 
-	listener, err := s.createListener(ctx, log)
+	// certWatcherErr receives an error if the certificate watcher fails
+	certWatcherErr := make(chan error, 1)
+
+	listener, err := s.createListener(ctx, certWatcherErr, log)
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: failed to create listener: %w", err)
 	}
@@ -256,9 +274,13 @@ func (s *defaultServer) Start(ctx context.Context) error {
 
 	srv := httpserver.New(ctx, mux)
 
+	var watcherErr error
 	idleConnsClosed := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		select {
+		case <-ctx.Done():
+		case watcherErr = <-certWatcherErr:
+		}
 		log.Info("Shutting down metrics server with timeout of 1 minute")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -275,6 +297,9 @@ func (s *defaultServer) Start(ctx context.Context) error {
 	}
 
 	<-idleConnsClosed
+	if watcherErr != nil {
+		return fmt.Errorf("metrics server shut down: certificate watcher failed: %w", watcherErr)
+	}
 	return nil
 }
 
@@ -289,7 +314,7 @@ func (s *defaultServer) handlerOpts() promhttp.HandlerOpts {
 	return handlerOpts
 }
 
-func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (net.Listener, error) {
+func (s *defaultServer) createListener(ctx context.Context, certWatcherErr chan<- error, log logr.Logger) (net.Listener, error) {
 	if !s.options.SecureServing {
 		return s.options.ListenConfig.Listen(ctx, "tcp", s.options.BindAddress)
 	}
@@ -313,7 +338,7 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 		if certExists && keyExists {
 			// Create the certificate watcher and
 			// set the config's GetCertificate on the TLSConfig
-			certWatcher, err := certwatcher.New(certPath, keyPath)
+			certWatcher, err := s.newCertWatcher(certPath, keyPath)
 			if err != nil {
 				return nil, err
 			}
@@ -322,6 +347,10 @@ func (s *defaultServer) createListener(ctx context.Context, log logr.Logger) (ne
 			go func() {
 				if err := certWatcher.Start(ctx); err != nil {
 					log.Error(err, "certificate watcher error")
+					// Errors after ctx is done are part of a normal shutdown.
+					if ctx.Err() == nil {
+						certWatcherErr <- err
+					}
 				}
 			}()
 		}

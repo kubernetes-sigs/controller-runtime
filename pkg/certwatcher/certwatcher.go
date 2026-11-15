@@ -154,7 +154,7 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 
 			readFailures++
 			cw.log.Error(err, "Failed read certificate", "consecutiveFailures", readFailures)
-			if readFailures >= maxConsecutiveReadFailures && cw.currentCertExpired() {
+			if readFailures >= maxConsecutiveReadFailures && !cw.currentCertValid() {
 				if closeErr := cw.watcher.Close(); closeErr != nil {
 					cw.log.Error(closeErr, "Failed to close watcher")
 				}
@@ -164,14 +164,14 @@ func (cw *CertWatcher) Start(ctx context.Context) error {
 	}
 }
 
-// currentCertExpired reports whether the cached certificate has expired.
-func (cw *CertWatcher) currentCertExpired() bool {
+// currentCertValid reports whether the cached certificate is still valid.
+func (cw *CertWatcher) currentCertValid() bool {
 	cw.RLock()
 	defer cw.RUnlock()
 	if cw.currentCert == nil {
 		return false
 	}
-	return time.Now().After(cw.currentCert.Leaf.NotAfter)
+	return time.Now().Before(cw.currentCert.Leaf.NotAfter)
 }
 
 // Watch reads events from the watcher's channel and reacts to changes.

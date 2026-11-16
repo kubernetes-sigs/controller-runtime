@@ -88,3 +88,24 @@ Before starting any work, please either comment on an existing issue, or file a 
 ## Code of conduct
 
 Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](code-of-conduct.md).
+
+## AI Guidance
+
+This project follows the [Kubernetes AI guidance][Kubernetes AI guidance]:
+
+> Using AI tools to help write your PR is acceptable, but as the author, you are responsible for understanding every change. If you used AI tools in preparing your PR, you must disclose this in the description of your PR. For example, including “This PR was written in part with the assistance of generative AI,” in the PR description is sufficient.
+>
+> Listing AI tooling as a co-author, co-signing commits using an AI tool, or using the assisted-by, co-developed or similar commit trailer is not allowed.
+>
+> All contributions must follow the [contributions policies] and use commit messages that align with [the policy].
+>
+> [Large AI generated PRs] and AI generated commit messages are not allowed.
+>
+> Do not leave the first review of AI generated changes to the reviewers. Verify the changes (code review, testing, etc.) before submitting your PR. Reviewers may ask questions about your AI-assisted code, and if you cannot explain why a change was made, the PR will be closed.
+>
+> When responding to review comments, you must do so without relying on AI tools. Reviewers want to engage directly with you, not with generated responses. If you do not engage directly with reviewers, the PR will be closed.
+
+[Kubernetes AI guidance]: https://www.kubernetes.dev/docs/guide/pull-requests/#ai-guidance
+[contributions policies]: https://www.kubernetes.dev/docs/guide/contributing/
+[the policy]: https://www.kubernetes.dev/docs/guide/pull-requests/#commit-message-guidelines
+[Large AI generated PRs]: https://www.kubernetes.dev/docs/guide/pull-requests/#large-or-automatic-edits

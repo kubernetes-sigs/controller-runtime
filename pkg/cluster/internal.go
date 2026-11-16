@@ -21,10 +21,10 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,7 +53,7 @@ type cluster struct {
 	recorderProvider *intrec.Provider
 
 	// mapper is used to map resources to kind, and map kind and version.
-	mapper meta.RESTMapperWithContext
+	mapper apiutil.DynamicRESTMapper
 
 	// Logger is the logger that should be used by this manager.
 	// If none is set, it defaults to log.Log global logger.
@@ -92,7 +92,7 @@ func (c *cluster) GetEventRecorder(name string) recorder.EventRecorder {
 	return c.recorderProvider.GetEventRecorder(name)
 }
 
-func (c *cluster) GetRESTMapper() meta.RESTMapperWithContext {
+func (c *cluster) GetRESTMapper() apiutil.DynamicRESTMapper {
 	return c.mapper
 }
 

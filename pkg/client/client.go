@@ -50,7 +50,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// Mapper, if provided, will be used to map GroupVersionKinds to Resources
-	Mapper meta.RESTMapperWithContext
+	Mapper apiutil.DynamicRESTMapper
 
 	// Cache, if provided, is used to read objects from the cache.
 	Cache *CacheOptions
@@ -287,7 +287,7 @@ type client struct {
 	unstructuredClient unstructuredClient
 	metadataClient     metadataClient
 	scheme             *runtime.Scheme
-	mapper             meta.RESTMapperWithContext
+	mapper             apiutil.DynamicRESTMapper
 
 	cache             Reader
 	uncachedGVKs      map[schema.GroupVersionKind]struct{}
@@ -343,7 +343,7 @@ func (c *client) Scheme() *runtime.Scheme {
 }
 
 // RESTMapper returns the scheme this client is using.
-func (c *client) RESTMapper() meta.RESTMapperWithContext {
+func (c *client) RESTMapper() apiutil.DynamicRESTMapper {
 	return c.mapper
 }
 

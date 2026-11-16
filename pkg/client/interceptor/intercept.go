@@ -19,11 +19,11 @@ package interceptor
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Funcs contains functions that are called instead of the underlying client's methods.
@@ -151,7 +151,7 @@ func (c interceptor) Scheme() *runtime.Scheme {
 	return c.client.Scheme()
 }
 
-func (c interceptor) RESTMapper() meta.RESTMapperWithContext {
+func (c interceptor) RESTMapper() apiutil.DynamicRESTMapper {
 	return c.client.RESTMapper()
 }
 

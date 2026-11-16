@@ -28,7 +28,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -485,7 +484,7 @@ func (c *consistentClient) Scheme() *runtime.Scheme {
 	return c.upstream.Scheme()
 }
 
-func (c *consistentClient) RESTMapper() meta.RESTMapperWithContext {
+func (c *consistentClient) RESTMapper() apiutil.DynamicRESTMapper {
 	return c.upstream.RESTMapper()
 }
 

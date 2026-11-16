@@ -27,13 +27,13 @@ import (
 	"github.com/go-logr/logr"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
@@ -116,7 +116,7 @@ type Options struct {
 	//
 	// If set, the RESTMapper returned by this function is used to create the RESTMapper
 	// used by the Client and Cache.
-	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error)
+	MapperProvider func(c *rest.Config, httpClient *http.Client) (apiutil.DynamicRESTMapper, error)
 
 	// Cache is the cache.Options that will be used to create the default Cache.
 	// By default, the cache will watch and list requested objects in all namespaces.

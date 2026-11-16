@@ -37,7 +37,6 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,6 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
@@ -69,7 +69,7 @@ var _ = Describe("manger.Manager", func() {
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
 			m, err := New(cfg, Options{
-				MapperProvider: func(c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
+				MapperProvider: func(c *rest.Config, httpClient *http.Client) (apiutil.DynamicRESTMapper, error) {
 					return nil, expected
 				},
 			})

@@ -19,9 +19,9 @@ package interceptor
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -442,7 +442,7 @@ func (d dummyClient) Scheme() *runtime.Scheme {
 	return nil
 }
 
-func (d dummyClient) RESTMapper() meta.RESTMapperWithContext {
+func (d dummyClient) RESTMapper() apiutil.DynamicRESTMapper {
 	return nil
 }
 

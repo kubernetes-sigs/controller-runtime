@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
@@ -51,7 +50,7 @@ func (n *namespacedClient) Scheme() *runtime.Scheme {
 }
 
 // RESTMapper returns the scheme this client is using.
-func (n *namespacedClient) RESTMapper() meta.RESTMapperWithContext {
+func (n *namespacedClient) RESTMapper() apiutil.DynamicRESTMapper {
 	return n.client.RESTMapper()
 }
 

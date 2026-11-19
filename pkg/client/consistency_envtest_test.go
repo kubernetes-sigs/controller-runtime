@@ -273,6 +273,7 @@ var _ = Describe("ConsistentClient", func() {
 					afterDelete := repr.newObject()
 					Expect(cl.Get(ctx, client.ObjectKeyFromObject(cm), afterDelete)).To(Succeed())
 					Expect(afterDelete.GetDeletionTimestamp()).NotTo(BeNil(), "should have a deletion timestamp")
+					Expect(cm.GetResourceVersion()).To(Equal(afterDelete.GetResourceVersion()), "obj should be updated with the remaining object")
 				})
 			})
 		})

@@ -19,6 +19,7 @@ package client_test
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -29,7 +30,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
 	toolscache "k8s.io/client-go/tools/cache"
@@ -551,25 +552,15 @@ type fakeConsistentClientUpstream struct {
 	client.Client
 }
 
-func (u *fakeConsistentClientUpstream) DeleteWithResult(ctx context.Context, obj client.Object, opts ...client.DeleteOption) (*unstructured.Unstructured, error) {
+func (u *fakeConsistentClientUpstream) DeleteWithResult(ctx context.Context, obj client.Object, opts ...client.DeleteOption) (runtime.Object, error) {
+	before := obj.DeepCopyObject()
 	if err := u.Delete(ctx, obj, opts...); err != nil {
 		return nil, err
 	}
-
-	gvk, err := u.GroupVersionKindFor(obj)
-	if err != nil {
-		return nil, err
+	if reflect.DeepEqual(obj, before) {
+		return &metav1.Status{}, nil
 	}
-	result := &unstructured.Unstructured{}
-	result.SetGroupVersionKind(gvk)
-	if err := u.Get(ctx, client.ObjectKeyFromObject(obj), result); err != nil {
-		if apierrors.IsNotFound(err) {
-			return &unstructured.Unstructured{}, nil
-		}
-		return nil, err
-	}
-
-	return result, nil
+	return obj, nil
 }
 
 // fakeCache delivers events to eventhandlers from a client using interceptorFuncs

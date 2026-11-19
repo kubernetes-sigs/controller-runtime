@@ -413,6 +413,10 @@ func (c *fakeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 		return err
 	}
 
+	return c.copyInto(o, gvk, obj)
+}
+
+func (c *fakeClient) copyInto(o runtime.Object, gvk schema.GroupVersionKind, obj client.Object) error {
 	ta, err := meta.TypeAccessor(o)
 	if err != nil {
 		return err
@@ -740,7 +744,16 @@ func (c *fakeClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 		}
 	}
 
-	return c.deleteObjectLocked(gvr, accessor)
+	remaining, err := c.deleteObjectLocked(gvr, accessor)
+	if err != nil || remaining == nil {
+		return err
+	}
+
+	gvk, err := apiutil.GVKForObject(obj, c.scheme)
+	if err != nil {
+		return err
+	}
+	return c.copyInto(remaining, gvk, obj)
 }
 
 func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
@@ -785,8 +798,7 @@ func (c *fakeClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ..
 		if err != nil {
 			return err
 		}
-		err = c.deleteObjectLocked(gvr, accessor)
-		if err != nil {
+		if _, err := c.deleteObjectLocked(gvr, accessor); err != nil {
 			return err
 		}
 	}
@@ -1221,23 +1233,25 @@ func (c *fakeClient) SubResource(subResource string) client.SubResourceClient {
 	return &fakeSubResourceClient{client: c, subResource: subResource}
 }
 
-func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accessor metav1.Object) error {
+func (c *fakeClient) deleteObjectLocked(gvr schema.GroupVersionResource, accessor metav1.Object) (runtime.Object, error) {
 	old, err := c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
 	if err == nil {
 		oldAccessor, err := meta.Accessor(old)
-		if err == nil {
-			if len(oldAccessor.GetFinalizers()) > 0 {
+		if err == nil && len(oldAccessor.GetFinalizers()) > 0 {
+			if oldAccessor.GetDeletionTimestamp() == nil {
 				now := metav1.Now()
 				oldAccessor.SetDeletionTimestamp(&now)
 				// Call update directly with mutability parameter set to true to allow
 				// changes to deletionTimestamp
-				return c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{})
+				if err := c.tracker.update(gvr, old, accessor.GetNamespace(), false, true, metav1.UpdateOptions{}); err != nil {
+					return nil, err
+				}
 			}
+			return c.tracker.Get(gvr, accessor.GetNamespace(), accessor.GetName())
 		}
 	}
 
-	// TODO: implement propagation
-	return c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
+	return nil, c.tracker.Delete(gvr, accessor.GetNamespace(), accessor.GetName())
 }
 
 func getGVRFromObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionResource, error) {
@@ -1287,11 +1301,12 @@ func (sw *fakeSubResourceClient) Create(ctx context.Context, obj client.Object, 
 		if !isEviction {
 			return apierrors.NewBadRequest(fmt.Sprintf("got invalid type %T, expected Eviction", subResource))
 		}
-		if _, isPod := obj.(*corev1.Pod); !isPod {
+		pod, isPod := obj.(*corev1.Pod)
+		if !isPod {
 			return apierrors.NewNotFound(schema.GroupResource{}, "")
 		}
 
-		return sw.client.Delete(ctx, obj)
+		return sw.client.Delete(ctx, pod.DeepCopy())
 	case "token":
 		tokenRequest, isTokenRequest := subResource.(*authenticationv1.TokenRequest)
 		if !isTokenRequest {

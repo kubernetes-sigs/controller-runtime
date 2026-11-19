@@ -19,7 +19,9 @@ package apiutil
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -28,6 +30,17 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/util/flowcontrol"
+)
+
+// After a lookup misses in a group version, the mapper waits before it fetches that group version
+// again. Without this, every lookup of a kind that a served group version doesn't have, or of a
+// group version the server doesn't serve, sends a discovery request. The wait starts at
+// missBackoffInitial so that a kind added right after a miss, for example by installing a CRD,
+// is found quickly. It doubles with each fetch that still misses, up to missBackoffMax.
+const (
+	missBackoffInitial = 100 * time.Millisecond
+	missBackoffMax     = 10 * time.Second
 )
 
 // NewDynamicRESTMapper returns a dynamic RESTMapper for cfg. The dynamic
@@ -47,6 +60,7 @@ func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (meta.RESTM
 		client:      client,
 		knownGroups: map[string]*restmapper.APIGroupResources{},
 		apiGroups:   map[string]*metav1.APIGroup{},
+		missBackoff: flowcontrol.NewBackOff(missBackoffInitial, missBackoffMax),
 	}, nil
 }
 
@@ -60,9 +74,22 @@ type mapper struct {
 
 	initialDiscoveryDone bool
 
+	// missBackoff is keyed by group version. A group version backs off each time the mapper
+	// fetches it again because a lookup missed in its cached resources, or finds that the
+	// server doesn't serve it. A lookup that misses in a group version in backoff doesn't
+	// fetch it.
+	missBackoff *flowcontrol.Backoff
+
+	// fetchMu serializes discovery requests and the cache updates that follow them.
+	// It is held during requests to the API server instead of mu, so lookups of cached
+	// kinds don't wait for them. It must be taken before mu.
+	fetchMu sync.Mutex
+
 	// mutex to provide thread-safe mapper reloading.
 	// It protects all fields in the mapper as well as methods
-	// that have the `Locked` suffix.
+	// that have the `Locked` suffix. Code that changes the fields
+	// must hold fetchMu too, so code holding fetchMu can read them
+	// without mu.
 	mu sync.RWMutex
 }
 
@@ -164,8 +191,16 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 		versions = nil
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Don't wait for other discovery requests if all versions are in backoff.
+	m.mu.RLock()
+	inBackoff := m.allVersionsInMissBackoff(groupName, versions)
+	m.mu.RUnlock()
+	if inBackoff {
+		return nil
+	}
+
+	m.fetchMu.Lock()
+	defer m.fetchMu.Unlock()
 	// If no specific versions are set by user, we will scan all available ones for the API group.
 	// This operation requires 2 requests: /api and /apis, but only once. For all subsequent calls
 	// this data will be taken from cache.
@@ -173,7 +208,7 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 	// We always run this once, because if the server supports aggregated discovery, this will
 	// load everything with two api calls which we assume is overall cheaper.
 	if len(versions) == 0 || !m.initialDiscoveryDone {
-		apiGroup, didAggregatedDiscovery, err := m.findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName)
+		apiGroup, didAggregatedDiscovery, err := m.findAPIGroupByNameAndMaybeAggregatedDiscovery(groupName)
 		if err != nil {
 			return err
 		}
@@ -202,19 +237,76 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 		}
 	}
 
+	// Return if all versions went into backoff while this call waited for fetchMu. Otherwise fetch
+	// all of them, even those in backoff: if one of them isn't found, the whole group is removed
+	// from the cache and rebuilt from the fetched versions only.
+	if m.allVersionsInMissBackoff(groupName, versions) {
+		return nil
+	}
+	now := m.missBackoff.Clock.Now()
+
 	// Update information for group resources about versioned resources.
 	// The number of API calls is equal to the number of versions: /apis/<group>/<version>.
 	// If we encounter a missing API version (NotFound error), we will remove the group from
 	// the m.apiGroups and m.knownGroups caches.
 	// If this happens, in the next call the group will be added back to apiGroups
 	// and only the existing versions will be loaded in knownGroups.
-	groupVersionResources, err := m.fetchGroupVersionResourcesLocked(groupName, versions...)
+	// The requests are sent without holding mu, so lookups of cached kinds don't wait for them.
+	groupVersionResources, notFound, err := m.fetchGroupVersionResources(groupName, versions...)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Back off the versions the server doesn't serve. If the fetch succeeded, also back off the
+	// versions that were already cached, since fetching them again means a lookup missed in them.
+	// Versions loaded for the first time don't back off, so a kind added to them right after is
+	// found on the next miss.
+	missed := slices.Clone(notFound)
+	if err == nil {
+		for gv := range groupVersionResources {
+			if m.isGroupVersionCachedLocked(gv) {
+				missed = append(missed, gv)
+			}
+		}
+	}
+
+	m.removeNotFoundGroupVersionsLocked(notFound)
+	if err == nil {
+		m.addGroupVersionResourcesToCacheAndReloadLocked(groupVersionResources)
+	}
+	m.missBackoff.GC()
+	for _, gv := range missed {
+		m.missBackoff.Next(gv.String(), now)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get API group resources: %w", err)
 	}
-
-	m.addGroupVersionResourcesToCacheAndReloadLocked(groupVersionResources)
 	return nil
+}
+
+// allVersionsInMissBackoff reports whether every version of the group that
+// addKnownGroupAndReload would fetch is in backoff. If versions is empty, it
+// checks the cached versions of the group. Either mu or fetchMu must be held
+// when calling it.
+func (m *mapper) allVersionsInMissBackoff(groupName string, versions []string) bool {
+	if len(versions) == 0 {
+		apiGroup, ok := m.apiGroups[groupName]
+		if !ok || len(apiGroup.Versions) == 0 {
+			return false
+		}
+		versions = make([]string, 0, len(apiGroup.Versions))
+		for _, version := range apiGroup.Versions {
+			versions = append(versions, version.Version)
+		}
+	}
+
+	now := m.missBackoff.Clock.Now()
+	for _, version := range versions {
+		if !m.missBackoff.IsInBackOffSinceUpdate(schema.GroupVersion{Group: groupName, Version: version}.String(), now) {
+			return false
+		}
+	}
+	return true
 }
 
 // addGroupVersionResourcesToCacheAndReloadLocked does what the name suggests. The mutex must be held when
@@ -272,9 +364,10 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 	m.mapper = restmapper.NewDiscoveryRESTMapper(updatedGroupResources)
 }
 
-// findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked tries to find the passed apiGroup.
+// findAPIGroupByNameAndMaybeAggregatedDiscovery tries to find the passed apiGroup.
 // If the server supports aggregated discovery, it will always perform that.
-func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName string) (_ *metav1.APIGroup, didAggregatedDiscovery bool, _ error) {
+// fetchMu must be held when calling it, and mu must not be held.
+func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscovery(groupName string) (_ *metav1.APIGroup, didAggregatedDiscovery bool, _ error) {
 	// Looking in the cache first
 	group, ok := m.apiGroups[groupName]
 	if ok {
@@ -290,6 +383,8 @@ func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName s
 		return nil, false, fmt.Errorf("received an empty API groups list")
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.initialDiscoveryDone = true
 	for i := range apiGroups.Groups {
 		group := &apiGroups.Groups[i]
@@ -306,25 +401,20 @@ func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName s
 	return m.apiGroups[groupName], didAggregatedDiscovery, nil
 }
 
-// fetchGroupVersionResourcesLocked fetches the resources for the specified group and its versions.
-// This method might modify the cache so it needs to be called under the lock.
-func (m *mapper) fetchGroupVersionResourcesLocked(groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, error) {
+// fetchGroupVersionResources fetches the resources for the specified group and its versions.
+// It returns the versions that the server doesn't serve separately. It doesn't use the cache,
+// so it can be called without holding the mutex.
+func (m *mapper) fetchGroupVersionResources(groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, []schema.GroupVersion, error) {
 	groupVersionResources := make(map[schema.GroupVersion]*metav1.APIResourceList)
 	failedGroups := make(map[schema.GroupVersion]error)
+	var notFound []schema.GroupVersion
 
 	for _, version := range versions {
 		groupVersion := schema.GroupVersion{Group: groupName, Version: version}
 
 		apiResourceList, err := m.client.ServerResourcesForGroupVersion(groupVersion.String())
 		if apierrors.IsNotFound(err) {
-			// If the version is not found, we remove the group from the cache
-			// so it gets refreshed on the next call.
-			if m.isAPIGroupCachedLocked(groupVersion) {
-				delete(m.apiGroups, groupName)
-			}
-			if m.isGroupVersionCachedLocked(groupVersion) {
-				delete(m.knownGroups, groupName)
-			}
+			notFound = append(notFound, groupVersion)
 			continue
 		} else if err != nil {
 			failedGroups[groupVersion] = err
@@ -338,10 +428,28 @@ func (m *mapper) fetchGroupVersionResourcesLocked(groupName string, versions ...
 
 	if len(failedGroups) > 0 {
 		err := ErrResourceDiscoveryFailed(failedGroups)
-		return nil, &err
+		return nil, notFound, &err
 	}
 
-	return groupVersionResources, nil
+	return groupVersionResources, notFound, nil
+}
+
+// removeNotFoundGroupVersionsLocked removes the groups of versions that the server doesn't serve
+// from the cache, so they get refreshed on the next call. The mutex must be held when calling it.
+func (m *mapper) removeNotFoundGroupVersionsLocked(notFound []schema.GroupVersion) {
+	for _, groupVersion := range notFound {
+		if m.isAPIGroupCachedLocked(groupVersion) {
+			delete(m.apiGroups, groupVersion.Group)
+		}
+		if m.isGroupVersionCachedLocked(groupVersion) {
+			// The group's other versions aren't cached anymore either, so the next miss in them
+			// must fetch them.
+			for version := range m.knownGroups[groupVersion.Group].VersionedResources {
+				m.missBackoff.DeleteEntry(schema.GroupVersion{Group: groupVersion.Group, Version: version}.String())
+			}
+			delete(m.knownGroups, groupVersion.Group)
+		}
+	}
 }
 
 // isGroupVersionCachedLocked checks if a version for a group is cached in the known groups cache.

@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	_ "github.com/onsi/ginkgo/v2"
 	gmg "github.com/onsi/gomega"
@@ -37,6 +38,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	testingclock "k8s.io/utils/clock/testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -476,6 +478,85 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
 			})
 
+			t.Run("LazyRESTMapper should not fetch discovery on every lookup of a missing kind", func(t *testing.T) {
+				g := gmg.NewWithT(t)
+
+				httpClient, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				crt := newCountingRoundTripper(httpClient.Transport)
+				httpClient.Transport = crt
+
+				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				clk := testingclock.NewFakeClock(time.Now())
+				apiutil.SetMissBackoffClock(lazyRestMapper, clk)
+
+				_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "Deployment"}, "v1")
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "Driver"}, "v1")
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				crt.Reset()
+
+				// The first miss fetches apps/v1 again in case the kind was added since it was cached:
+				// 	#1: GET https://host/apis/apps/v1
+				// The lookups after it get a NoMatch error from the cache until the backoff has passed.
+				for range 100 {
+					_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "Missing"}, "v1")
+					g.Expect(err).To(beNoMatchError())
+				}
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
+				crt.Reset()
+
+				// The same applies to a group version the server doesn't serve:
+				// 	#1: GET https://host/apis/apps/v1alpha1
+				for range 100 {
+					_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "Deployment"}, "v1alpha1")
+					g.Expect(err).To(beNoMatchError())
+				}
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
+				crt.Reset()
+
+				// A CRD installed after a miss is found once the backoff has passed.
+				// 	#1: GET https://host/apis/crew.example.com/v1
+				_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "Pilot"}, "v1")
+				g.Expect(err).To(beNoMatchError())
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
+
+				s := scheme.Scheme
+				err = apiextensionsv1.AddToScheme(s)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				c, err := client.New(restCfg, client.Options{Scheme: s})
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				crd := createNewCRD(t.Context(), g, c, "crew.example.com", "Pilot", "pilots")
+				t.Cleanup(func() {
+					g.Expect(c.Delete(context.Background(), crd)).To(gmg.Succeed()) //nolint:forbidigo //t.Context is cancelled in t.Cleanup
+				})
+
+				discHTTP, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				discClient, err := discovery.NewDiscoveryClientForConfigAndClient(restCfg, discHTTP)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				g.Eventually(func(g gmg.Gomega) {
+					resources, err := discClient.ServerResourcesForGroupVersion("crew.example.com/v1")
+					g.Expect(err).NotTo(gmg.HaveOccurred())
+					g.Expect(resources.APIResources).To(gmg.ContainElement(gmg.HaveField("Kind", "Pilot")))
+				}).WithTimeout(30*time.Second).Should(gmg.Succeed(), "Pilot should be served")
+
+				_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "Pilot"}, "v1")
+				g.Expect(err).To(beNoMatchError())
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
+
+				// 	#2: GET https://host/apis/crew.example.com/v1
+				clk.Step(apiutil.MissBackoffInitial)
+				mapping, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "crew.example.com", Kind: "Pilot"}, "v1")
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+				g.Expect(mapping.GroupVersionKind.Kind).To(gmg.Equal("Pilot"))
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(2))
+			})
+
 			t.Run("LazyRESTMapper should return an error if the version doesn't exist", func(t *testing.T) {
 				g := gmg.NewWithT(t)
 
@@ -630,6 +711,7 @@ func TestLazyRestMapperProvider(t *testing.T) {
 
 				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
 				g.Expect(err).NotTo(gmg.HaveOccurred())
+				apiutil.SetMissBackoffClock(lazyRestMapper, testingclock.NewFakeClock(time.Now()))
 
 				s := scheme.Scheme
 				err = apiextensionsv1.AddToScheme(s)
@@ -729,10 +811,10 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				crt.Reset()
 
 				// Now we request v1alpha1 again and it should return an error since the cache was invalidated.
-				// 	#1: GET https://host/apis/inventory.example.com/v1alpha1
+				// The previous lookup found that v1alpha1 isn't served, so it isn't fetched again during its backoff.
 				_, err = lazyRestMapper.RESTMapping(schema.GroupKind{Group: group, Kind: kind}, "v1alpha1")
 				g.Expect(err).To(beNoMatchError())
-				g.Expect(crt.GetRequestCount()).To(gmg.Equal(1))
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(0))
 
 				// Verify that when requesting the mapping without a version, it doesn't error
 				// and it returns v1.

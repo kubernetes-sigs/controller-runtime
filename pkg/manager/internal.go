@@ -116,7 +116,12 @@ type controllerManager struct {
 	// LeaderElection.Run(...) function has returned and the shutdown can proceed.
 	leaderElectionStopped chan struct{}
 
-	// leaderElectionCancel is used to cancel the leader election. It is distinct from internalStopper,
+	// leaderElectionLost is closed when the leader election reports that we stopped leading.
+	// If the stop procedure is engaged (or already running) at that point, the graceful shutdown
+	// is skipped and the shutdown context is cancelled immediately.
+	leaderElectionLost chan struct{}
+
+	// leaderElectionCancel is used to cancel the leader election. It is distinct from internalCancel,
 	// because for safety reasons we need to os.Exit() when we lose the leader election, meaning that
 	// it must be deferred until after gracefulShutdown is done.
 	leaderElectionCancel context.CancelFunc
@@ -154,11 +159,6 @@ type controllerManager struct {
 	// onStoppedLeading is callled when the leader election lease is lost.
 	// It can be overridden for tests.
 	onStoppedLeading func()
-
-	// shutdownCtx is the context that can be used during shutdown. It will be cancelled
-	// after the gracefulShutdownTimeout ended. It must not be accessed before internalStop
-	// is closed because it will be nil.
-	shutdownCtx context.Context
 
 	internalCtx    context.Context
 	internalCancel context.CancelFunc
@@ -505,18 +505,31 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 		return errors.New("stop procedure already engaged")
 	}
 
-	// Populate the shutdown context, this operation MUST be done before
-	// closing the internalProceduresStop channel.
+	// Create the shutdown context, which bounds how long we wait for the runnables to stop.
+	// It is cancelled once all runnables have stopped, the gracefulShutdownTimeout expires,
+	// or the leader election is lost.
 	//
 	// The shutdown context immediately expires if the gracefulShutdownTimeout is not set.
+	var shutdownCtx context.Context
 	var shutdownCancel context.CancelFunc
 	if cm.gracefulShutdownTimeout < 0 {
 		// We want to wait forever for the runnables to stop.
-		cm.shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
+		shutdownCtx, shutdownCancel = context.WithCancel(context.Background())
 	} else {
-		cm.shutdownCtx, shutdownCancel = context.WithTimeout(context.Background(), cm.gracefulShutdownTimeout)
+		shutdownCtx, shutdownCancel = context.WithTimeout(context.Background(), cm.gracefulShutdownTimeout)
 	}
 	defer shutdownCancel()
+
+	// Skip the graceful shutdown as soon as the leader election is lost, regardless of whether
+	// that happened before or while the stop procedure is running.
+	go func() {
+		select {
+		case <-shutdownCtx.Done():
+		case <-cm.leaderElectionLost:
+			cm.logger.Info("Leader election lost, skipping graceful shutdown")
+			shutdownCancel()
+		}
+	}()
 
 	// Start draining the errors before acquiring the lock to make sure we don't deadlock
 	// if something that has the lock is blocked on trying to write into the unbuffered
@@ -545,7 +558,7 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 	// We want to close this after the other runnables stop, because we don't
 	// want things like leader election to try and emit events on a closed
 	// channel
-	defer cm.recorderProvider.Stop(cm.shutdownCtx)
+	defer cm.recorderProvider.Stop(shutdownCtx)
 	defer func() {
 		// Cancel leader election only after we waited. It will os.Exit() the app for safety.
 		if cm.resourceLock != nil {
@@ -568,39 +581,39 @@ func (cm *controllerManager) engageStopProcedure(stopComplete <-chan struct{}) e
 			// shutdown sequence to block indefinitely as it will wait for the runnable that is
 			// holding the lock to finish.
 			cm.logger.Info("Stopping and waiting for warmup runnables")
-			cm.runnables.Warmup.StopAndWait(cm.shutdownCtx)
+			cm.runnables.Warmup.StopAndWait(shutdownCtx)
 		}()
 
 		// First stop the non-leader election runnables.
 		cm.logger.Info("Stopping and waiting for non leader election runnables")
-		cm.runnables.Others.StopAndWait(cm.shutdownCtx)
+		cm.runnables.Others.StopAndWait(shutdownCtx)
 
 		// Stop all the leader election runnables, which includes reconcilers.
 		cm.logger.Info("Stopping and waiting for leader election runnables")
 		// Prevent leader election when shutting down a non-elected manager
 		cm.runnables.LeaderElection.startOnce.Do(func() {})
-		cm.runnables.LeaderElection.StopAndWait(cm.shutdownCtx)
+		cm.runnables.LeaderElection.StopAndWait(shutdownCtx)
 
 		// Stop the caches before the leader election runnables, this is an important
 		// step to make sure that we don't race with the reconcilers by receiving more events
 		// from the API servers and enqueueing them.
 		cm.logger.Info("Stopping and waiting for caches")
-		cm.runnables.Caches.StopAndWait(cm.shutdownCtx)
+		cm.runnables.Caches.StopAndWait(shutdownCtx)
 
 		// Webhooks and internal HTTP servers should come last, as they might be still serving some requests.
 		cm.logger.Info("Stopping and waiting for webhooks")
-		cm.runnables.Webhooks.StopAndWait(cm.shutdownCtx)
+		cm.runnables.Webhooks.StopAndWait(shutdownCtx)
 
 		cm.logger.Info("Stopping and waiting for HTTP servers")
-		cm.runnables.HTTPServers.StopAndWait(cm.shutdownCtx)
+		cm.runnables.HTTPServers.StopAndWait(shutdownCtx)
 
 		// Proceed to close the manager and overall shutdown context.
 		cm.logger.Info("Wait completed, proceeding to shutdown the manager")
 		shutdownCancel()
 	}()
 
-	<-cm.shutdownCtx.Done()
-	if err := cm.shutdownCtx.Err(); err != nil && !errors.Is(err, context.Canceled) {
+	<-shutdownCtx.Done()
+	if err := shutdownCtx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			if cm.gracefulShutdownTimeout > 0 {
 				return fmt.Errorf("failed waiting for all runnables to end within grace period of %s: %w", cm.gracefulShutdownTimeout, err)
@@ -633,8 +646,11 @@ func (cm *controllerManager) initLeaderElector() (*leaderelection.LeaderElector,
 					cm.onStoppedLeading()
 				}
 				// Make sure graceful shutdown is skipped if we lost the leader lock without
-				// intending to.
-				cm.gracefulShutdownTimeout = time.Duration(0)
+				// intending to. This also applies if a graceful shutdown is already in progress.
+				// NOTE: This must be closed at most once. That holds because we call Run only once
+				// and don't set LeaderElectionConfig.Recovery: with Recovery, client-go can call
+				// OnStoppedLeading multiple times per Run, which would panic here on a double close.
+				close(cm.leaderElectionLost)
 				// Most implementations of leader election log.Fatal() here.
 				// Since Start is wrapped in log.Fatal when called, we can just return
 				// an error here which will cause the program to exit.

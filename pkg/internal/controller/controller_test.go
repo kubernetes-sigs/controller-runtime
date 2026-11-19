@@ -513,6 +513,35 @@ var _ = Describe("controller", func() {
 			<-processed
 		})
 
+		It("should not start reconciling queued requests after the context is cancelled", func(specCtx SpecContext) {
+			for _, name := range []string{"a", "b", "c"} {
+				queue.Add(reconcile.Request{Namespace: "foo", Name: name})
+			}
+
+			firstStarted := make(chan struct{})
+			var started atomic.Int32
+			ctrl.Do = reconcile.Func(func(ctx context.Context, _ reconcile.Request) (reconcile.Result, error) {
+				if started.Add(1) == 1 {
+					close(firstStarted)
+					<-ctx.Done()
+				}
+				return reconcile.Result{}, nil
+			})
+
+			ctx, cancel := context.WithCancel(specCtx)
+			defer cancel()
+			startDone := make(chan error, 1)
+			go func() {
+				defer GinkgoRecover()
+				startDone <- ctrl.Start(ctx)
+			}()
+
+			Eventually(firstStarted).Should(BeClosed())
+			cancel()
+			Eventually(startDone).Should(Receive(Succeed()))
+			Expect(started.Load()).To(Equal(int32(1)))
+		})
+
 		It("should error when channel source is not specified", func(ctx SpecContext) {
 			ctrl.CacheSyncTimeout = 10 * time.Second
 

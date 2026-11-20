@@ -570,7 +570,7 @@ type SubResourceGetOptions struct {
 	Raw *metav1.GetOptions
 }
 
-// ApplyToSubResourceGet updates the configuaration to the given get options.
+// ApplyToSubResourceGet updates the configuration to the given get options.
 func (getOpt *SubResourceGetOptions) ApplyToSubResourceGet(o *SubResourceGetOptions) {
 	if getOpt.Raw != nil {
 		o.Raw = getOpt.Raw

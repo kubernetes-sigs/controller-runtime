@@ -544,14 +544,14 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(kinds).ToNot(gmg.BeEmpty())
 				g.Expect(kinds[0].Version).ToNot(gmg.BeEmpty())
 
-				resorce, err := lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Resource: "priorityclasses"})
+				resource, err := lazyRestMapper.ResourceFor(schema.GroupVersionResource{Group: "scheduling.k8s.io", Resource: "priorityclasses"})
 				g.Expect(err).NotTo(gmg.HaveOccurred())
-				g.Expect(resorce.Version).ToNot(gmg.BeEmpty())
+				g.Expect(resource.Version).ToNot(gmg.BeEmpty())
 
-				resorces, err := lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Resource: "poddisruptionbudgets"})
+				resources, err := lazyRestMapper.ResourcesFor(schema.GroupVersionResource{Group: "policy", Resource: "poddisruptionbudgets"})
 				g.Expect(err).NotTo(gmg.HaveOccurred())
 				g.Expect(kinds).ToNot(gmg.BeEmpty())
-				g.Expect(resorces[0].Version).ToNot(gmg.BeEmpty())
+				g.Expect(resources[0].Version).ToNot(gmg.BeEmpty())
 			})
 
 			t.Run("LazyRESTMapper can fetch CRDs if they were created at runtime", func(t *testing.T) {

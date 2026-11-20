@@ -23,7 +23,6 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	eventsv1client "k8s.io/client-go/kubernetes/typed/events/v1"
@@ -65,7 +64,7 @@ type Cluster interface {
 	GetFieldIndexer() client.FieldIndexer
 
 	// GetRESTMapper returns a RESTMapper
-	GetRESTMapper() meta.RESTMapper
+	GetRESTMapper() apiutil.DynamicRESTMapper
 
 	// GetAPIReader returns a reader that will be configured to use the API server directly.
 	// This should be used sparingly and only when the cached client does not fit your
@@ -84,7 +83,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
-	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
+	MapperProvider func(c *rest.Config, httpClient *http.Client) (apiutil.DynamicRESTMapper, error)
 
 	// Logger is the logger that should be used by this Cluster.
 	// If none is set, it defaults to log.Log global logger.

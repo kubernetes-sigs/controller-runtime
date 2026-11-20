@@ -28,13 +28,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -268,7 +268,7 @@ func (cm *controllerManager) GetEventRecorder(name string) recorder.EventRecorde
 	return cm.cluster.GetEventRecorder(name)
 }
 
-func (cm *controllerManager) GetRESTMapper() meta.RESTMapper {
+func (cm *controllerManager) GetRESTMapper() apiutil.DynamicRESTMapper {
 	return cm.cluster.GetRESTMapper()
 }
 

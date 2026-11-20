@@ -94,6 +94,7 @@ func TestApiMachinery(t *testing.T) {
 
 				// Query the scope of a GVK that was registered at initialization.
 				scope, err := apiutil.IsGVKNamespaced(
+					t.Context(),
 					schema.GroupVersionKind(initialGvk),
 					lazyRestMapper,
 				)
@@ -120,6 +121,7 @@ func TestApiMachinery(t *testing.T) {
 
 					// Run a valid query to initialize cache.
 					scope, err := apiutil.IsGVKNamespaced(
+						t.Context(),
 						schema.GroupVersionKind(initialGvk),
 						lazyRestMapper,
 					)
@@ -149,6 +151,7 @@ func TestApiMachinery(t *testing.T) {
 
 					// Query the scope of the GVK registered at runtime.
 					scope, err = apiutil.IsGVKNamespaced(
+						t.Context(),
 						schema.GroupVersionKind(runtimeGvk.gvk),
 						lazyRestMapper,
 					)

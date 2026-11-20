@@ -19,9 +19,9 @@ package interceptor
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -442,7 +442,7 @@ func (d dummyClient) Scheme() *runtime.Scheme {
 	return nil
 }
 
-func (d dummyClient) RESTMapper() meta.RESTMapper {
+func (d dummyClient) RESTMapper() apiutil.DynamicRESTMapper {
 	return nil
 }
 
@@ -450,7 +450,7 @@ func (d dummyClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersio
 	return schema.GroupVersionKind{}, nil
 }
 
-func (d dummyClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+func (d dummyClient) IsObjectNamespaced(ctx context.Context, obj runtime.Object) (bool, error) {
 	return false, nil
 }
 

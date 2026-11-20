@@ -26,9 +26,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/goleak"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
@@ -48,7 +48,9 @@ var _ = Describe("cluster.Cluster", func() {
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
 			c, err := New(cfg, func(o *Options) {
-				o.MapperProvider = func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) { return nil, expected }
+				o.MapperProvider = func(c *rest.Config, httpClient *http.Client) (apiutil.DynamicRESTMapper, error) {
+					return nil, expected
+				}
 			})
 			Expect(c).To(BeNil())
 			Expect(err).To(Equal(expected))

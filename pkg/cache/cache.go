@@ -591,7 +591,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 			byObject.Namespaces[namespace] = config
 		}
 
-		// Only default ByObject iself if it isn't namespaced or has no namespaces configured, as only
+		// Only default ByObject itself if it isn't namespaced or has no namespaces configured, as only
 		// then any of this will be honored.
 		if !isNamespaced || len(byObject.Namespaces) == 0 {
 			defaultedConfig := defaultConfig(byObjectToConfig(byObject), optionDefaultsToConfig(&opts))

@@ -31,7 +31,7 @@ import (
 var (
 	crdPaths              = flag.StringSlice("crd-paths", nil, "paths to files or directories containing CRDs to install on start")
 	webhookPaths          = flag.StringSlice("webhook-paths", nil, "paths to files or directories containing webhook configurations to install on start")
-	attachControlPlaneOut = flag.Bool("debug-env", false, "attach to test env (apiserver & etcd) output -- just a convinience flag to force KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true")
+	attachControlPlaneOut = flag.Bool("debug-env", false, "attach to test env (apiserver & etcd) output -- just a convenience flag to force KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true")
 )
 
 // have a separate function so we can return an exit code w/o skipping defers

@@ -2,9 +2,6 @@ name: PR dependabot go modules fix
 
 # This action runs on PRs opened by dependabot and updates modules.
 on:
-  pull_request:
-    branches:
-      - dependabot/**
   push:
     branches:
       - dependabot/**
@@ -17,6 +14,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    # limit who can run this job to dependabot only (this job should not run accidentally in forks with branches matching the dependabot/** filter above).
+    if: github.actor == 'dependabot[bot]'
     steps:
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag=v7.0.1
@@ -24,7 +23,7 @@ jobs:
       id: vars
       run: echo "go_version=$(make go-version)" >> $GITHUB_OUTPUT
     - name: Set up Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # tag=v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # tag=v7.1.0
       with:
         go-version: ${{ steps.vars.outputs.go_version }}
     - name: Update all modules

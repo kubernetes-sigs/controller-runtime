@@ -271,25 +271,34 @@ func (c *consistentClient) List(ctx context.Context, list ObjectList, opts ...Li
 }
 
 func (c *consistentClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&CreateOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&CreateOptions{}).ApplyOptions(opts)
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Create(ctx, obj, opts...)
 	})
 }
 
 func (c *consistentClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&UpdateOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&UpdateOptions{}).ApplyOptions(opts)
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Update(ctx, obj, opts...)
 	})
 }
 
 func (c *consistentClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&PatchOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&PatchOptions{}).ApplyOptions(opts)
+	// Raw.DryRun is used when DryRun is unset, see AsPatchOptions.
+	dryRun := o.DryRun
+	if dryRun == nil && o.Raw != nil {
+		dryRun = o.Raw.DryRun
+	}
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(dryRun) > 0, func() error {
 		return c.upstream.Patch(ctx, obj, patch, opts...)
 	})
 }
 
 func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...ApplyOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&ApplyOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&ApplyOptions{}).ApplyOptions(opts)
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Apply(ctx, obj, opts...)
 	})
 }
@@ -403,7 +412,7 @@ func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, erro
 }
 
 func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
-	if (&DeleteOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency {
+	if o := (&DeleteOptions{}).ApplyOptions(opts); o.DisableReadYourWritesConsistency || len(o.DryRun) > 0 {
 		return c.upstream.Delete(ctx, obj, opts...)
 	}
 
@@ -521,19 +530,27 @@ func (c *consistentSubResourceClient) Create(ctx context.Context, obj, subResour
 }
 
 func (c *consistentSubResourceClient) Update(ctx context.Context, obj Object, opts ...SubResourceUpdateOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&SubResourceUpdateOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&SubResourceUpdateOptions{}).ApplyOptions(opts)
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Update(ctx, obj, opts...)
 	})
 }
 
 func (c *consistentSubResourceClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...SubResourcePatchOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&SubResourcePatchOptions{}).ApplyOptions(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&SubResourcePatchOptions{}).ApplyOptions(opts)
+	// Raw.DryRun is used when DryRun is unset, see AsPatchOptions.
+	dryRun := o.DryRun
+	if dryRun == nil && o.Raw != nil {
+		dryRun = o.Raw.DryRun
+	}
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(dryRun) > 0, func() error {
 		return c.upstream.Patch(ctx, obj, patch, opts...)
 	})
 }
 
 func (c *consistentSubResourceClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...SubResourceApplyOption) error {
-	return c.writeAndRecordRV(ctx, obj, (&SubResourceApplyOptions{}).ApplyOpts(opts).DisableReadYourWritesConsistency, func() error {
+	o := (&SubResourceApplyOptions{}).ApplyOpts(opts)
+	return c.writeAndRecordRV(ctx, obj, o.DisableReadYourWritesConsistency || len(o.DryRun) > 0, func() error {
 		return c.upstream.Apply(ctx, obj, opts...)
 	})
 }

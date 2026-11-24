@@ -294,6 +294,6 @@ type MatchPaths []string
 // ApplyToEqualObjectMatcher applies this configuration to the given MatchOptions.
 func (i MatchPaths) ApplyToEqualObjectMatcher(opts *EqualObjectOptions) {
 	for _, p := range i {
-		opts.matchPaths = append(opts.ignorePaths, strings.Split(p, "."))
+		opts.matchPaths = append(opts.matchPaths, strings.Split(p, "."))
 	}
 }

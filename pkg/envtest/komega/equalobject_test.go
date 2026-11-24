@@ -126,6 +126,24 @@ func TestEqualObjectMatcher(t *testing.T) {
 			},
 		},
 		{
+			name: "fails if a non-last match path differs, with multiple match paths",
+			original: &appsv1.Deployment{
+				Name:      "test",
+				Namespace: "default",
+			},
+			modified: &appsv1.Deployment{
+				Name:      "somethingelse",
+				Namespace: "default",
+			},
+			want: false,
+			options: []EqualObjectOption{
+				MatchPaths{
+					"ObjectMeta.Name",
+					"ObjectMeta.Namespace",
+				},
+			},
+		},
+		{
 			name: "works with unstructured.Unstructured",
 			original: &unstructured.Unstructured{
 				Object: map[string]any{

@@ -38,7 +38,7 @@ var (
 )
 
 func init() {
-	Registry.MustRegister(leaderGauge)
+	Registry.MustRegister(leaderGauge, leaderSlowpathCounter)
 	leaderelection.SetProvider(leaderelectionMetricsProvider{})
 }
 

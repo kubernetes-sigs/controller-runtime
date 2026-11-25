@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	_ "github.com/onsi/ginkgo/v2"
 	gmg "github.com/onsi/gomega"
@@ -68,6 +69,21 @@ func (crt *countingRoundTripper) GetRequestCount() int {
 // Reset sets the counter to 0.
 func (crt *countingRoundTripper) Reset() {
 	crt.requestCount = 0
+}
+
+// blockingRoundTripper holds every request until release is closed, and closes
+// blocked when the first one arrives.
+type blockingRoundTripper struct {
+	roundTripper http.RoundTripper
+	once         sync.Once
+	blocked      chan struct{}
+	release      chan struct{}
+}
+
+func (brt *blockingRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	brt.once.Do(func() { close(brt.blocked) })
+	<-brt.release
+	return brt.roundTripper.RoundTrip(r)
 }
 
 func setupEnvtest(t *testing.T, disableAggregatedDiscovery bool) *rest.Config {
@@ -474,6 +490,84 @@ func TestLazyRestMapperProvider(t *testing.T) {
 				g.Expect(err).To(gmg.HaveOccurred())
 				g.Expect(meta.IsNoMatchError(err)).To(gmg.BeTrue())
 				g.Expect(crt.GetRequestCount()).To(gmg.Equal(5))
+			})
+
+			t.Run("LazyRESTMapper should serve cached kinds while a lookup waits for the API server", func(t *testing.T) {
+				g := gmg.NewWithT(t)
+
+				httpClient, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				deployment := schema.GroupKind{Group: "apps", Kind: "Deployment"}
+				_, err = lazyRestMapper.RESTMapping(deployment, "v1")
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				// A kind apps/v1 doesn't serve makes the mapper fetch apps/v1 again.
+				brt := &blockingRoundTripper{roundTripper: httpClient.Transport, blocked: make(chan struct{}), release: make(chan struct{})}
+				httpClient.Transport = brt
+				released := sync.OnceFunc(func() { close(brt.release) })
+				defer released()
+
+				missing := make(chan error, 1)
+				go func() {
+					_, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: "INVALID"}, "v1")
+					missing <- err
+				}()
+				<-brt.blocked
+
+				cached := make(chan error, 1)
+				go func() {
+					_, err := lazyRestMapper.RESTMapping(deployment, "v1")
+					cached <- err
+				}()
+				g.Eventually(cached).WithTimeout(5 * time.Second).Should(gmg.Receive(gmg.BeNil()))
+
+				released()
+				g.Eventually(missing).WithTimeout(10 * time.Second).Should(gmg.Receive(gmg.Satisfy(meta.IsNoMatchError)))
+			})
+
+			t.Run("LazyRESTMapper should not fetch a group again while a lookup is loading it", func(t *testing.T) {
+				g := gmg.NewWithT(t)
+
+				httpClient, err := rest.HTTPClientFor(restCfg)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				crt := newCountingRoundTripper(httpClient.Transport)
+				brt := &blockingRoundTripper{roundTripper: crt, blocked: make(chan struct{}), release: make(chan struct{})}
+				httpClient.Transport = brt
+				released := sync.OnceFunc(func() { close(brt.release) })
+				defer released()
+
+				lazyRestMapper, err := apiutil.NewDynamicRESTMapper(restCfg, httpClient)
+				g.Expect(err).NotTo(gmg.HaveOccurred())
+
+				lookup := func(kind string) <-chan error {
+					errs := make(chan error, 1)
+					go func() {
+						_, err := lazyRestMapper.RESTMapping(schema.GroupKind{Group: "apps", Kind: kind}, "v1")
+						errs <- err
+					}()
+					return errs
+				}
+
+				// The informers of a starting manager look up their kinds at the same
+				// time, so most of them miss while the first lookup loads the group.
+				deployment := lookup("Deployment")
+				<-brt.blocked
+				statefulSet := lookup("StatefulSet")
+				g.Consistently(statefulSet).WithTimeout(200 * time.Millisecond).ShouldNot(gmg.Receive())
+
+				released()
+				g.Eventually(deployment).WithTimeout(10 * time.Second).Should(gmg.Receive(gmg.BeNil()))
+				g.Eventually(statefulSet).WithTimeout(10 * time.Second).Should(gmg.Receive(gmg.BeNil()))
+				expectedAPIRequestCount := 3
+				if aggregatedDiscovery {
+					expectedAPIRequestCount = 2
+				}
+				g.Expect(crt.GetRequestCount()).To(gmg.Equal(expectedAPIRequestCount))
 			})
 
 			t.Run("LazyRESTMapper should return an error if the version doesn't exist", func(t *testing.T) {

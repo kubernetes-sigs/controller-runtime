@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -42,18 +43,23 @@ func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (meta.RESTM
 		return nil, err
 	}
 
-	return &mapper{
-		mapper:      restmapper.NewDiscoveryRESTMapper([]*restmapper.APIGroupResources{}),
+	m := &mapper{
 		client:      client,
 		knownGroups: map[string]*restmapper.APIGroupResources{},
 		apiGroups:   map[string]*metav1.APIGroup{},
-	}, nil
+	}
+	m.setMapper(restmapper.NewDiscoveryRESTMapper([]*restmapper.APIGroupResources{}))
+
+	return m, nil
 }
 
 // mapper is a RESTMapper that will lazily query the provided
 // client for discovery information to do REST mappings.
 type mapper struct {
-	mapper      meta.RESTMapper
+	// mapper is replaced on every reload. Lookups read it with loadMapper
+	// first, so they don't wait for a reload that holds mu while it sends
+	// discovery requests.
+	mapper      atomic.Pointer[meta.RESTMapper]
 	client      discovery.AggregatedDiscoveryInterface
 	knownGroups map[string]*restmapper.APIGroupResources
 	apiGroups   map[string]*metav1.APIGroup
@@ -61,13 +67,16 @@ type mapper struct {
 	initialDiscoveryDone bool
 
 	// mutex to provide thread-safe mapper reloading.
-	// It protects all fields in the mapper as well as methods
+	// It protects all other fields in the mapper as well as methods
 	// that have the `Locked` suffix.
 	mu sync.RWMutex
 }
 
 // KindFor implements Mapper.KindFor.
 func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	if res, err := m.loadMapper().KindFor(resource); !meta.IsNoMatchError(err) {
+		return res, err
+	}
 	res, err := m.getMapper().KindFor(resource)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
@@ -81,6 +90,9 @@ func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVers
 
 // KindsFor implements Mapper.KindsFor.
 func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	if res, err := m.loadMapper().KindsFor(resource); !meta.IsNoMatchError(err) {
+		return res, err
+	}
 	res, err := m.getMapper().KindsFor(resource)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
@@ -94,6 +106,9 @@ func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupV
 
 // ResourceFor implements Mapper.ResourceFor.
 func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	if res, err := m.loadMapper().ResourceFor(input); !meta.IsNoMatchError(err) {
+		return res, err
+	}
 	res, err := m.getMapper().ResourceFor(input)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
@@ -107,6 +122,9 @@ func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVer
 
 // ResourcesFor implements Mapper.ResourcesFor.
 func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	if res, err := m.loadMapper().ResourcesFor(input); !meta.IsNoMatchError(err) {
+		return res, err
+	}
 	res, err := m.getMapper().ResourcesFor(input)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
@@ -120,6 +138,9 @@ func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.Group
 
 // RESTMapping implements Mapper.RESTMapping.
 func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+	if res, err := m.loadMapper().RESTMapping(gk, versions...); !meta.IsNoMatchError(err) {
+		return res, err
+	}
 	res, err := m.getMapper().RESTMapping(gk, versions...)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
@@ -133,6 +154,9 @@ func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RES
 
 // RESTMappings implements Mapper.RESTMappings.
 func (m *mapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
+	if res, err := m.loadMapper().RESTMappings(gk, versions...); !meta.IsNoMatchError(err) {
+		return res, err
+	}
 	res, err := m.getMapper().RESTMappings(gk, versions...)
 	if meta.IsNoMatchError(err) {
 		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
@@ -149,10 +173,23 @@ func (m *mapper) ResourceSingularizer(resource string) (string, error) {
 	return m.getMapper().ResourceSingularizer(resource)
 }
 
+// loadMapper returns the current mapper without waiting for a running reload.
+func (m *mapper) loadMapper() meta.RESTMapper {
+	return *m.mapper.Load()
+}
+
+// getMapper returns the current mapper once no reload is running. A lookup
+// that misses calls it before it reloads, so lookups that miss while another
+// lookup is loading the same group use that result instead of fetching the
+// group again.
 func (m *mapper) getMapper() meta.RESTMapper {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.mapper
+	return m.loadMapper()
+}
+
+func (m *mapper) setMapper(restMapper meta.RESTMapper) {
+	m.mapper.Store(&restMapper)
 }
 
 // addKnownGroupAndReload reloads the mapper with updated information about missing API group.
@@ -269,7 +306,7 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 		updatedGroupResources = append(updatedGroupResources, agr)
 	}
 
-	m.mapper = restmapper.NewDiscoveryRESTMapper(updatedGroupResources)
+	m.setMapper(restmapper.NewDiscoveryRESTMapper(updatedGroupResources))
 }
 
 // findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked tries to find the passed apiGroup.

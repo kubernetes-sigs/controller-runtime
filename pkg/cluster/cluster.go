@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/internal/legacyrestmapper"
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 	intrec "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
@@ -65,7 +66,7 @@ type Cluster interface {
 	GetFieldIndexer() client.FieldIndexer
 
 	// GetRESTMapper returns a RESTMapper
-	GetRESTMapper() meta.RESTMapper
+	GetRESTMapper() apiutil.RESTMapper
 
 	// GetAPIReader returns a reader that will be configured to use the API server directly.
 	// This should be used sparingly and only when the cached client does not fit your
@@ -84,7 +85,7 @@ type Options struct {
 	Scheme *runtime.Scheme
 
 	// MapperProvider provides the rest mapper used to map go types to Kubernetes APIs
-	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapper, error)
+	MapperProvider func(c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error)
 
 	// Logger is the logger that should be used by this Cluster.
 	// If none is set, it defaults to log.Log global logger.
@@ -167,11 +168,12 @@ func New(config *rest.Config, opts ...Option) (Cluster, error) {
 	}
 
 	// Create the mapper provider
-	mapper, err := options.MapperProvider(config, options.HTTPClient)
+	restMapper, err := options.MapperProvider(config, options.HTTPClient)
 	if err != nil {
 		options.Logger.Error(err, "Failed to get API Group-Resources")
 		return nil, err
 	}
+	mapper := legacyrestmapper.Wrap(restMapper)
 
 	// Create the cache for the cached read client and registering informers
 	cacheOpts := options.Cache
@@ -265,7 +267,9 @@ func setOptionsDefaults(options Options, config *rest.Config) (Options, error) {
 	}
 
 	if options.MapperProvider == nil {
-		options.MapperProvider = apiutil.NewDynamicRESTMapper
+		options.MapperProvider = func(c *rest.Config, httpClient *http.Client) (meta.RESTMapperWithContext, error) {
+			return apiutil.NewDynamicRESTMapper(c, httpClient)
+		}
 	}
 
 	// Allow users to define how to create a new client

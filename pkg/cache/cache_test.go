@@ -844,7 +844,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 
 					By("verifying that an error is returned")
 					Expect(err).To(HaveOccurred())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 
 				It("should set the Limit option and limit number of objects to Limit when List is called", func(ctx SpecContext) {
@@ -2119,7 +2119,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 
 				It("should allow getting an informer by group/version/kind to be cancelled", func(specCtx SpecContext) {
@@ -2132,7 +2132,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformerForKind(ctx, gvk)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 
 				It("should be able not to change indexer values after indexing cluster-scope objects", func(ctx SpecContext) {
@@ -2382,7 +2382,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 			})
 			Context("with metadata-only objects", func() {
@@ -2520,7 +2520,7 @@ func CacheTest(createCacheFunc func(config *rest.Config, opts cache.Options) (ca
 					sii, err := informerCache.GetInformer(ctx, pod)
 					Expect(err).To(HaveOccurred())
 					Expect(sii).To(BeNil())
-					Expect(apierrors.IsTimeout(err)).To(BeTrue())
+					Expect(isCancelledOrTimeout(err)).To(BeTrue(), "expected a timeout or context.Canceled error, got: %v", err)
 				})
 			})
 		})
@@ -2723,6 +2723,14 @@ func isPodDisableDeepCopy(opts cache.Options) bool {
 	return false
 }
 
+// isCancelledOrTimeout returns true if err is the result of a cancelled context.
+// If the RESTMapper has to run discovery to create the informer, the cancellation surfaces
+// as a context.Canceled error. Otherwise the cache returns a timeout error while waiting for
+// the informer to sync.
+func isCancelledOrTimeout(err error) bool {
+	return errors.Is(err, context.Canceled) || apierrors.IsTimeout(err)
+}
+
 func cancelledCtx(ctx context.Context) context.Context {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
@@ -2730,10 +2738,10 @@ func cancelledCtx(ctx context.Context) context.Context {
 }
 
 type fakeRESTMapper struct {
-	meta.RESTMapper
+	meta.RESTMapperWithContext
 }
 
-func (f *fakeRESTMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+func (f *fakeRESTMapper) RESTMappingWithContext(_ context.Context, gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
 	return &meta.RESTMapping{Scope: meta.RESTScopeNamespace}, nil
 }
 

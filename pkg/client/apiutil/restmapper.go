@@ -17,6 +17,7 @@ limitations under the License.
 package apiutil
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -28,11 +29,21 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+
+	"sigs.k8s.io/controller-runtime/pkg/internal/legacyrestmapper"
 )
+
+// RESTMapper is a RESTMapper that implements both the context-aware
+// meta.RESTMapperWithContext and the legacy meta.RESTMapper interface.
+//
+// The methods of meta.RESTMapperWithContext should be preferred because they support
+// cancellation and contextual logging. The legacy methods are copied from meta.RESTMapper
+// and use context.Background().
+type RESTMapper = legacyrestmapper.RESTMapper
 
 // NewDynamicRESTMapper returns a dynamic RESTMapper for cfg. The dynamic
 // RESTMapper dynamically discovers resource types at runtime.
-func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (meta.RESTMapper, error) {
+func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (RESTMapper, error) {
 	if httpClient == nil {
 		return nil, fmt.Errorf("httpClient must not be nil, consider using rest.HTTPClientFor(c) to create a client")
 	}
@@ -42,19 +53,19 @@ func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (meta.RESTM
 		return nil, err
 	}
 
-	return &mapper{
-		mapper:      restmapper.NewDiscoveryRESTMapper([]*restmapper.APIGroupResources{}),
+	return legacyrestmapper.Wrap(&mapper{
+		mapper:      restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{}),
 		client:      client,
 		knownGroups: map[string]*restmapper.APIGroupResources{},
 		apiGroups:   map[string]*metav1.APIGroup{},
-	}, nil
+	}), nil
 }
 
-// mapper is a RESTMapper that will lazily query the provided
+// mapper is a meta.RESTMapperWithContext that will lazily query the provided
 // client for discovery information to do REST mappings.
 type mapper struct {
-	mapper      meta.RESTMapper
-	client      discovery.AggregatedDiscoveryInterface
+	mapper      meta.RESTMapperWithContext
+	client      discovery.AggregatedDiscoveryInterfaceWithContext
 	knownGroups map[string]*restmapper.APIGroupResources
 	apiGroups   map[string]*metav1.APIGroup
 
@@ -66,90 +77,90 @@ type mapper struct {
 	mu sync.RWMutex
 }
 
-// KindFor implements Mapper.KindFor.
-func (m *mapper) KindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error) {
-	res, err := m.getMapper().KindFor(resource)
+// KindForWithContext implements meta.RESTMapperWithContext.KindForWithContext.
+func (m *mapper) KindForWithContext(ctx context.Context, resource schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	res, err := m.getMapper().KindForWithContext(ctx, resource)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
+		if err := m.addKnownGroupAndReload(ctx, resource.Group, resource.Version); err != nil {
 			return schema.GroupVersionKind{}, err
 		}
-		res, err = m.getMapper().KindFor(resource)
+		res, err = m.getMapper().KindForWithContext(ctx, resource)
 	}
 
 	return res, err
 }
 
-// KindsFor implements Mapper.KindsFor.
-func (m *mapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
-	res, err := m.getMapper().KindsFor(resource)
+// KindsForWithContext implements meta.RESTMapperWithContext.KindsForWithContext.
+func (m *mapper) KindsForWithContext(ctx context.Context, resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	res, err := m.getMapper().KindsForWithContext(ctx, resource)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(resource.Group, resource.Version); err != nil {
+		if err := m.addKnownGroupAndReload(ctx, resource.Group, resource.Version); err != nil {
 			return nil, err
 		}
-		res, err = m.getMapper().KindsFor(resource)
+		res, err = m.getMapper().KindsForWithContext(ctx, resource)
 	}
 
 	return res, err
 }
 
-// ResourceFor implements Mapper.ResourceFor.
-func (m *mapper) ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
-	res, err := m.getMapper().ResourceFor(input)
+// ResourceForWithContext implements meta.RESTMapperWithContext.ResourceForWithContext.
+func (m *mapper) ResourceForWithContext(ctx context.Context, input schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	res, err := m.getMapper().ResourceForWithContext(ctx, input)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
+		if err := m.addKnownGroupAndReload(ctx, input.Group, input.Version); err != nil {
 			return schema.GroupVersionResource{}, err
 		}
-		res, err = m.getMapper().ResourceFor(input)
+		res, err = m.getMapper().ResourceForWithContext(ctx, input)
 	}
 
 	return res, err
 }
 
-// ResourcesFor implements Mapper.ResourcesFor.
-func (m *mapper) ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
-	res, err := m.getMapper().ResourcesFor(input)
+// ResourcesForWithContext implements meta.RESTMapperWithContext.ResourcesForWithContext.
+func (m *mapper) ResourcesForWithContext(ctx context.Context, input schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	res, err := m.getMapper().ResourcesForWithContext(ctx, input)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(input.Group, input.Version); err != nil {
+		if err := m.addKnownGroupAndReload(ctx, input.Group, input.Version); err != nil {
 			return nil, err
 		}
-		res, err = m.getMapper().ResourcesFor(input)
+		res, err = m.getMapper().ResourcesForWithContext(ctx, input)
 	}
 
 	return res, err
 }
 
-// RESTMapping implements Mapper.RESTMapping.
-func (m *mapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
-	res, err := m.getMapper().RESTMapping(gk, versions...)
+// RESTMappingWithContext implements meta.RESTMapperWithContext.RESTMappingWithContext.
+func (m *mapper) RESTMappingWithContext(ctx context.Context, gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+	res, err := m.getMapper().RESTMappingWithContext(ctx, gk, versions...)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
+		if err := m.addKnownGroupAndReload(ctx, gk.Group, versions...); err != nil {
 			return nil, err
 		}
-		res, err = m.getMapper().RESTMapping(gk, versions...)
+		res, err = m.getMapper().RESTMappingWithContext(ctx, gk, versions...)
 	}
 
 	return res, err
 }
 
-// RESTMappings implements Mapper.RESTMappings.
-func (m *mapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
-	res, err := m.getMapper().RESTMappings(gk, versions...)
+// RESTMappingsWithContext implements meta.RESTMapperWithContext.RESTMappingsWithContext.
+func (m *mapper) RESTMappingsWithContext(ctx context.Context, gk schema.GroupKind, versions ...string) ([]*meta.RESTMapping, error) {
+	res, err := m.getMapper().RESTMappingsWithContext(ctx, gk, versions...)
 	if meta.IsNoMatchError(err) {
-		if err := m.addKnownGroupAndReload(gk.Group, versions...); err != nil {
+		if err := m.addKnownGroupAndReload(ctx, gk.Group, versions...); err != nil {
 			return nil, err
 		}
-		res, err = m.getMapper().RESTMappings(gk, versions...)
+		res, err = m.getMapper().RESTMappingsWithContext(ctx, gk, versions...)
 	}
 
 	return res, err
 }
 
-// ResourceSingularizer implements Mapper.ResourceSingularizer.
-func (m *mapper) ResourceSingularizer(resource string) (string, error) {
-	return m.getMapper().ResourceSingularizer(resource)
+// ResourceSingularizerWithContext implements meta.RESTMapperWithContext.ResourceSingularizerWithContext.
+func (m *mapper) ResourceSingularizerWithContext(ctx context.Context, resource string) (string, error) {
+	return m.getMapper().ResourceSingularizerWithContext(ctx, resource)
 }
 
-func (m *mapper) getMapper() meta.RESTMapper {
+func (m *mapper) getMapper() meta.RESTMapperWithContext {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.mapper
@@ -157,7 +168,7 @@ func (m *mapper) getMapper() meta.RESTMapper {
 
 // addKnownGroupAndReload reloads the mapper with updated information about missing API group.
 // versions can be specified for partial updates, for instance for v1beta1 version only.
-func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) error {
+func (m *mapper) addKnownGroupAndReload(ctx context.Context, groupName string, versions ...string) error {
 	// versions will here be [""] if the forwarded Version value of
 	// GroupVersionResource (in calling method) was not specified.
 	if len(versions) == 1 && versions[0] == "" {
@@ -173,7 +184,7 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 	// We always run this once, because if the server supports aggregated discovery, this will
 	// load everything with two api calls which we assume is overall cheaper.
 	if len(versions) == 0 || !m.initialDiscoveryDone {
-		apiGroup, didAggregatedDiscovery, err := m.findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName)
+		apiGroup, didAggregatedDiscovery, err := m.findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(ctx, groupName)
 		if err != nil {
 			return err
 		}
@@ -208,7 +219,7 @@ func (m *mapper) addKnownGroupAndReload(groupName string, versions ...string) er
 	// the m.apiGroups and m.knownGroups caches.
 	// If this happens, in the next call the group will be added back to apiGroups
 	// and only the existing versions will be loaded in knownGroups.
-	groupVersionResources, err := m.fetchGroupVersionResourcesLocked(groupName, versions...)
+	groupVersionResources, err := m.fetchGroupVersionResourcesLocked(ctx, groupName, versions...)
 	if err != nil {
 		return fmt.Errorf("failed to get API group resources: %w", err)
 	}
@@ -269,12 +280,12 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 		updatedGroupResources = append(updatedGroupResources, agr)
 	}
 
-	m.mapper = restmapper.NewDiscoveryRESTMapper(updatedGroupResources)
+	m.mapper = restmapper.NewDiscoveryRESTMapperWithContext(updatedGroupResources)
 }
 
 // findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked tries to find the passed apiGroup.
 // If the server supports aggregated discovery, it will always perform that.
-func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName string) (_ *metav1.APIGroup, didAggregatedDiscovery bool, _ error) {
+func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(ctx context.Context, groupName string) (_ *metav1.APIGroup, didAggregatedDiscovery bool, _ error) {
 	// Looking in the cache first
 	group, ok := m.apiGroups[groupName]
 	if ok {
@@ -282,7 +293,7 @@ func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName s
 	}
 
 	// Update the cache if nothing was found.
-	apiGroups, maybeResources, _, err := m.client.GroupsAndMaybeResources()
+	apiGroups, maybeResources, _, err := m.client.GroupsAndMaybeResourcesWithContext(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get server groups: %w", err)
 	}
@@ -308,14 +319,14 @@ func (m *mapper) findAPIGroupByNameAndMaybeAggregatedDiscoveryLocked(groupName s
 
 // fetchGroupVersionResourcesLocked fetches the resources for the specified group and its versions.
 // This method might modify the cache so it needs to be called under the lock.
-func (m *mapper) fetchGroupVersionResourcesLocked(groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, error) {
+func (m *mapper) fetchGroupVersionResourcesLocked(ctx context.Context, groupName string, versions ...string) (map[schema.GroupVersion]*metav1.APIResourceList, error) {
 	groupVersionResources := make(map[schema.GroupVersion]*metav1.APIResourceList)
 	failedGroups := make(map[schema.GroupVersion]error)
 
 	for _, version := range versions {
 		groupVersion := schema.GroupVersion{Group: groupName, Version: version}
 
-		apiResourceList, err := m.client.ServerResourcesForGroupVersion(groupVersion.String())
+		apiResourceList, err := m.client.ServerResourcesForGroupVersionWithContext(ctx, groupVersion.String())
 		if apierrors.IsNotFound(err) {
 			// If the version is not found, we remove the group from the cache
 			// so it gets refreshed on the next call.

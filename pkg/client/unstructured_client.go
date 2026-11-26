@@ -42,7 +42,7 @@ func (uc *unstructuredClient) Create(ctx context.Context, obj Object, opts ...Cr
 
 	gvk := u.GetObjectKind().GroupVersionKind()
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (uc *unstructuredClient) Update(ctx context.Context, obj Object, opts ...Up
 
 	gvk := u.GetObjectKind().GroupVersionKind()
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (uc *unstructuredClient) Update(ctx context.Context, obj Object, opts ...Up
 
 // Delete implements client.Client.
 func (uc *unstructuredClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (uc *unstructuredClient) DeleteAllOf(ctx context.Context, obj Object, opts 
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (uc *unstructuredClient) Patch(ctx context.Context, obj Object, patch Patch
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (uc *unstructuredClient) Apply(ctx context.Context, obj runtime.ApplyConfig
 	if !ok {
 		return fmt.Errorf("bug: unstructured client got an applyconfiguration that was not %T but %T", &unstructuredApplyConfiguration{}, obj)
 	}
-	o, err := uc.resources.getObjMeta(unstructuredApplyConfig.Unstructured)
+	o, err := uc.resources.getObjMeta(ctx, unstructuredApplyConfig.Unstructured)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (uc *unstructuredClient) Get(ctx context.Context, key ObjectKey, obj Object
 	getOpts := GetOptions{}
 	getOpts.ApplyOptions(opts)
 
-	r, err := uc.resources.getResource(obj)
+	r, err := uc.resources.getResource(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (uc *unstructuredClient) List(ctx context.Context, obj ObjectList, opts ...
 	gvk := u.GetObjectKind().GroupVersionKind()
 	gvk.Kind = strings.TrimSuffix(gvk.Kind, "List")
 
-	r, err := uc.resources.getResource(obj)
+	r, err := uc.resources.getResource(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func (uc *unstructuredClient) GetSubResource(ctx context.Context, obj, subResour
 		subResourceObj.SetName(obj.GetName())
 	}
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func (uc *unstructuredClient) CreateSubResource(ctx context.Context, obj, subRes
 		subResourceObj.SetName(obj.GetName())
 	}
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (uc *unstructuredClient) UpdateSubResource(ctx context.Context, obj Object,
 		return fmt.Errorf("unstructured client did not understand object: %T", obj)
 	}
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -352,7 +352,7 @@ func (uc *unstructuredClient) PatchSubResource(ctx context.Context, obj Object, 
 
 	gvk := u.GetObjectKind().GroupVersionKind()
 
-	o, err := uc.resources.getObjMeta(obj)
+	o, err := uc.resources.getObjMeta(ctx, obj)
 	if err != nil {
 		return err
 	}
@@ -389,7 +389,7 @@ func (uc *unstructuredClient) ApplySubResource(ctx context.Context, obj runtime.
 	if !ok {
 		return fmt.Errorf("bug: unstructured client got an applyconfiguration that was not %T but %T", &unstructuredApplyConfiguration{}, obj)
 	}
-	o, err := uc.resources.getObjMeta(unstructuredApplyConfig.Unstructured)
+	o, err := uc.resources.getObjMeta(ctx, unstructuredApplyConfig.Unstructured)
 	if err != nil {
 		return err
 	}

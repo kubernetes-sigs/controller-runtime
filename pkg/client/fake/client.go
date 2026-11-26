@@ -152,10 +152,6 @@ func (f *ClientBuilder) WithScheme(scheme *runtime.Scheme) *ClientBuilder {
 // with a meta.DefaultRESTMapper to provide a static rest mapping.
 // If not set, defaults to an empty meta.DefaultRESTMapper.
 func (f *ClientBuilder) WithRESTMapper(restMapper meta.RESTMapperWithContext) *ClientBuilder {
-	if restMapper == nil {
-		f.restMapper = nil
-		return f
-	}
 	f.restMapper = legacyrestmapper.Wrap(restMapper)
 	return f
 }

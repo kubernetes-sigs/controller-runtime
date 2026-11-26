@@ -379,21 +379,54 @@ func (c *client) Delete(ctx context.Context, obj Object, opts ...DeleteOption) e
 }
 
 // delete issues a delete call and returns the response or an error. The response
-// gets deserialized into an unstructured and is either a metav1.Status if the object
-// is gone from storage or the object if it remains, for example because of finalizers.
-func (c *client) delete(ctx context.Context, obj Object, opts ...DeleteOption) (*unstructured.Unstructured, error) {
-	switch obj.(type) {
+// is either a metav1.Status if the object is gone from storage or the object, which
+// remains in storage for example because of finalizers, but is also returned by
+// some resources such as pods after they were removed. It is decoded into the type
+// of obj if obj is typed, and into an unstructured otherwise.
+func (c *client) delete(ctx context.Context, obj Object, opts ...DeleteOption) (runtime.Object, error) {
+	defer c.resetGroupVersionKind(obj, obj.GetObjectKind().GroupVersionKind())
+	switch o := obj.(type) {
 	case runtime.Unstructured:
 		return c.unstructuredClient.Delete(ctx, obj, opts...)
 	case *metav1.PartialObjectMetadata:
 		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+		u.SetGroupVersionKind(o.GroupVersionKind())
 		u.SetNamespace(obj.GetNamespace())
 		u.SetName(obj.GetName())
-		return c.unstructuredClient.Delete(ctx, u, opts...)
+		response, err := c.unstructuredClient.Delete(ctx, u, opts...)
+		if err != nil || !remainsAfterDelete(o.GroupVersionKind().GroupKind(), response) {
+			return response, err
+		}
+		metadata := &metav1.PartialObjectMetadata{}
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, metadata); err != nil {
+			return nil, fmt.Errorf("delete succeeded, but failed to convert the response into %T: %w", obj, err)
+		}
+		*o = *metadata
+		return response, nil
 	default:
 		return c.typedClient.Delete(ctx, obj, opts...)
 	}
+}
+
+func remainsAfterDelete(gk schema.GroupKind, response runtime.Object) bool {
+	accessor, err := meta.Accessor(response)
+	if err != nil {
+		return false
+	}
+	gracePeriod := accessor.GetDeletionGracePeriodSeconds()
+	if len(accessor.GetFinalizers()) > 0 || (gracePeriod != nil && *gracePeriod > 0) {
+		return true
+	}
+	// Namespaces are held by spec.finalizers rather than metadata.finalizers.
+	if gk != (schema.GroupKind{Kind: "Namespace"}) {
+		return false
+	}
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(response)
+	if err != nil {
+		return false
+	}
+	finalizers, _, _ := unstructured.NestedStringSlice(content, "spec", "finalizers")
+	return len(finalizers) > 0
 }
 
 // DeleteAllOf implements client.Client.

@@ -1995,8 +1995,10 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("deleting the Deployment")
 				depName := dep.Name
+				before := dep.DeepCopy()
 				err = cl.Delete(ctx, dep)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(dep).To(Equal(before))
 
 				By("validating the Deployment no longer exists")
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
@@ -2020,6 +2022,43 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				By("validating the Node no longer exists")
 				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should update obj while a pod remains for its grace period and leave it unchanged once removed", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("initially creating a Pod bound to a node")
+				pod.Spec = corev1.PodSpec{NodeName: "node", Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}}
+				pod, err := clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("deleting the Pod, which remains for its grace period")
+				Expect(cl.Delete(ctx, pod)).To(Succeed())
+				Expect(pod.DeletionGracePeriodSeconds).To(HaveValue(BeNumerically(">", 0)))
+				stored, err := clientset.CoreV1().Pods(ns).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pod).To(Equal(stored))
+
+				By("deleting the Pod without grace period, which removes it but still returns it")
+				before := pod.DeepCopy()
+				Expect(cl.Delete(ctx, pod, client.GracePeriodSeconds(0))).To(Succeed())
+				Expect(pod).To(Equal(before))
+				_, err = clientset.CoreV1().Pods(ns).Get(ctx, pod.Name, metav1.GetOptions{})
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			})
+
+			It("should update obj while a namespace is held by its spec finalizers", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				namespace := &corev1.Namespace{Name: fmt.Sprintf("delete-namespace-%d", count)}
+				Expect(cl.Create(ctx, namespace)).To(Succeed())
+				DeferCleanup(func(ctx context.Context) { deleteNamespace(ctx, namespace) })
+
+				Expect(cl.Delete(ctx, namespace)).To(Succeed())
+				Expect(namespace.DeletionTimestamp).NotTo(BeNil())
+				Expect(namespace.Status.Phase).To(Equal(corev1.NamespaceTerminating))
 			})
 
 			It("should fail if the object does not exist", func(ctx SpecContext) {
@@ -2122,8 +2161,10 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 					Kind:    "Deployment",
 					Version: "v1",
 				})
+				before := u.DeepCopy()
 				err = cl.Delete(ctx, u)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(u).To(Equal(before))
 
 				By("validating the Deployment no longer exists")
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, depName, metav1.GetOptions{})
@@ -2154,6 +2195,22 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				By("validating the Node no longer exists")
 				_, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 				Expect(err).To(HaveOccurred())
+			})
+
+			It("should update obj while a namespace is held by its spec finalizers", func(ctx SpecContext) {
+				cl, err := client.New(cfg, client.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				namespace := &corev1.Namespace{Name: fmt.Sprintf("delete-namespace-%d", count)}
+				Expect(cl.Create(ctx, namespace)).To(Succeed())
+				DeferCleanup(func(ctx context.Context) { deleteNamespace(ctx, namespace) })
+
+				u := &unstructured.Unstructured{}
+				u.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Namespace"))
+				u.SetName(namespace.Name)
+				Expect(cl.Delete(ctx, u)).To(Succeed())
+				Expect(u.GetDeletionTimestamp()).NotTo(BeNil())
+				Expect(u.GroupVersionKind()).To(Equal(corev1.SchemeGroupVersion.WithKind("Namespace")))
 			})
 
 			It("should fail if the object does not exist", func(ctx SpecContext) {
@@ -2237,8 +2294,10 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 
 				By("deleting the Deployment")
 				metaObj := metaOnlyFromObj(dep, scheme)
+				before := metaObj.DeepCopy()
 				err = cl.Delete(ctx, metaObj)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(metaObj).To(Equal(before))
 
 				By("validating the Deployment no longer exists")
 				_, err = clientset.AppsV1().Deployments(ns).Get(ctx, dep.Name, metav1.GetOptions{})
@@ -2287,6 +2346,8 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 				metaObj.SetNamespace(ns)
 				metaObj.SetName(u.GetName())
 				Expect(cl.Delete(ctx, metaObj)).To(Succeed())
+				Expect(metaObj.GroupVersionKind()).To(Equal(chaosPodGVK))
+				Expect(metaObj.GetDeletionTimestamp()).NotTo(BeNil())
 
 				By("validating the ChaosPod is terminating")
 				Expect(cl.Get(ctx, client.ObjectKeyFromObject(u), u)).To(Succeed())
@@ -2345,6 +2406,43 @@ U5wwSivyi7vmegHKmblOzNVKA5qPO8zWzqBC
 			})
 		})
 	})
+
+	DescribeTable("mutating operations return the updated object",
+		func(ctx SpecContext, mutate func(ctx SpecContext, cl client.Client) (*appsv1.Deployment, error)) {
+			cl, err := client.New(cfg, client.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			mutated, err := mutate(ctx, cl)
+			Expect(err).NotTo(HaveOccurred())
+
+			retrieved := &appsv1.Deployment{}
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(mutated), retrieved)).To(Succeed())
+			Expect(retrieved).To(BeComparableTo(mutated))
+		},
+		Entry("create", func(ctx SpecContext, cl client.Client) (*appsv1.Deployment, error) {
+			return dep, cl.Create(ctx, dep)
+		}),
+		Entry("update", func(ctx SpecContext, cl client.Client) (*appsv1.Deployment, error) {
+			Expect(cl.Create(ctx, dep)).To(Succeed())
+			dep.Labels = map[string]string{"updated-label": "update-test"}
+			return dep, cl.Update(ctx, dep)
+		}),
+		Entry("patch", func(ctx SpecContext, cl client.Client) (*appsv1.Deployment, error) {
+			Expect(cl.Create(ctx, dep)).To(Succeed())
+			original := dep.DeepCopy()
+			dep.Labels = map[string]string{"updated-label": "update-test"}
+			return dep, cl.Patch(ctx, dep, client.MergeFrom(original))
+		}),
+		Entry("delete of an object held by finalizers", func(ctx SpecContext, cl client.Client) (*appsv1.Deployment, error) {
+			dep.Finalizers = []string{"example.com/hold"}
+			Expect(cl.Create(ctx, dep)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				patch := client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"finalizers":null}}`))
+				Expect(client.IgnoreNotFound(cl.Patch(ctx, dep.DeepCopy(), patch))).To(Succeed())
+			})
+			return dep, cl.Delete(ctx, dep)
+		}),
+	)
 
 	Describe("Get", func() {
 		Context("with structured objects", func() {

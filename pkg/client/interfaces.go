@@ -70,7 +70,9 @@ type Writer interface {
 	// struct pointer so that obj can be updated with the content returned by the Server.
 	Create(ctx context.Context, obj Object, opts ...CreateOption) error
 
-	// Delete deletes the given obj from Kubernetes cluster.
+	// Delete deletes the given obj from Kubernetes cluster. If the object remains in
+	// storage, for example because it is held by finalizers, obj is updated with the
+	// content returned by the Server. Otherwise obj is left unchanged.
 	Delete(ctx context.Context, obj Object, opts ...DeleteOption) error
 
 	// Update updates the given obj in the Kubernetes cluster. obj must be a

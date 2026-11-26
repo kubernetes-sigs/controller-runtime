@@ -820,8 +820,10 @@ var _ = Describe("Fake client", func() {
 			By("Deleting a deployment")
 			depCopy := dep.DeepCopy()
 			depCopy.ResourceVersion = "bogus"
+			before := depCopy.DeepCopy()
 			err := cl.Delete(ctx, depCopy)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(depCopy).To(Equal(before), "obj should be unchanged when the object is removed")
 
 			By("Listing all deployments in the namespace")
 			list := &appsv1.DeploymentList{}
@@ -1252,11 +1254,9 @@ var _ = Describe("Fake client", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Removing the finalizer")
-			obj := &corev1.ConfigMap{
-				Name:       namespacedName.Name,
-				Namespace:  namespacedName.Namespace,
-				Finalizers: []string{},
-			}
+			Expect(newObj.DeletionTimestamp).NotTo(BeNil())
+			obj := newObj.DeepCopy()
+			obj.Finalizers = []string{}
 			err = cl.Patch(ctx, obj, client.MergeFrom(newObj))
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2933,6 +2933,11 @@ var _ = Describe("Fake client", func() {
 			dep.Labels = map[string]string{"updated-label": "update-test"}
 			dep.Spec.Replicas = new(int32(2))
 			return dep, cl.Patch(ctx, dep, client.MergeFrom(original))
+		}),
+		Entry("delete of an object held by finalizers", func(ctx SpecContext) (*appsv1.Deployment, error) {
+			dep.Finalizers = []string{"example.com/hold"}
+			cl = NewClientBuilder().WithObjects(dep).Build()
+			return dep, cl.Delete(ctx, dep)
 		}),
 		Entry("Create through Apply", func(ctx SpecContext) (*appsv1.Deployment, error) {
 			ac := appsv1applyconfigurations.Deployment(dep.Name, dep.Namespace).

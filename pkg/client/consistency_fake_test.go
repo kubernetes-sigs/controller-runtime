@@ -64,6 +64,13 @@ func TestConsistentFakeClient(t *testing.T) {
 		d.SetFinalizers([]string{"test.io/finalizer"})
 		return d
 	}
+	unstructuredDeployment := func() *unstructured.Unstructured {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("Deployment"))
+		u.SetName(deployment().GetName())
+		u.SetNamespace(namespace)
+		return u
+	}
 
 	resourceVersion := func(g *WithT, rv string) int64 {
 		parsed, err := strconv.ParseInt(rv, 10, 64)
@@ -145,6 +152,40 @@ func TestConsistentFakeClient(t *testing.T) {
 		return resourceVersion(g, d.GetResourceVersion())
 	}
 
+	createUnstructured := func(ctx context.Context, c client.Client, g *WithT) int64 {
+		u := unstructuredDeployment()
+		g.Expect(c.Create(ctx, u)).To(Succeed())
+		return resourceVersion(g, u.GetResourceVersion())
+	}
+	updateUnstructured := func(ctx context.Context, c client.Client, g *WithT) int64 {
+		u := unstructuredDeployment()
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(u), u)).To(Succeed())
+		u.SetLabels(map[string]string{"updated": "true"})
+		g.Expect(c.Update(ctx, u)).To(Succeed())
+		return resourceVersion(g, u.GetResourceVersion())
+	}
+	patchUnstructured := func(ctx context.Context, c client.Client, g *WithT) int64 {
+		u := unstructuredDeployment()
+		patch := client.MergeFrom(u.DeepCopy())
+		u.SetLabels(map[string]string{"patched": "true"})
+		g.Expect(c.Patch(ctx, u, patch)).To(Succeed())
+		return resourceVersion(g, u.GetResourceVersion())
+	}
+	updateStatusUnstructured := func(ctx context.Context, c client.Client, g *WithT) int64 {
+		u := unstructuredDeployment()
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(u), u)).To(Succeed())
+		g.Expect(unstructured.SetNestedField(u.Object, int64(5), "status", "replicas")).To(Succeed())
+		g.Expect(c.Status().Update(ctx, u)).To(Succeed())
+		return resourceVersion(g, u.GetResourceVersion())
+	}
+	patchStatusUnstructured := func(ctx context.Context, c client.Client, g *WithT) int64 {
+		u := unstructuredDeployment()
+		patch := client.MergeFrom(u.DeepCopy())
+		g.Expect(unstructured.SetNestedField(u.Object, int64(6), "status", "replicas")).To(Succeed())
+		g.Expect(c.Status().Patch(ctx, u, patch)).To(Succeed())
+		return resourceVersion(g, u.GetResourceVersion())
+	}
+
 	get := func(ctx context.Context, c client.Client, g *WithT, writtenRV <-chan int64) {
 		result := deployment()
 		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
@@ -152,6 +193,18 @@ func TestConsistentFakeClient(t *testing.T) {
 	}
 	list := func(ctx context.Context, c client.Client, g *WithT, writtenRV <-chan int64) {
 		result := &appsv1.DeploymentList{}
+		g.Expect(c.List(ctx, result)).To(Succeed())
+		g.Expect(result.Items).To(HaveLen(1))
+		g.Expect(resourceVersion(g, result.Items[0].GetResourceVersion())).To(BeNumerically(">=", <-writtenRV))
+	}
+	getUnstructured := func(ctx context.Context, c client.Client, g *WithT, writtenRV <-chan int64) {
+		result := unstructuredDeployment()
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(result), result)).To(Succeed())
+		g.Expect(resourceVersion(g, result.GetResourceVersion())).To(BeNumerically(">=", <-writtenRV))
+	}
+	listUnstructured := func(ctx context.Context, c client.Client, g *WithT, writtenRV <-chan int64) {
+		result := &unstructured.UnstructuredList{}
+		result.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("DeploymentList"))
 		g.Expect(c.List(ctx, result)).To(Succeed())
 		g.Expect(result.Items).To(HaveLen(1))
 		g.Expect(resourceVersion(g, result.Items[0].GetResourceVersion())).To(BeNumerically(">=", <-writtenRV))
@@ -327,6 +380,58 @@ func TestConsistentFakeClient(t *testing.T) {
 			maybeInitObject: deployment,
 			write:           updateScale,
 			read:            list,
+		},
+		{
+			name:  "Unstructured Get after unstructured Create",
+			write: createUnstructured,
+			read:  getUnstructured,
+		},
+		{
+			name:  "Unstructured List after unstructured Create",
+			write: createUnstructured,
+			read:  listUnstructured,
+		},
+		{
+			name:            "Unstructured Get after unstructured Update",
+			maybeInitObject: deployment,
+			write:           updateUnstructured,
+			read:            getUnstructured,
+		},
+		{
+			name:            "Unstructured List after unstructured Update",
+			maybeInitObject: deployment,
+			write:           updateUnstructured,
+			read:            listUnstructured,
+		},
+		{
+			name:            "Unstructured Get after unstructured Patch",
+			maybeInitObject: deployment,
+			write:           patchUnstructured,
+			read:            getUnstructured,
+		},
+		{
+			name:            "Unstructured List after unstructured Patch",
+			maybeInitObject: deployment,
+			write:           patchUnstructured,
+			read:            listUnstructured,
+		},
+		{
+			name:            "Unstructured Get after unstructured status Update",
+			maybeInitObject: deployment,
+			write:           updateStatusUnstructured,
+			read:            getUnstructured,
+		},
+		{
+			name:            "Unstructured Get after unstructured status Patch",
+			maybeInitObject: deployment,
+			write:           patchStatusUnstructured,
+			read:            getUnstructured,
+		},
+		{
+			name:            "Unstructured List after unstructured status Patch",
+			maybeInitObject: deployment,
+			write:           patchStatusUnstructured,
+			read:            listUnstructured,
 		},
 	}
 

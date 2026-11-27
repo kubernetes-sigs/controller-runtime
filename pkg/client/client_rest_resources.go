@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/internal/legacyrestmapper"
 )
 
 // clientRestResources creates and stores rest clients and metadata for Kubernetes types.
@@ -80,7 +81,19 @@ func (c *clientRestResources) newResource(ctx context.Context, gvk schema.GroupV
 	if err != nil {
 		return nil, err
 	}
-	return &resourceMeta{Interface: client, mapping: mapping, gvk: gvk}, nil
+	return &resourceMeta{
+		Interface:        client,
+		mapping:          mapping,
+		gvk:              gvk,
+		mapperGeneration: c.mapperGeneration(),
+	}, nil
+}
+
+func (c *clientRestResources) mapperGeneration() uint64 {
+	if g, ok := c.mapper.(legacyrestmapper.GenerationedRESTMapper); ok {
+		return g.Generation()
+	}
+	return 0
 }
 
 type applyConfiguration interface {
@@ -119,6 +132,8 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 	_, isUnstructured := obj.(runtime.Unstructured)
 	forceDisableProtoBuf := isUnstructured || isApplyConfiguration
 
+	gen := c.mapperGeneration()
+
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
 	c.mu.RLock()
@@ -129,7 +144,7 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 
 	c.mu.RUnlock()
 
-	if known {
+	if known && r.mapperGeneration == gen {
 		return r, nil
 	}
 
@@ -183,6 +198,8 @@ type resourceMeta struct {
 	gvk schema.GroupVersionKind
 	// mapping is the rest mapping
 	mapping *meta.RESTMapping
+	// mapperGeneration is the mapper generation when this resourceMeta was resolved
+	mapperGeneration uint64
 }
 
 // isNamespaced returns true if the type is namespaced.

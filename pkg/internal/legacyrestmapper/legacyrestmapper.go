@@ -72,6 +72,18 @@ type RESTMapper interface {
 	ResourceSingularizer(resource string) (singular string, err error)
 }
 
+// GenerationedRESTMapper is an optional interface implemented by RESTMappers
+// that track cache invalidations and reloads via a monotonically increasing generation.
+type GenerationedRESTMapper interface {
+	Generation() uint64
+}
+
+// GroupInvalidator is an optional interface implemented by RESTMappers
+// that support invalidating cached mappings for a single API group.
+type GroupInvalidator interface {
+	InvalidateGroup(group string)
+}
+
 var (
 	// RESTMapper must stay assignable to both upstream interfaces.
 	_ meta.RESTMapper            = RESTMapper(nil)
@@ -134,4 +146,35 @@ func (m *wrapper) RESTMappings(gk schema.GroupKind, versions ...string) ([]*meta
 // ResourceSingularizer implements meta.RESTMapper.ResourceSingularizer.
 func (m *wrapper) ResourceSingularizer(resource string) (string, error) {
 	return m.ResourceSingularizerWithContext(context.Background(), resource)
+}
+
+// Reset implements meta.ResettableRESTMapper.Reset.
+func (m *wrapper) Reset() {
+	m.ResetWithContext(context.Background())
+}
+
+// ResetWithContext implements meta.ResettableRESTMapperWithContext.ResetWithContext.
+func (m *wrapper) ResetWithContext(ctx context.Context) {
+	if r, ok := m.RESTMapperWithContext.(meta.ResettableRESTMapperWithContext); ok {
+		r.ResetWithContext(ctx)
+		return
+	}
+	if r, ok := m.RESTMapperWithContext.(meta.ResettableRESTMapper); ok {
+		r.Reset()
+	}
+}
+
+// InvalidateGroup implements GroupInvalidator.InvalidateGroup.
+func (m *wrapper) InvalidateGroup(group string) {
+	if inv, ok := m.RESTMapperWithContext.(GroupInvalidator); ok {
+		inv.InvalidateGroup(group)
+	}
+}
+
+// Generation implements GenerationedRESTMapper.Generation.
+func (m *wrapper) Generation() uint64 {
+	if g, ok := m.RESTMapperWithContext.(GenerationedRESTMapper); ok {
+		return g.Generation()
+	}
+	return 0
 }

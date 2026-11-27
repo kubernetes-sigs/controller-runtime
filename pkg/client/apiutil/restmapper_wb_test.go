@@ -18,14 +18,17 @@ package apiutil
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	gmg "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/restmapper"
+	"sigs.k8s.io/controller-runtime/pkg/internal/legacyrestmapper"
 )
 
 func TestLazyRestMapper_fetchGroupVersionResourcesLocked_CacheInvalidation(t *testing.T) {
@@ -212,4 +215,148 @@ type fakeAggregatedDiscoveryClient struct {
 func (f *fakeAggregatedDiscoveryClient) GroupsAndMaybeResourcesWithContext(ctx context.Context) (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
 	groupList, err := f.DiscoveryInterfaceWithContext.ServerGroupsWithContext(ctx)
 	return groupList, nil, nil, err
+}
+
+type scopeToggleDiscoveryClient struct {
+	discovery.DiscoveryInterfaceWithContext
+	widgetNamespaced atomic.Bool
+	groupCalls       atomic.Int32
+	resourceCalls    atomic.Int32
+}
+
+func (s *scopeToggleDiscoveryClient) GroupsAndMaybeResourcesWithContext(context.Context) (*metav1.APIGroupList, map[schema.GroupVersion]*metav1.APIResourceList, map[schema.GroupVersion]error, error) {
+	s.groupCalls.Add(1)
+	return &metav1.APIGroupList{
+		Groups: []metav1.APIGroup{
+			{
+				Name: "example.com",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{GroupVersion: "example.com/v1", Version: "v1"},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: "example.com/v1", Version: "v1"},
+			},
+			{
+				Name: "other.example.com",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{GroupVersion: "other.example.com/v1", Version: "v1"},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: "other.example.com/v1", Version: "v1"},
+			},
+		},
+	}, nil, nil, nil
+}
+
+func (s *scopeToggleDiscoveryClient) ServerResourcesForGroupVersionWithContext(_ context.Context, groupVersion string) (*metav1.APIResourceList, error) {
+	s.resourceCalls.Add(1)
+	switch groupVersion {
+	case "example.com/v1":
+		return &metav1.APIResourceList{
+			GroupVersion: "example.com/v1",
+			APIResources: []metav1.APIResource{
+				{
+					Name:       "widgets",
+					Kind:       "Widget",
+					Namespaced: s.widgetNamespaced.Load(),
+				},
+			},
+		}, nil
+	case "other.example.com/v1":
+		return &metav1.APIResourceList{
+			GroupVersion: "other.example.com/v1",
+			APIResources: []metav1.APIResource{
+				{
+					Name:       "gadgets",
+					Kind:       "Gadget",
+					Namespaced: true,
+				},
+			},
+		}, nil
+	default:
+		return &metav1.APIResourceList{GroupVersion: groupVersion}, nil
+	}
+}
+
+func TestDynamicRESTMapper_InvalidateGroupAndReset(t *testing.T) {
+	g := gmg.NewWithT(t)
+
+	dc := &scopeToggleDiscoveryClient{}
+	rawMapper := &mapper{
+		mapper:      restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{}),
+		client:      dc,
+		knownGroups: map[string]*restmapper.APIGroupResources{},
+		apiGroups:   map[string]*metav1.APIGroup{},
+	}
+	wrapped := legacyrestmapper.Wrap(rawMapper)
+
+	// Verify wrapped mapper satisfies ResettableRESTMapper, ResettableRESTMapperWithContext,
+	// GroupInvalidator, and GenerationedRESTMapper.
+	resettable, ok := wrapped.(meta.ResettableRESTMapper)
+	g.Expect(ok).To(gmg.BeTrue())
+	resettableCtx, ok := wrapped.(meta.ResettableRESTMapperWithContext)
+	g.Expect(ok).To(gmg.BeTrue())
+	invalidator, ok := wrapped.(legacyrestmapper.GroupInvalidator)
+	g.Expect(ok).To(gmg.BeTrue())
+	genMapper, ok := wrapped.(legacyrestmapper.GenerationedRESTMapper)
+	g.Expect(ok).To(gmg.BeTrue())
+
+	// Initial lookup: Cluster-scoped Widget and Namespaced Gadget.
+	mapping, err := wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameRoot))
+
+	otherMapping, err := wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "other.example.com", Kind: "Gadget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(otherMapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameNamespace))
+
+	callsBeforeCacheHit := dc.resourceCalls.Load()
+	genBeforeCacheHit := genMapper.Generation()
+
+	// Cached lookup should not trigger additional discovery calls or bump generation.
+	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameRoot))
+	g.Expect(dc.resourceCalls.Load()).To(gmg.Equal(callsBeforeCacheHit))
+	g.Expect(genMapper.Generation()).To(gmg.Equal(genBeforeCacheHit))
+
+	// Invalidating an uncached group is a no-op.
+	invalidator.InvalidateGroup("uncached.example.com")
+	g.Expect(genMapper.Generation()).To(gmg.Equal(genBeforeCacheHit))
+
+	// Recreate CRD with Namespaced scope and invalidate only example.com.
+	dc.widgetNamespaced.Store(true)
+	invalidator.InvalidateGroup("example.com")
+	g.Expect(genMapper.Generation()).To(gmg.BeNumerically(">", genBeforeCacheHit))
+
+	// other.example.com remains cached and does not trigger discovery.
+	callsBeforeOther := dc.resourceCalls.Load()
+	otherMapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "other.example.com", Kind: "Gadget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(otherMapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameNamespace))
+	g.Expect(dc.resourceCalls.Load()).To(gmg.Equal(callsBeforeOther))
+
+	// example.com reloads and picks up the new Namespaced scope.
+	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameNamespace))
+	g.Expect(dc.resourceCalls.Load()).To(gmg.Equal(callsBeforeOther + 1))
+
+	// Recreate CRD back to Cluster scope and reset via ResettableRESTMapperWithContext.
+	dc.widgetNamespaced.Store(false)
+	genBeforeReset := genMapper.Generation()
+	resettableCtx.ResetWithContext(t.Context())
+	g.Expect(genMapper.Generation()).To(gmg.BeNumerically(">", genBeforeReset))
+
+	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameRoot))
+
+	// Reset via legacy meta.ResettableRESTMapper also works.
+	dc.widgetNamespaced.Store(true)
+	genBeforeReset = genMapper.Generation()
+	resettable.Reset()
+	g.Expect(genMapper.Generation()).To(gmg.BeNumerically(">", genBeforeReset))
+
+	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameNamespace))
 }

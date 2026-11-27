@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -71,10 +72,52 @@ type mapper struct {
 
 	initialDiscoveryDone bool
 
+	generation atomic.Uint64
+
 	// mutex to provide thread-safe mapper reloading.
 	// It protects all fields in the mapper as well as methods
 	// that have the `Locked` suffix.
 	mu sync.RWMutex
+}
+
+// Reset implements meta.ResettableRESTMapper.Reset.
+func (m *mapper) Reset() {
+	m.ResetWithContext(context.Background())
+}
+
+// ResetWithContext implements meta.ResettableRESTMapperWithContext.ResetWithContext.
+func (m *mapper) ResetWithContext(_ context.Context) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.knownGroups = map[string]*restmapper.APIGroupResources{}
+	m.apiGroups = map[string]*metav1.APIGroup{}
+	m.initialDiscoveryDone = false
+	m.mapper = restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{})
+	m.generation.Add(1)
+}
+
+// InvalidateGroup drops the cached discovery data for groupName so that the
+// next lookup reloads it from the API server.
+func (m *mapper) InvalidateGroup(groupName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	_, known := m.knownGroups[groupName]
+	_, apiKnown := m.apiGroups[groupName]
+	if !known && !apiKnown {
+		return
+	}
+
+	delete(m.knownGroups, groupName)
+	delete(m.apiGroups, groupName)
+	m.rebuildMapperLocked()
+	m.generation.Add(1)
+}
+
+// Generation returns the monotonically increasing cache generation of the mapper.
+func (m *mapper) Generation() uint64 {
+	return m.generation.Load()
 }
 
 // KindForWithContext implements meta.RESTMapperWithContext.KindForWithContext.
@@ -275,6 +318,11 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 	}
 
 	// Finally, reload the mapper.
+	m.rebuildMapperLocked()
+	m.generation.Add(1)
+}
+
+func (m *mapper) rebuildMapperLocked() {
 	updatedGroupResources := make([]*restmapper.APIGroupResources, 0, len(m.knownGroups))
 	for _, agr := range m.knownGroups {
 		updatedGroupResources = append(updatedGroupResources, agr)

@@ -293,3 +293,81 @@ func TestWaitForGetIsUnblockedByRemovePendingDelete(t *testing.T) {
 		g.Expect(result).To(Receive(BeNil()))
 	})
 }
+
+func TestEndWritePendingDeleteWaitsForOnDelete(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		h := NewHandler(logr.Discard())
+		key := types.NamespacedName{Namespace: "default", Name: "foo"}
+
+		w := h.BeginWrite(key)
+		h.EndWritePendingDelete(key, w, "uid-1")
+
+		getResult := make(chan error, 1)
+		go func() { getResult <- h.WaitForGet(ctx, key) }()
+		listResult := make(chan error, 1)
+		go func() { listResult <- h.WaitForList(ctx) }()
+
+		synctest.Wait()
+		g.Expect(getResult).NotTo(Receive())
+		g.Expect(listResult).NotTo(Receive())
+
+		h.OnDelete(configMap(key, "uid-1", "10"))
+		synctest.Wait()
+		g.Expect(getResult).To(Receive(BeNil()))
+		g.Expect(listResult).To(Receive(BeNil()))
+	})
+}
+
+func TestEndWritePendingDeleteDoesNotBlockWhenOnDeleteAlreadyFired(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		h := NewHandler(logr.Discard())
+		key := types.NamespacedName{Namespace: "default", Name: "foo"}
+
+		w := h.BeginWrite(key)
+		h.OnDelete(configMap(key, "uid-1", "10"))
+		synctest.Wait()
+
+		h.EndWritePendingDelete(key, w, "uid-1")
+
+		g.Expect(h.WaitForGet(ctx, key)).To(Succeed())
+		g.Expect(h.WaitForList(ctx)).To(Succeed())
+	})
+}
+
+func TestEndWritePendingDeleteWaitsWhenDifferentUIDDeletedInFlight(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := NewWithT(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		h := NewHandler(logr.Discard())
+		key := types.NamespacedName{Namespace: "default", Name: "foo"}
+
+		w := h.BeginWrite(key)
+		h.OnDelete(configMap(key, "uid-old", "9"))
+		synctest.Wait()
+
+		h.EndWritePendingDelete(key, w, "uid-new")
+
+		result := make(chan error, 1)
+		go func() { result <- h.WaitForGet(ctx, key) }()
+
+		synctest.Wait()
+		g.Expect(result).NotTo(Receive())
+
+		h.OnDelete(configMap(key, "uid-new", "10"))
+		synctest.Wait()
+		g.Expect(result).To(Receive(BeNil()))
+	})
+}

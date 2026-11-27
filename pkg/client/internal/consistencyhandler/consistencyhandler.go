@@ -36,10 +36,15 @@ func NewHandler(log logr.Logger) *ConsistencyHandler {
 		rvBroadCaster:             &broadcaster{},
 		pendingDeletesBroadcaster: &broadcaster{},
 		pendingDeletes:            make(map[types.NamespacedName]sets.Set[types.UID]),
+		inFlightWrites:            make(map[types.NamespacedName]map[*InFlightWrite]struct{}),
 		minimumRVs:                make(map[types.NamespacedName]int64),
 		log:                       log,
 		triggerCleanup:            make(chan struct{}, 1),
 	}
+}
+
+type InFlightWrite struct {
+	observedDeletes sets.Set[types.UID]
 }
 
 type ConsistencyHandler struct {
@@ -50,6 +55,10 @@ type ConsistencyHandler struct {
 	pendingDeletesLock        sync.RWMutex
 	// pendingDeletes holds pending deletes. Must only be accessed when holding pendingDeletesLock
 	pendingDeletes map[types.NamespacedName]sets.Set[types.UID]
+	// inFlightWrites tracks active writes per key so deletions observed while a write is
+	// in flight are not missed if OnDelete fires before the write returns. Must only be
+	// accessed when holding pendingDeletesLock.
+	inFlightWrites map[types.NamespacedName]map[*InFlightWrite]struct{}
 
 	minimumRVsLock sync.RWMutex
 	// minimumRVs stores the minimum RVs we must have seen before returning reads. Must only be
@@ -142,10 +151,51 @@ func (h *ConsistencyHandler) cleanupMinimumRVs() {
 	}
 }
 
-func (h *ConsistencyHandler) AddPendingDelete(key types.NamespacedName, uid types.UID) {
+func (h *ConsistencyHandler) BeginWrite(key types.NamespacedName) *InFlightWrite {
 	h.pendingDeletesLock.Lock()
 	defer h.pendingDeletesLock.Unlock()
 
+	w := &InFlightWrite{}
+	if h.inFlightWrites[key] == nil {
+		h.inFlightWrites[key] = make(map[*InFlightWrite]struct{})
+	}
+	h.inFlightWrites[key][w] = struct{}{}
+	return w
+}
+
+func (h *ConsistencyHandler) EndWrite(key types.NamespacedName, w *InFlightWrite) {
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
+	h.endWriteLocked(key, w)
+}
+
+func (h *ConsistencyHandler) EndWritePendingDelete(key types.NamespacedName, w *InFlightWrite, uid types.UID) {
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
+	h.endWriteLocked(key, w)
+
+	if w.observedDeletes.Has(uid) {
+		return
+	}
+	h.addPendingDeleteLocked(key, uid)
+}
+
+func (h *ConsistencyHandler) endWriteLocked(key types.NamespacedName, w *InFlightWrite) {
+	if writes := h.inFlightWrites[key]; writes != nil {
+		delete(writes, w)
+		if len(writes) == 0 {
+			delete(h.inFlightWrites, key)
+		}
+	}
+}
+
+func (h *ConsistencyHandler) AddPendingDelete(key types.NamespacedName, uid types.UID) {
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
+	h.addPendingDeleteLocked(key, uid)
+}
+
+func (h *ConsistencyHandler) addPendingDeleteLocked(key types.NamespacedName, uid types.UID) {
 	if h.pendingDeletes[key] == nil {
 		h.pendingDeletes[key] = sets.New(uid)
 		return
@@ -156,7 +206,10 @@ func (h *ConsistencyHandler) AddPendingDelete(key types.NamespacedName, uid type
 func (h *ConsistencyHandler) RemovePendingDelete(key types.NamespacedName, uid types.UID) {
 	h.pendingDeletesLock.Lock()
 	defer h.pendingDeletesLock.Unlock()
+	h.removePendingDeleteLocked(key, uid)
+}
 
+func (h *ConsistencyHandler) removePendingDeleteLocked(key types.NamespacedName, uid types.UID) {
 	if h.pendingDeletes[key] != nil {
 		h.pendingDeletes[key].Delete(uid)
 		if len(h.pendingDeletes[key]) == 0 {
@@ -236,7 +289,21 @@ func (h *ConsistencyHandler) allDeleted(uids sets.Set[types.UID]) bool {
 }
 
 func (h *ConsistencyHandler) observeDeletion(obj cacheapi.Object) {
-	h.RemovePendingDelete(types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}, obj.GetUID())
+	key := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+	uid := obj.GetUID()
+
+	h.pendingDeletesLock.Lock()
+	defer h.pendingDeletesLock.Unlock()
+
+	for w := range h.inFlightWrites[key] {
+		if w.observedDeletes == nil {
+			w.observedDeletes = sets.New(uid)
+		} else {
+			w.observedDeletes.Insert(uid)
+		}
+	}
+
+	h.removePendingDeleteLocked(key, uid)
 }
 
 func (h *ConsistencyHandler) waitForRV(ctx context.Context, rv int64) error {

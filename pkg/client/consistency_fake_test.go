@@ -29,6 +29,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	appsv1applyconfigurations "k8s.io/client-go/applyconfigurations/apps/v1"
@@ -521,6 +522,221 @@ func TestConsistentFakeClientDisableReadYourWritesConsistency(t *testing.T) {
 	}
 }
 
+func TestConsistentFakeClientFinalizerRemoval(t *testing.T) {
+	t.Parallel()
+
+	const namespace = "default"
+
+	newDeployment := func(finalizers []string, deleting bool) *appsv1.Deployment {
+		d := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test",
+				Namespace:  namespace,
+				UID:        "test-uid",
+				Finalizers: finalizers,
+			},
+		}
+		if deleting {
+			now := metav1.Now()
+			d.SetDeletionTimestamp(&now)
+		}
+		return d
+	}
+
+	// sameRVFuncs wraps cache interceptor funcs to simulate Kubernetes < 1.38 behavior
+	// where removing the last finalizer on a terminating object returns the same RV as the request.
+	sameRVFuncs := func(base interceptor.Funcs) interceptor.Funcs {
+		return interceptor.Funcs{
+			Create: base.Create,
+			Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				prevRV := obj.GetResourceVersion()
+				if err := base.Update(ctx, cl, obj, opts...); err != nil {
+					return err
+				}
+				if obj.GetDeletionTimestamp() != nil && len(obj.GetFinalizers()) == 0 && prevRV != "" {
+					obj.SetResourceVersion(prevRV)
+				}
+				return nil
+			},
+			Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				prevRV := obj.GetResourceVersion()
+				if err := base.Patch(ctx, cl, obj, patch, opts...); err != nil {
+					return err
+				}
+				if obj.GetDeletionTimestamp() != nil && len(obj.GetFinalizers()) == 0 && prevRV != "" {
+					obj.SetResourceVersion(prevRV)
+				}
+				return nil
+			},
+			Apply: func(ctx context.Context, cl client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+				if err := base.Apply(ctx, cl, obj, opts...); err != nil {
+					return err
+				}
+				if ac, ok := obj.(*appsv1applyconfigurations.DeploymentApplyConfiguration); ok {
+					if ac.DeletionTimestamp != nil && len(ac.Finalizers) == 0 {
+						// Reset RV to the initial observed RV ("1") to simulate < 1.38 apiserver response.
+						ac.WithResourceVersion("1")
+					}
+				}
+				return nil
+			},
+			Delete:           base.Delete,
+			SubResourceUpdate: base.SubResourceUpdate,
+			SubResourcePatch:  base.SubResourcePatch,
+			SubResourceApply:  base.SubResourceApply,
+		}
+	}
+
+	newClientWithObservedInit := func(t *testing.T, initObj *appsv1.Deployment) client.Client {
+		t.Helper()
+		fc := newFakeCache()
+		upstream := fake.NewClientBuilder().
+			WithGlobalResourceVersionCounter().
+			WithObjects(initObj).
+			WithInterceptorFuncs(sameRVFuncs(fc.interceptorFuncs())).
+			Build()
+
+		c := client.NewConsistentClient(
+			&fakeConsistentClientUpstream{Client: upstream},
+			fc,
+			func() writebarrier.WriteBarrier { return writebarrier.NewWriteBarrier() },
+		)
+		// Perform an initial Get to register the consistency handler and observe the initial RV.
+		got := &appsv1.Deployment{}
+		if err := c.Get(t.Context(), client.ObjectKeyFromObject(initObj), got); err != nil {
+			t.Fatalf("initial get failed: %v", err)
+		}
+		fc.informer.dispatch(func(h toolscache.ResourceEventHandler) {
+			h.OnAdd(got, false)
+		})
+		synctest.Wait()
+		return c
+	}
+
+	testCases := []struct {
+		name          string
+		initObj       func() *appsv1.Deployment
+		mutate        func(ctx context.Context, c client.Client, g *WithT)
+		expectDeleted bool
+		expectFinal   []string
+	}{
+		{
+			name:    "Update removing last finalizer with DeletionTimestamp set and same RV",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/finalizer"}, true) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				d := &appsv1.Deployment{}
+				g.Expect(c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "test"}, d)).To(Succeed())
+				d.SetFinalizers(nil)
+				g.Expect(c.Update(ctx, d)).To(Succeed())
+			},
+			expectDeleted: true,
+		},
+		{
+			name:    "Patch removing last finalizer with DeletionTimestamp set and same RV",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/finalizer"}, true) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				d := &appsv1.Deployment{}
+				g.Expect(c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "test"}, d)).To(Succeed())
+				p := client.MergeFrom(d.DeepCopy())
+				d.SetFinalizers(nil)
+				g.Expect(c.Patch(ctx, d, p)).To(Succeed())
+			},
+			expectDeleted: true,
+		},
+		{
+			name:    "Apply removing last finalizer with DeletionTimestamp set and same RV",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/finalizer"}, true) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				ac := appsv1applyconfigurations.Deployment("test", namespace)
+				g.Expect(c.Apply(ctx, ac, client.FieldOwner("test"))).To(Succeed())
+			},
+			expectDeleted: true,
+		},
+		{
+			name:    "Update removing one finalizer while another remains with DeletionTimestamp set",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/f1", "test.io/f2"}, true) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				d := &appsv1.Deployment{}
+				g.Expect(c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "test"}, d)).To(Succeed())
+				d.SetFinalizers([]string{"test.io/f2"})
+				g.Expect(c.Update(ctx, d)).To(Succeed())
+			},
+			expectDeleted: false,
+			expectFinal:   []string{"test.io/f2"},
+		},
+		{
+			name:    "Patch removing one finalizer while another remains with DeletionTimestamp set",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/f1", "test.io/f2"}, true) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				d := &appsv1.Deployment{}
+				g.Expect(c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "test"}, d)).To(Succeed())
+				p := client.MergeFrom(d.DeepCopy())
+				d.SetFinalizers([]string{"test.io/f2"})
+				g.Expect(c.Patch(ctx, d, p)).To(Succeed())
+			},
+			expectDeleted: false,
+			expectFinal:   []string{"test.io/f2"},
+		},
+		{
+			name:    "Update removing last finalizer without DeletionTimestamp",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/finalizer"}, false) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				d := &appsv1.Deployment{}
+				g.Expect(c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "test"}, d)).To(Succeed())
+				d.SetFinalizers(nil)
+				g.Expect(c.Update(ctx, d)).To(Succeed())
+			},
+			expectDeleted: false,
+			expectFinal:   nil,
+		},
+		{
+			name:    "Patch removing last finalizer without DeletionTimestamp",
+			initObj: func() *appsv1.Deployment { return newDeployment([]string{"test.io/finalizer"}, false) },
+			mutate: func(ctx context.Context, c client.Client, g *WithT) {
+				d := &appsv1.Deployment{}
+				g.Expect(c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "test"}, d)).To(Succeed())
+				p := client.MergeFrom(d.DeepCopy())
+				d.SetFinalizers(nil)
+				g.Expect(c.Patch(ctx, d, p)).To(Succeed())
+			},
+			expectDeleted: false,
+			expectFinal:   nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				g := NewWithT(t)
+				c := newClientWithObservedInit(t, tc.initObj())
+
+				tc.mutate(t.Context(), c, g)
+
+				start := time.Now()
+				got := &appsv1.Deployment{}
+				err := c.Get(t.Context(), client.ObjectKey{Namespace: namespace, Name: "test"}, got)
+				g.Expect(time.Since(start)).To(Equal(watchDelay))
+				if tc.expectDeleted {
+					g.Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected NotFound, got %v", err)
+				} else {
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(got.GetFinalizers()).To(Equal(tc.expectFinal))
+				}
+
+				list := &appsv1.DeploymentList{}
+				g.Expect(c.List(t.Context(), list)).To(Succeed())
+				if tc.expectDeleted {
+					g.Expect(list.Items).To(BeEmpty())
+				} else {
+					g.Expect(list.Items).To(HaveLen(1))
+					g.Expect(list.Items[0].GetFinalizers()).To(Equal(tc.expectFinal))
+				}
+			})
+		})
+	}
+}
+
 // watchDelay is how long the fake cache lags behind the fake client.
 const watchDelay = 10 * time.Second
 
@@ -619,15 +835,39 @@ func (c *fakeCache) interceptorFuncs() interceptor.Funcs {
 			return nil
 		},
 		Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			beforeUpdate := &appsv1.Deployment{}
+			if err := cl.Get(ctx, client.ObjectKeyFromObject(obj), beforeUpdate); err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
 			if err := cl.Update(ctx, obj, opts...); err != nil {
 				return err
+			}
+			afterUpdate := &appsv1.Deployment{}
+			if err := cl.Get(ctx, client.ObjectKeyFromObject(obj), afterUpdate); err != nil {
+				if apierrors.IsNotFound(err) {
+					notify(func(h toolscache.ResourceEventHandler) { h.OnDelete(beforeUpdate) })
+					return nil
+				}
+				panic(err)
 			}
 			notify(func(h toolscache.ResourceEventHandler) { h.OnUpdate(nil, obj) })
 			return nil
 		},
 		Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			beforePatch := &appsv1.Deployment{}
+			if err := cl.Get(ctx, client.ObjectKeyFromObject(obj), beforePatch); err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
 			if err := cl.Patch(ctx, obj, patch, opts...); err != nil {
 				return err
+			}
+			afterPatch := &appsv1.Deployment{}
+			if err := cl.Get(ctx, client.ObjectKeyFromObject(obj), afterPatch); err != nil {
+				if apierrors.IsNotFound(err) {
+					notify(func(h toolscache.ResourceEventHandler) { h.OnDelete(beforePatch) })
+					return nil
+				}
+				panic(err)
 			}
 			notify(func(h toolscache.ResourceEventHandler) { h.OnUpdate(nil, obj) })
 			return nil
@@ -635,6 +875,22 @@ func (c *fakeCache) interceptorFuncs() interceptor.Funcs {
 		Apply: func(ctx context.Context, cl client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
 			if err := cl.Apply(ctx, obj, opts...); err != nil {
 				return err
+			}
+			updated := &appsv1.Deployment{}
+			data, err := json.Marshal(obj)
+			if err != nil {
+				panic(err)
+			}
+			if err := json.Unmarshal(data, updated); err != nil {
+				panic(err)
+			}
+			afterApply := &appsv1.Deployment{}
+			if err := cl.Get(ctx, client.ObjectKeyFromObject(updated), afterApply); err != nil {
+				if apierrors.IsNotFound(err) {
+					notify(func(h toolscache.ResourceEventHandler) { h.OnDelete(updated) })
+					return nil
+				}
+				panic(err)
 			}
 			notifyApply(obj)
 			return nil

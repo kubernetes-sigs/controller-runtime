@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/internal/legacyrestmapper"
 )
 
 // clientRestResources creates and stores rest clients and metadata for Kubernetes types.
@@ -67,16 +66,25 @@ func (c *clientRestResources) newResource(ctx context.Context, gvk schema.GroupV
 	isList bool,
 	forceDisableProtoBuf bool,
 	isUnstructured bool,
+	existingClient rest.Interface,
 ) (*resourceMeta, error) {
 	if strings.HasSuffix(gvk.Kind, "List") && isList {
 		// if this was a list, treat it as a request for the item's resource
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	client, err := apiutil.RESTClientForGVK(gvk, forceDisableProtoBuf, isUnstructured, c.config, c.codecs, c.httpClient)
-	if err != nil {
-		return nil, err
+	client := existingClient
+	if client == nil {
+		var err error
+		client, err = apiutil.RESTClientForGVK(gvk, forceDisableProtoBuf, isUnstructured, c.config, c.codecs, c.httpClient)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	// Read the group generation before resolving the mapping so a concurrent
+	// invalidation during lookup cannot store an old mapping under a new generation.
+	gen := c.mapperGeneration(gvk.Group)
 	mapping, err := c.mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
@@ -85,13 +93,13 @@ func (c *clientRestResources) newResource(ctx context.Context, gvk schema.GroupV
 		Interface:        client,
 		mapping:          mapping,
 		gvk:              gvk,
-		mapperGeneration: c.mapperGeneration(),
+		mapperGeneration: gen,
 	}, nil
 }
 
-func (c *clientRestResources) mapperGeneration() uint64 {
-	if g, ok := c.mapper.(legacyrestmapper.GenerationedRESTMapper); ok {
-		return g.Generation()
+func (c *clientRestResources) mapperGeneration(group string) uint64 {
+	if g, ok := c.mapper.(apiutil.GroupGeneration); ok {
+		return g.GroupGeneration(group)
 	}
 	return 0
 }
@@ -132,7 +140,7 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 	_, isUnstructured := obj.(runtime.Unstructured)
 	forceDisableProtoBuf := isUnstructured || isApplyConfiguration
 
-	gen := c.mapperGeneration()
+	gen := c.mapperGeneration(gvk.Group)
 
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
@@ -156,7 +164,14 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 	// Initialize a new Client
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	r, err = c.newResource(ctx, gvk, isList, forceDisableProtoBuf, isUnstructured)
+	var existingClient rest.Interface
+	if existing, ok := c.resourceByType[cacheKey]; ok {
+		if existing.mapperGeneration == c.mapperGeneration(gvk.Group) {
+			return existing, nil
+		}
+		existingClient = existing.Interface
+	}
+	r, err = c.newResource(ctx, gvk, isList, forceDisableProtoBuf, isUnstructured, existingClient)
 	if err != nil {
 		return nil, err
 	}

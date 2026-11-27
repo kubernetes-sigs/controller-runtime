@@ -289,14 +289,14 @@ func TestDynamicRESTMapper_InvalidateGroupAndReset(t *testing.T) {
 	wrapped := legacyrestmapper.Wrap(rawMapper)
 
 	// Verify wrapped mapper satisfies ResettableRESTMapper, ResettableRESTMapperWithContext,
-	// GroupInvalidator, and GenerationedRESTMapper.
+	// GroupInvalidator, and GroupGeneration.
 	resettable, ok := wrapped.(meta.ResettableRESTMapper)
 	g.Expect(ok).To(gmg.BeTrue())
 	resettableCtx, ok := wrapped.(meta.ResettableRESTMapperWithContext)
 	g.Expect(ok).To(gmg.BeTrue())
-	invalidator, ok := wrapped.(legacyrestmapper.GroupInvalidator)
+	invalidator, ok := wrapped.(GroupInvalidator)
 	g.Expect(ok).To(gmg.BeTrue())
-	genMapper, ok := wrapped.(legacyrestmapper.GenerationedRESTMapper)
+	genMapper, ok := wrapped.(GroupGeneration)
 	g.Expect(ok).To(gmg.BeTrue())
 
 	// Initial lookup: Cluster-scoped Widget and Namespaced Gadget.
@@ -309,23 +309,27 @@ func TestDynamicRESTMapper_InvalidateGroupAndReset(t *testing.T) {
 	g.Expect(otherMapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameNamespace))
 
 	callsBeforeCacheHit := dc.resourceCalls.Load()
-	genBeforeCacheHit := genMapper.Generation()
+	exampleGenBeforeCacheHit := genMapper.GroupGeneration("example.com")
+	otherGenBeforeCacheHit := genMapper.GroupGeneration("other.example.com")
 
 	// Cached lookup should not trigger additional discovery calls or bump generation.
 	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
 	g.Expect(err).NotTo(gmg.HaveOccurred())
 	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameRoot))
 	g.Expect(dc.resourceCalls.Load()).To(gmg.Equal(callsBeforeCacheHit))
-	g.Expect(genMapper.Generation()).To(gmg.Equal(genBeforeCacheHit))
+	g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.Equal(exampleGenBeforeCacheHit))
+	g.Expect(genMapper.GroupGeneration("other.example.com")).To(gmg.Equal(otherGenBeforeCacheHit))
 
 	// Invalidating an uncached group is a no-op.
 	invalidator.InvalidateGroup("uncached.example.com")
-	g.Expect(genMapper.Generation()).To(gmg.Equal(genBeforeCacheHit))
+	g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.Equal(exampleGenBeforeCacheHit))
+	g.Expect(genMapper.GroupGeneration("other.example.com")).To(gmg.Equal(otherGenBeforeCacheHit))
 
 	// Recreate CRD with Namespaced scope and invalidate only example.com.
 	dc.widgetNamespaced.Store(true)
 	invalidator.InvalidateGroup("example.com")
-	g.Expect(genMapper.Generation()).To(gmg.BeNumerically(">", genBeforeCacheHit))
+	g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.BeNumerically(">", exampleGenBeforeCacheHit))
+	g.Expect(genMapper.GroupGeneration("other.example.com")).To(gmg.Equal(otherGenBeforeCacheHit))
 
 	// other.example.com remains cached and does not trigger discovery.
 	callsBeforeOther := dc.resourceCalls.Load()
@@ -342,9 +346,11 @@ func TestDynamicRESTMapper_InvalidateGroupAndReset(t *testing.T) {
 
 	// Recreate CRD back to Cluster scope and reset via ResettableRESTMapperWithContext.
 	dc.widgetNamespaced.Store(false)
-	genBeforeReset := genMapper.Generation()
+	genBeforeReset := genMapper.GroupGeneration("example.com")
+	otherGenBeforeReset := genMapper.GroupGeneration("other.example.com")
 	resettableCtx.ResetWithContext(t.Context())
-	g.Expect(genMapper.Generation()).To(gmg.BeNumerically(">", genBeforeReset))
+	g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.BeNumerically(">", genBeforeReset))
+	g.Expect(genMapper.GroupGeneration("other.example.com")).To(gmg.BeNumerically(">", otherGenBeforeReset))
 
 	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
 	g.Expect(err).NotTo(gmg.HaveOccurred())
@@ -352,11 +358,51 @@ func TestDynamicRESTMapper_InvalidateGroupAndReset(t *testing.T) {
 
 	// Reset via legacy meta.ResettableRESTMapper also works.
 	dc.widgetNamespaced.Store(true)
-	genBeforeReset = genMapper.Generation()
+	genBeforeReset = genMapper.GroupGeneration("example.com")
 	resettable.Reset()
-	g.Expect(genMapper.Generation()).To(gmg.BeNumerically(">", genBeforeReset))
+	g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.BeNumerically(">", genBeforeReset))
 
 	mapping, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
 	g.Expect(err).NotTo(gmg.HaveOccurred())
 	g.Expect(mapping.Scope.Name()).To(gmg.Equal(meta.RESTScopeNameNamespace))
+}
+
+func TestDynamicRESTMapper_PerGroupGenerationIsolation(t *testing.T) {
+	g := gmg.NewWithT(t)
+
+	dc := &scopeToggleDiscoveryClient{}
+	rawMapper := &mapper{
+		mapper:           restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{}),
+		client:           dc,
+		knownGroups:      map[string]*restmapper.APIGroupResources{},
+		apiGroups:        map[string]*metav1.APIGroup{},
+		groupGenerations: map[string]uint64{},
+	}
+	wrapped := legacyrestmapper.Wrap(rawMapper)
+
+	genMapper, ok := wrapped.(GroupGeneration)
+	g.Expect(ok).To(gmg.BeTrue())
+
+	// Loading example.com bumps example.com only, leaving other.example.com at 0.
+	_, err := wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "Widget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	exampleGen := genMapper.GroupGeneration("example.com")
+	g.Expect(exampleGen).To(gmg.BeNumerically(">", uint64(0)))
+	g.Expect(genMapper.GroupGeneration("other.example.com")).To(gmg.Equal(uint64(0)))
+
+	// Loading other.example.com bumps other.example.com only, leaving example.com unchanged.
+	_, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "other.example.com", Kind: "Gadget"}, "v1")
+	g.Expect(err).NotTo(gmg.HaveOccurred())
+	otherGen := genMapper.GroupGeneration("other.example.com")
+	g.Expect(otherGen).To(gmg.BeNumerically(">", uint64(0)))
+	g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.Equal(exampleGen))
+
+	// Probing a missing kind in example.com reloads discovery for example.com,
+	// but since discovery resources did not change, neither group's generation bumps.
+	for range 5 {
+		_, err = wrapped.RESTMappingWithContext(t.Context(), schema.GroupKind{Group: "example.com", Kind: "MissingKind"}, "v1")
+		g.Expect(meta.IsNoMatchError(err)).To(gmg.BeTrue())
+		g.Expect(genMapper.GroupGeneration("example.com")).To(gmg.Equal(exampleGen))
+		g.Expect(genMapper.GroupGeneration("other.example.com")).To(gmg.Equal(otherGen))
+	}
 }

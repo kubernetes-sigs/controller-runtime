@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sync"
-	"sync/atomic"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -42,6 +42,15 @@ import (
 // and use context.Background().
 type RESTMapper = legacyrestmapper.RESTMapper
 
+// GroupInvalidator is an optional interface implemented by RESTMappers
+// that support invalidating cached mappings for a single API group.
+type GroupInvalidator = legacyrestmapper.GroupInvalidator
+
+// GroupGeneration is an optional interface implemented by RESTMappers
+// that track cache invalidations and reloads per API group via a monotonically
+// increasing generation.
+type GroupGeneration = legacyrestmapper.GroupGeneration
+
 // NewDynamicRESTMapper returns a dynamic RESTMapper for cfg. The dynamic
 // RESTMapper dynamically discovers resource types at runtime.
 func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (RESTMapper, error) {
@@ -55,10 +64,11 @@ func NewDynamicRESTMapper(cfg *rest.Config, httpClient *http.Client) (RESTMapper
 	}
 
 	return legacyrestmapper.Wrap(&mapper{
-		mapper:      restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{}),
-		client:      client,
-		knownGroups: map[string]*restmapper.APIGroupResources{},
-		apiGroups:   map[string]*metav1.APIGroup{},
+		mapper:           restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{}),
+		client:           client,
+		knownGroups:      map[string]*restmapper.APIGroupResources{},
+		apiGroups:        map[string]*metav1.APIGroup{},
+		groupGenerations: map[string]uint64{},
 	}), nil
 }
 
@@ -72,17 +82,13 @@ type mapper struct {
 
 	initialDiscoveryDone bool
 
-	generation atomic.Uint64
+	resetGeneration  uint64
+	groupGenerations map[string]uint64
 
 	// mutex to provide thread-safe mapper reloading.
 	// It protects all fields in the mapper as well as methods
 	// that have the `Locked` suffix.
 	mu sync.RWMutex
-}
-
-// Reset implements meta.ResettableRESTMapper.Reset.
-func (m *mapper) Reset() {
-	m.ResetWithContext(context.Background())
 }
 
 // ResetWithContext implements meta.ResettableRESTMapperWithContext.ResetWithContext.
@@ -94,7 +100,7 @@ func (m *mapper) ResetWithContext(_ context.Context) {
 	m.apiGroups = map[string]*metav1.APIGroup{}
 	m.initialDiscoveryDone = false
 	m.mapper = restmapper.NewDiscoveryRESTMapperWithContext([]*restmapper.APIGroupResources{})
-	m.generation.Add(1)
+	m.resetGeneration++
 }
 
 // InvalidateGroup drops the cached discovery data for groupName so that the
@@ -111,13 +117,19 @@ func (m *mapper) InvalidateGroup(groupName string) {
 
 	delete(m.knownGroups, groupName)
 	delete(m.apiGroups, groupName)
+	if m.groupGenerations == nil {
+		m.groupGenerations = map[string]uint64{}
+	}
+	m.groupGenerations[groupName]++
 	m.rebuildMapperLocked()
-	m.generation.Add(1)
 }
 
-// Generation returns the monotonically increasing cache generation of the mapper.
-func (m *mapper) Generation() uint64 {
-	return m.generation.Load()
+// GroupGeneration returns the monotonically increasing cache generation for groupName.
+func (m *mapper) GroupGeneration(groupName string) uint64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.resetGeneration + m.groupGenerations[groupName]
 }
 
 // KindForWithContext implements meta.RESTMapperWithContext.KindForWithContext.
@@ -274,13 +286,13 @@ func (m *mapper) addKnownGroupAndReload(ctx context.Context, groupName string, v
 // addGroupVersionResourcesToCacheAndReloadLocked does what the name suggests. The mutex must be held when
 // calling it.
 func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.GroupVersion]*metav1.APIResourceList) {
+	changedGroups := map[string]struct{}{}
+
 	// Update information for group resources about the API group by adding new versions.
-	// Ignore the versions that are already registered
+	// Ignore the versions that are already registered unless their resources changed.
 	for groupVersion, resources := range gvr {
-		var groupResources *restmapper.APIGroupResources
-		if _, ok := m.knownGroups[groupVersion.Group]; ok {
-			groupResources = m.knownGroups[groupVersion.Group]
-		} else {
+		groupResources, groupKnown := m.knownGroups[groupVersion.Group]
+		if !groupKnown {
 			groupResources = &restmapper.APIGroupResources{
 				Group:              metav1.APIGroup{Name: groupVersion.Group},
 				VersionedResources: make(map[string][]metav1.APIResource),
@@ -288,6 +300,11 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 		}
 
 		version := groupVersion.Version
+
+		existingResources, versionKnown := groupResources.VersionedResources[version]
+		if !groupKnown || !versionKnown || !apiResourcesEqual(existingResources, resources.APIResources) {
+			changedGroups[groupVersion.Group] = struct{}{}
+		}
 
 		groupResources.VersionedResources[version] = resources.APIResources
 		found := false
@@ -317,9 +334,26 @@ func (m *mapper) addGroupVersionResourcesToCacheAndReloadLocked(gvr map[schema.G
 		m.knownGroups[groupVersion.Group] = groupResources
 	}
 
+	if len(changedGroups) == 0 {
+		return
+	}
+
+	if m.groupGenerations == nil {
+		m.groupGenerations = map[string]uint64{}
+	}
+	for group := range changedGroups {
+		m.groupGenerations[group]++
+	}
+
 	// Finally, reload the mapper.
 	m.rebuildMapperLocked()
-	m.generation.Add(1)
+}
+
+func apiResourcesEqual(a, b []metav1.APIResource) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	return reflect.DeepEqual(a, b)
 }
 
 func (m *mapper) rebuildMapperLocked() {
@@ -383,6 +417,10 @@ func (m *mapper) fetchGroupVersionResourcesLocked(ctx context.Context, groupName
 			}
 			if m.isGroupVersionCachedLocked(groupVersion) {
 				delete(m.knownGroups, groupName)
+				if m.groupGenerations == nil {
+					m.groupGenerations = map[string]uint64{}
+				}
+				m.groupGenerations[groupName]++
 			}
 			continue
 		} else if err != nil {

@@ -332,7 +332,7 @@ func writeTargetFor(obj any, scheme *runtime.Scheme) (gvkAndRepresentation, type
 		if err != nil {
 			return gvkAndRepresentation{}, types.NamespacedName{}, nil, nil, fmt.Errorf("failed to get GVK for object %T: %w", obj, err)
 		}
-		return gvkAndRepresentation{gvk: gvk, representation: representationIDTyped},
+		return gvkAndRepresentation{gvk: gvk, representation: representationIDForObj(t)},
 			ObjectKeyFromObject(t),
 			t,
 			func() (string, error) { return t.GetResourceVersion(), nil },

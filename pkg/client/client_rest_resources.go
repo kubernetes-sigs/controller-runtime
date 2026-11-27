@@ -66,21 +66,42 @@ func (c *clientRestResources) newResource(ctx context.Context, gvk schema.GroupV
 	isList bool,
 	forceDisableProtoBuf bool,
 	isUnstructured bool,
+	existingClient rest.Interface,
 ) (*resourceMeta, error) {
 	if strings.HasSuffix(gvk.Kind, "List") && isList {
 		// if this was a list, treat it as a request for the item's resource
 		gvk.Kind = gvk.Kind[:len(gvk.Kind)-4]
 	}
 
-	client, err := apiutil.RESTClientForGVK(gvk, forceDisableProtoBuf, isUnstructured, c.config, c.codecs, c.httpClient)
-	if err != nil {
-		return nil, err
+	client := existingClient
+	if client == nil {
+		var err error
+		client, err = apiutil.RESTClientForGVK(gvk, forceDisableProtoBuf, isUnstructured, c.config, c.codecs, c.httpClient)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	// Read the group generation before resolving the mapping so a concurrent
+	// invalidation during lookup cannot store an old mapping under a new generation.
+	gen := c.mapperGeneration(gvk.Group)
 	mapping, err := c.mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, err
 	}
-	return &resourceMeta{Interface: client, mapping: mapping, gvk: gvk}, nil
+	return &resourceMeta{
+		Interface:        client,
+		mapping:          mapping,
+		gvk:              gvk,
+		mapperGeneration: gen,
+	}, nil
+}
+
+func (c *clientRestResources) mapperGeneration(group string) uint64 {
+	if g, ok := c.mapper.(apiutil.GroupGeneration); ok {
+		return g.GroupGeneration(group)
+	}
+	return 0
 }
 
 type applyConfiguration interface {
@@ -119,6 +140,8 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 	_, isUnstructured := obj.(runtime.Unstructured)
 	forceDisableProtoBuf := isUnstructured || isApplyConfiguration
 
+	gen := c.mapperGeneration(gvk.Group)
+
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
 	c.mu.RLock()
@@ -129,7 +152,7 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 
 	c.mu.RUnlock()
 
-	if known {
+	if known && r.mapperGeneration == gen {
 		return r, nil
 	}
 
@@ -141,7 +164,14 @@ func (c *clientRestResources) getResource(ctx context.Context, obj any) (*resour
 	// Initialize a new Client
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	r, err = c.newResource(ctx, gvk, isList, forceDisableProtoBuf, isUnstructured)
+	var existingClient rest.Interface
+	if existing, ok := c.resourceByType[cacheKey]; ok {
+		if existing.mapperGeneration == c.mapperGeneration(gvk.Group) {
+			return existing, nil
+		}
+		existingClient = existing.Interface
+	}
+	r, err = c.newResource(ctx, gvk, isList, forceDisableProtoBuf, isUnstructured, existingClient)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +213,8 @@ type resourceMeta struct {
 	gvk schema.GroupVersionKind
 	// mapping is the rest mapping
 	mapping *meta.RESTMapping
+	// mapperGeneration is the mapper generation when this resourceMeta was resolved
+	mapperGeneration uint64
 }
 
 // isNamespaced returns true if the type is namespaced.

@@ -293,13 +293,27 @@ func (c *consistentClient) Apply(ctx context.Context, obj runtime.ApplyConfigura
 	})
 }
 
-func writeTargetFor(obj any, scheme *runtime.Scheme) (gvkAndRepresentation, types.NamespacedName, Object, func() (string, error), error) {
+type writeObjectMetadata struct {
+	resourceVersion string
+	uid             types.UID
+	deleted         bool
+}
+
+func writeObjectMetadataFromObject(obj Object) writeObjectMetadata {
+	return writeObjectMetadata{
+		resourceVersion: obj.GetResourceVersion(),
+		uid:             obj.GetUID(),
+		deleted:         obj.GetDeletionTimestamp() != nil && len(obj.GetFinalizers()) == 0,
+	}
+}
+
+func writeTargetFor(obj any, scheme *runtime.Scheme) (gvkAndRepresentation, types.NamespacedName, Object, func() (writeObjectMetadata, error), error) {
 	switch t := obj.(type) {
 	case *unstructuredApplyConfiguration:
 		return gvkAndRepresentation{gvk: t.Unstructured.GroupVersionKind(), representation: representationIDUnstructured},
 			ObjectKeyFromObject(t),
 			t.Unstructured,
-			func() (string, error) { return t.Unstructured.GetResourceVersion(), nil },
+			func() (writeObjectMetadata, error) { return writeObjectMetadataFromObject(t.Unstructured), nil },
 			nil
 	case applyConfiguration:
 		gvk, err := gvkFromApplyConfiguration(t)
@@ -319,13 +333,13 @@ func writeTargetFor(obj any, scheme *runtime.Scheme) (gvkAndRepresentation, type
 		return gvkAndRepresentation{gvk: gvk, representation: representationIDTyped},
 			ObjectKeyFromObject(clientObj),
 			clientObj,
-			func() (string, error) { return resourceVersionFromApplyConfiguration(t) },
+			func() (writeObjectMetadata, error) { return writeObjectMetadataFromApplyConfiguration(t) },
 			nil
 	case *metav1.PartialObjectMetadata:
 		return gvkAndRepresentation{gvk: t.GroupVersionKind(), representation: representationIDPartialObjectMetadata},
 			ObjectKeyFromObject(t),
 			t,
-			func() (string, error) { return t.GetResourceVersion(), nil },
+			func() (writeObjectMetadata, error) { return writeObjectMetadataFromObject(t), nil },
 			nil
 	case Object:
 		gvk, err := apiutil.GVKForObject(t, scheme)
@@ -335,7 +349,7 @@ func writeTargetFor(obj any, scheme *runtime.Scheme) (gvkAndRepresentation, type
 		return gvkAndRepresentation{gvk: gvk, representation: representationIDTyped},
 			ObjectKeyFromObject(t),
 			t,
-			func() (string, error) { return t.GetResourceVersion(), nil },
+			func() (writeObjectMetadata, error) { return writeObjectMetadataFromObject(t), nil },
 			nil
 	default:
 		return gvkAndRepresentation{}, types.NamespacedName{}, nil, nil, fmt.Errorf("unsupported type %T, must be either %T, %T or %T", obj, Object(nil), &unstructuredApplyConfiguration{}, applyConfiguration(nil))
@@ -347,7 +361,7 @@ func (c *consistentClient) writeAndRecordRV(ctx context.Context, obj any, disabl
 		return write()
 	}
 
-	gvkAndRepresentation, namespacedName, cacheObj, getResourceVersion, err := writeTargetFor(obj, c.upstream.Scheme())
+	gvkAndRepresentation, namespacedName, cacheObj, getMetadata, err := writeTargetFor(obj, c.upstream.Scheme())
 	if err != nil {
 		return err
 	}
@@ -362,43 +376,77 @@ func (c *consistentClient) writeAndRecordRV(ctx context.Context, obj any, disabl
 	release := c.writeBarriers.getOrCreate(gvkAndRepresentation).Begin(namespacedName)
 	defer release()
 
+	inFlightWrite := h.BeginWrite(namespacedName)
+
 	if err := write(); err != nil {
+		h.EndWrite(namespacedName, inFlightWrite)
 		return err
 	}
 
-	rvRaw, err := getResourceVersion()
+	meta, err := getMetadata()
 	if err != nil {
+		h.EndWrite(namespacedName, inFlightWrite)
 		return fmt.Errorf("failed to get resource version from %T: %w", obj, err)
 	}
-	rv, err := strconv.ParseInt(rvRaw, 10, 64)
+	rv, err := strconv.ParseInt(meta.resourceVersion, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to parse resource version %s: %w", rvRaw, err)
+		h.EndWrite(namespacedName, inFlightWrite)
+		return fmt.Errorf("failed to parse resource version %s: %w", meta.resourceVersion, err)
 	}
 
+	// If a mutating request removes the last finalizer on a terminating object, the apiserver
+	// deletes it from storage while potentially returning the same resource version (< 1.38).
+	// Wait for the delete event in the cache instead of relying on the resource version alone.
+	if meta.deleted {
+		h.EndWritePendingDelete(namespacedName, inFlightWrite, meta.uid)
+		return nil
+	}
+
+	h.EndWrite(namespacedName, inFlightWrite)
 	h.SetMinimumRV(ObjectKeyFromObject(cacheObj), rv)
 
 	return nil
 }
 
-func resourceVersionFromApplyConfiguration(obj applyConfiguration) (string, error) {
+func writeObjectMetadataFromApplyConfiguration(obj applyConfiguration) (writeObjectMetadata, error) {
 	v := reflect.ValueOf(obj)
 	for v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
-		return "", fmt.Errorf("expected struct, got %s", v.Kind())
+		return writeObjectMetadata{}, fmt.Errorf("expected struct, got %s", v.Kind())
 	}
 	rv := v.FieldByName("ResourceVersion")
 	if !rv.IsValid() {
-		return "", fmt.Errorf("type %T has no ResourceVersion field", obj)
+		return writeObjectMetadata{}, fmt.Errorf("type %T has no ResourceVersion field", obj)
 	}
 	if rv.Kind() != reflect.Pointer || rv.Type().Elem().Kind() != reflect.String {
-		return "", fmt.Errorf("ResourceVersion field in %T is not *string", obj)
+		return writeObjectMetadata{}, fmt.Errorf("ResourceVersion field in %T is not *string", obj)
 	}
 	if rv.IsNil() {
-		return "", fmt.Errorf("ResourceVersion field in %T is nil", obj)
+		return writeObjectMetadata{}, fmt.Errorf("ResourceVersion field in %T is nil", obj)
 	}
-	return rv.Elem().String(), nil
+
+	var uid types.UID
+	if uidField := v.FieldByName("UID"); uidField.IsValid() && uidField.Kind() == reflect.Pointer && uidField.Type().Elem().Kind() == reflect.String && !uidField.IsNil() {
+		uid = types.UID(uidField.Elem().String())
+	}
+
+	var hasDeletionTimestamp bool
+	if dtField := v.FieldByName("DeletionTimestamp"); dtField.IsValid() && dtField.Kind() == reflect.Pointer && !dtField.IsNil() {
+		hasDeletionTimestamp = true
+	}
+
+	var hasFinalizers bool
+	if finField := v.FieldByName("Finalizers"); finField.IsValid() && finField.Kind() == reflect.Slice && finField.Len() > 0 {
+		hasFinalizers = true
+	}
+
+	return writeObjectMetadata{
+		resourceVersion: rv.Elem().String(),
+		uid:             uid,
+		deleted:         hasDeletionTimestamp && !hasFinalizers,
+	}, nil
 }
 
 func (c *consistentClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {

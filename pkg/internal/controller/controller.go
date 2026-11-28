@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/internal/controller/metrics"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -123,6 +125,10 @@ type Controller[request comparable] struct {
 
 	// Started is true if the Controller has been Started
 	Started bool
+
+	// sourcesSynced is set once all event sources have been started and have synced.
+	// It is read without holding mu so health checks never wait on a slow source sync.
+	sourcesSynced atomic.Bool
 
 	// ctx is the context that was passed to Start() and used when starting watches.
 	//
@@ -273,6 +279,19 @@ func (c *Controller[request]) Warmup(ctx context.Context) error {
 	return c.startEventSourcesAndQueueLocked(ctx)
 }
 
+// StartedChecker returns a healthz.Checker that is healthy once the controller has
+// started all of its event sources and they have synced. It does not wait for the
+// controller to become the leader, so with warmup enabled a standby replica reports
+// healthy as soon as its caches are warm.
+func (c *Controller[request]) StartedChecker() healthz.Checker {
+	return func(_ *http.Request) error {
+		if !c.sourcesSynced.Load() {
+			return fmt.Errorf("controller %q has not started and synced its event sources yet", c.Name)
+		}
+		return nil
+	}
+}
+
 // Start implements controller.Controller.
 func (c *Controller[request]) Start(ctx context.Context) error {
 	// use an IIFE to get proper lock handling
@@ -402,6 +421,10 @@ func (c *Controller[request]) startEventSourcesAndQueueLocked(ctx context.Contex
 			})
 		}
 		retErr = errGroup.Wait()
+		// A cancelled context makes the errgroup return nil without the sources having synced.
+		if retErr == nil && ctx.Err() == nil {
+			c.sourcesSynced.Store(true)
+		}
 
 		// All the watches have been started, we can reset the local slice.
 		//

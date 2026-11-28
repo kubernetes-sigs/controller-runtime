@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -28,6 +30,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -308,3 +311,25 @@ func NewTypedUnmanaged[request comparable](name string, options TypedOptions[req
 
 // ReconcileIDFromContext gets the reconcileID from the current context.
 var ReconcileIDFromContext = controller.ReconcileIDFromContext
+
+// StartedChecker returns a healthz.Checker that is healthy once the given controller
+// has started all of its event sources and they have synced. It can be passed to
+// Manager.AddReadyzCheck to keep a replica out of rotation until its caches are warm.
+//
+// The checker does not wait for leader election. A controller that needs leader
+// election only starts its sources when it becomes the leader, unless EnableWarmup
+// is set, so without warmup the checker of a standby replica stays unhealthy until
+// that replica is elected. Only register it as a readiness check for such a
+// controller if that is what you want.
+//
+// The controller must have been created by New or NewTyped. For any other
+// implementation the returned checker always reports an error.
+func StartedChecker[request comparable](c TypedController[request]) healthz.Checker {
+	sc, ok := c.(interface{ StartedChecker() healthz.Checker })
+	if !ok {
+		return func(_ *http.Request) error {
+			return errors.New("controller does not support started checks")
+		}
+	}
+	return sc.StartedChecker()
+}

@@ -38,9 +38,52 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+// unsupportedController is a Controller that does not come from New.
+type unsupportedController struct {
+	controller.Controller
+}
+
 var _ = Describe("controller.Controller", func() {
 	rec := reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 		return reconcile.Result{}, nil
+	})
+
+	Describe("StartedChecker", func() {
+		It("should report an error for a controller implementation that does not support it", func() {
+			var c controller.Controller = unsupportedController{}
+			Expect(controller.StartedChecker(c)(nil)).To(MatchError(ContainSubstring("does not support")))
+		})
+
+		It("should follow the state of a controller created by New", func(ctx SpecContext) {
+			m, err := manager.New(cfg, manager.Options{})
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := controller.New("started-checker", m, controller.Options{
+				Reconciler:         rec,
+				SkipNameValidation: new(true),
+				EnableWarmup:       new(true),
+				NeedLeaderElection: new(true),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			check := controller.StartedChecker(c)
+			Expect(check(nil)).To(HaveOccurred())
+
+			Expect(m.AddReadyzCheck("controller", check)).To(Succeed())
+
+			mgrCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			done := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(done)
+				Expect(m.Start(mgrCtx)).To(Succeed())
+			}()
+
+			Eventually(func() error { return check(nil) }).Should(Succeed())
+			cancel()
+			Eventually(done).Should(BeClosed())
+		})
 	})
 
 	Describe("New", func() {

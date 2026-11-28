@@ -1844,6 +1844,73 @@ var _ = Describe("controller", func() {
 		)
 	})
 
+	Describe("StartedChecker", func() {
+		It("should report unhealthy until the sources have been started and synced", func(specCtx SpecContext) {
+			ctx, cancel := context.WithCancel(specCtx)
+			defer cancel()
+
+			ctrl.Name = testControllerName
+			ctrl.CacheSyncTimeout = 10 * time.Second
+			release := make(chan struct{})
+			Expect(ctrl.Watch(source.Func(func(ctx context.Context, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				<-release
+				return nil
+			}))).To(Succeed())
+
+			check := ctrl.StartedChecker()
+			err := check(nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(testControllerName))
+
+			startDone := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(startDone)
+				Expect(ctrl.Start(ctx)).To(Succeed())
+			}()
+
+			By("Checking that a source that is still starting keeps the controller unhealthy and does not block the check")
+			Consistently(func() error { return check(nil) }, 200*time.Millisecond).Should(HaveOccurred())
+
+			close(release)
+			Eventually(func() error { return check(nil) }).Should(Succeed())
+
+			cancel()
+			<-startDone
+		})
+
+		It("should report healthy after Warmup when warmup is enabled", func(ctx SpecContext) {
+			ctrl.EnableWarmup = new(true)
+			ctrl.CacheSyncTimeout = time.Second
+			Expect(ctrl.Watch(source.Func(func(context.Context, workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				return nil
+			}))).To(Succeed())
+
+			check := ctrl.StartedChecker()
+			Expect(check(nil)).To(HaveOccurred())
+			Expect(ctrl.Warmup(ctx)).To(Succeed())
+			Expect(check(nil)).To(Succeed())
+		})
+
+		It("should stay unhealthy when a source fails to start", func(ctx SpecContext) {
+			ctrl.EnableWarmup = new(true)
+			ctrl.CacheSyncTimeout = time.Second
+			Expect(ctrl.Watch(source.Func(func(context.Context, workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				return errors.New("start failed")
+			}))).To(Succeed())
+
+			Expect(ctrl.Warmup(ctx)).To(HaveOccurred())
+			Expect(ctrl.StartedChecker()(nil)).To(HaveOccurred())
+		})
+
+		It("should stay unhealthy when warmup is disabled and the controller is not started", func(ctx SpecContext) {
+			ctrl.EnableWarmup = new(false)
+			ctrl.CacheSyncTimeout = time.Second
+			Expect(ctrl.Warmup(ctx)).To(Succeed())
+			Expect(ctrl.StartedChecker()(nil)).To(HaveOccurred())
+		})
+	})
+
 	Describe("Warmup with warmup disabled", func() {
 		JustBeforeEach(func() {
 			ctrl.EnableWarmup = new(false)

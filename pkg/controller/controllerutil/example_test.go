@@ -22,7 +22,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1applyconfigurations "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -69,5 +71,23 @@ func ExampleCreateOrUpdate() {
 		log.Error(err, "Deployment reconcile failed")
 	} else {
 		log.Info("Deployment successfully reconciled", "operation", op)
+	}
+}
+
+// This example applies a ConfigMap that is controlled by an owner and carries a finalizer.
+func ExampleSetControllerReferenceForApply() {
+	// c is client.Client, owner is the object that controls the ConfigMap.
+	owner := &appsv1.Deployment{Name: "foo", Namespace: "default"}
+	cm := corev1applyconfigurations.ConfigMap("foo", "default").WithData(map[string]string{"key": "value"})
+
+	// Typed apply configurations embed their metadata, which the helpers work on.
+	if err := controllerutil.SetControllerReferenceForApply(owner, cm.ObjectMetaApplyConfiguration, c.Scheme()); err != nil {
+		log.Error(err, "Failed to set the controller reference")
+		return
+	}
+	controllerutil.AddFinalizerForApply(cm.ObjectMetaApplyConfiguration, "example.com/cleanup")
+
+	if err := c.Apply(context.TODO(), cm, client.FieldOwner("example-controller"), client.ForceOwnership); err != nil {
+		log.Error(err, "Failed to apply the ConfigMap")
 	}
 }
